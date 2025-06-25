@@ -1,0 +1,30 @@
+# {{SERVICE_NAME}} CI Workflow Snippets
+# Add these snippets to .github/workflows/ci.yml
+
+# ============================================
+# BUILD STAGE (add to build job)
+# ============================================
+
+      - name: Build {{SERVICE_NAME}} service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project_devops/apps/{{SERVICE_NAME}}
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/{{SERVICE_NAME}}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+# ============================================
+# PACKAGE STAGE (add to package job)
+# ============================================
+
+      - name: Build and push {{SERVICE_NAME}} service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project_devops/apps/{{SERVICE_NAME}}
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/{{SERVICE_NAME}}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/{{SERVICE_NAME}}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

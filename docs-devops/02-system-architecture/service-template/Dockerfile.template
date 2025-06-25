@@ -1,0 +1,46 @@
+# {{SERVICE_NAME}} Service - {{SERVICE_DESCRIPTION}}
+# Lightweight, resource-efficient service (<{{MEMORY_LIMIT}}MB RAM)
+#
+# Template Variables:
+#   SERVICE_NAME: Name of the service (e.g., my-api)
+#   SERVICE_DESCRIPTION: Brief description of the service
+#   MEMORY_LIMIT: Expected memory limit (e.g., 100MB)
+#   BASE_IMAGE: Base Docker image (default: python:3.11-alpine)
+#   SYSTEM_DEPS: System dependencies (e.g., postgresql-dev gcc musl-dev) - optional
+#   PYTHON_DEPS: Python dependencies (e.g., flask prometheus-client psycopg2-binary)
+
+FROM {{BASE_IMAGE:-python:3.11-alpine}}
+
+# Set working directory
+WORKDIR /app
+
+{{#if SYSTEM_DEPS}}
+# Install system dependencies
+RUN apk add --no-cache {{SYSTEM_DEPS}} wget
+{{else}}
+# Install wget for health checks
+RUN apk add --no-cache wget
+{{/if}}
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --break-system-packages {{PYTHON_DEPS:-flask prometheus-client}}
+
+# Copy application code
+COPY src/ /app/
+
+# Run as non-root user
+RUN addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period={{START_PERIOD:-10s}} \
+  CMD wget --quiet --tries=1 --spider http://localhost:8080/health || exit 1
+
+# Run application
+CMD ["python", "app.py"]
