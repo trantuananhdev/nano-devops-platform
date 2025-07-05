@@ -1,0 +1,49 @@
+# Traefik Configuration
+# Edge Layer - Reverse Proxy
+
+api:
+  dashboard: true
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+    http:
+      tls:
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: platform-network
+
+log:
+  level: INFO
+  format: json
+
+accessLog:
+  format: json
+
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/dev/localhost.crt
+      keyFile: /etc/traefik/certs/dev/localhost.key
+    - certFile: /etc/traefik/certs/dev/odoo.localhost.crt
+      keyFile: /etc/traefik/certs/dev/odoo.localhost.key
+    - certFile: /etc/traefik/certs/dev/grafana.localhost.crt
+      keyFile: /etc/traefik/certs/dev/grafana.localhost.key
+    - certFile: /etc/traefik/certs/dev/prometheus.localhost.crt
+      keyFile: /etc/traefik/certs/dev/prometheus.localhost.key
+    - certFile: /etc/traefik/certs/dev/jaeger.localhost.crt
+      keyFile: /etc/traefik/certs/dev/jaeger.localhost.key
+    - certFile: /etc/traefik/certs/dev/alertmanager.localhost.crt
+      keyFile: /etc/traefik/certs/dev/alertmanager.localhost.key
+    - certFile: /etc/traefik/certs/dev/loki.localhost.crt
+      keyFile: /etc/traefik/certs/dev/loki.localhost.key
