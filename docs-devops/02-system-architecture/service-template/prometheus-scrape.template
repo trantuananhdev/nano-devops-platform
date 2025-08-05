@@ -1,0 +1,7 @@
+# {{SERVICE_NAME}} Prometheus Scrape Configuration
+# Add this snippet to project_devops/monitoring/prometheus/prometheus.yml
+
+  - job_name: '{{SERVICE_NAME}}'
+    static_configs:
+      - targets: ['{{SERVICE_NAME}}:8080']
+    metrics_path: '/metrics'
