@@ -1,0 +1,143 @@
+version: '3.8'
+
+# Nano DevOps Platform - Core Infrastructure
+# Focus: Security, Network, Database, Cache
+
+x-logging:
+  &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # Security Layer - Docker Socket Proxy
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.2
+    container_name: platform-socket-proxy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CONTAINERS=1
+      - TASKS=1
+      - SERVICES=1
+      - NETWORKS=1
+      - NODES=1
+      - POST=0
+    networks:
+      - platform-network
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+        reservations:
+          memory: 25M
+
+  # Edge Layer - Reverse Proxy
+  traefik:
+    image: traefik:v3.1
+    container_name: platform-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - ../config/traefik:/etc/traefik:ro
+      - ../config/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - /opt/platform/config/traefik/certs:/etc/traefik/certs:ro
+    networks:
+      - platform-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+        reservations:
+          memory: 80M
+    labels:
+      - "traefik.enable=true"
+      - "prometheus.scrape=true"
+      - "prometheus.job=traefik"
+      - "prometheus.port=8080"
+
+  # Data Layer - Shared PostgreSQL Database
+  platform-postgres:
+    image: postgres:16-alpine
+    container_name: platform-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: platform_db
+      POSTGRES_USER: platform_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../config/postgres/init:/docker-entrypoint-initdb.d:ro
+    secrets:
+      - postgres_password
+    networks:
+      - platform-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d platform_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # Cache Layer - Redis
+  platform-redis:
+    image: redis:7-alpine
+    container_name: platform-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - platform-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+        reservations:
+          memory: 100M
+
+networks:
+  platform-network:
+    external: true
+
+volumes:
+  postgres-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/platform/data/postgres
+  redis-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/platform/data/redis
+
+secrets:
+  postgres_password:
+    file: ../secrets/postgres_password.txt
