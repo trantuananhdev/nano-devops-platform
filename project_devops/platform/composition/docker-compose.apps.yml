@@ -1,0 +1,313 @@
+version: '3.8'
+
+# Nano DevOps Platform - Applications
+# Focus: Odoo, Microservices
+
+x-logging:
+  &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # Application Layer - Odoo 16 (TEMPORARILY DISABLED for resource testing)
+  # odoo:
+  #   image: odoo:16.0
+  #   container_name: platform-odoo
+  #   restart: unless-stopped
+  #   environment:
+  #     - HOST=platform-postgres
+  #     - PORT=5432
+  #     - USER=odoo
+  #     - PASSWORD=devadmin
+  #     - ODOO_LOAD_DEMO=no
+  #     - ODOO_HTTP_PORT=8069
+  #     - ODOO_PROXY_MODE=true
+  #     - ODOO_MAX_CRON_THREADS=1
+  #   secrets:
+  #     - odoo_db_password
+  #   volumes:
+  #     - odoo-data:/var/lib/odoo
+  #     - odoo-addons:/mnt/extra-addons
+  #   networks:
+  #     - platform-network
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8069/web/login"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 60s
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 600M
+  #       reservations:
+  #         memory: 300M
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.odoo.rule=Host(`odoo.nano.platform`)"
+  #     - "traefik.http.routers.odoo.entrypoints=websecure"
+  #     - "traefik.http.routers.odoo.tls=true"
+  #     - "traefik.http.routers.odoo-http.rule=Host(`odoo.nano.platform`)"
+  #     - "traefik.http.routers.odoo-http.entrypoints=web"
+  #     - "traefik.http.routers.odoo-http.middlewares=redirect-to-https"
+  #     - "traefik.http.services.odoo.loadbalancer.server.port=8069"
+  #     - "prometheus.scrape=true"
+  #     - "prometheus.job=odoo"
+  #     - "prometheus.port=8069"
+  #   depends_on:
+  #     platform-postgres:
+  #       condition: service_healthy
+
+  # Application Layer - health-api
+  health-api:
+    build:
+      context: ../../apps/health-api
+      dockerfile: Dockerfile
+    container_name: platform-health-api
+    restart: unless-stopped
+    networks:
+      - platform-network
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.health-api.rule=Host(`health.nano.platform`)"
+      - "traefik.http.routers.health-api.entrypoints=web,websecure"
+      - "traefik.http.routers.health-api.tls=true"
+      - "traefik.http.services.health-api.loadbalancer.server.port=8080"
+      - "prometheus.scrape=true"
+      - "prometheus.job=health-api"
+      - "prometheus.port=8080"
+
+  # Application Layer - data-api
+  data-api:
+    build:
+      context: ../../apps/data-api
+      dockerfile: Dockerfile
+    container_name: platform-data-api
+    restart: unless-stopped
+    environment:
+      - POSTGRES_HOST=platform-postgres
+      - POSTGRES_DB=platform_db
+      - POSTGRES_USER=platform_user
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    networks:
+      - platform-network
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.data-api.rule=Host(`data.nano.platform`)"
+      - "traefik.http.routers.data-api.entrypoints=web,websecure"
+      - "traefik.http.routers.data-api.tls=true"
+      - "traefik.http.services.data-api.loadbalancer.server.port=8080"
+      - "prometheus.scrape=true"
+      - "prometheus.job=data-api"
+      - "prometheus.port=8080"
+
+  # Faulty Service v2 (Complex Bug Target)
+  faulty-service:
+    build:
+      context: ../../apps/faulty-service
+      dockerfile: Dockerfile
+    container_name: platform-faulty-service
+    restart: unless-stopped
+    networks:
+      - platform-network
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.faulty.rule=Host(`faulty.nano.platform`)"
+      - "traefik.http.routers.faulty.entrypoints=web,websecure"
+      - "traefik.http.routers.faulty.tls=true"
+      - "traefik.http.services.faulty.loadbalancer.server.port=8080"
+      - "com.github.repo=trantuananhdev/nano-devops-platform"
+      - "com.ghost-engineer.managed=true"
+      - "prometheus.scrape=true"
+      - "prometheus.job=faulty-service"
+      - "prometheus.port=8080"
+
+  # Application Layer - aggregator-api
+  aggregator-api:
+    build:
+      context: ../../apps/aggregator-api
+      dockerfile: Dockerfile
+    container_name: platform-aggregator-api
+    restart: unless-stopped
+    environment:
+      - HEALTH_API_URL=http://health-api:8080
+      - DATA_API_URL=http://data-api:8080
+    networks:
+      - platform-network
+    depends_on:
+      health-api:
+        condition: service_started
+      data-api:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.aggregator-api.rule=Host(`aggregator.nano.platform`)"
+      - "traefik.http.routers.aggregator-api.entrypoints=web,websecure"
+      - "traefik.http.routers.aggregator-api.tls=true"
+      - "traefik.http.services.aggregator-api.loadbalancer.server.port=8080"
+      - "prometheus.scrape=true"
+      - "prometheus.job=aggregator-api"
+      - "prometheus.port=8080"
+
+  # Application Layer - user-api
+  user-api:
+    build:
+      context: ../../apps/user-api
+      dockerfile: Dockerfile
+    container_name: platform-user-api
+    restart: unless-stopped
+    environment:
+      - POSTGRES_HOST=platform-postgres
+      - POSTGRES_DB=platform_db
+      - POSTGRES_USER=platform_user
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    networks:
+      - platform-network
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.user-api.rule=Host(`user.nano.platform`)"
+      - "traefik.http.routers.user-api.entrypoints=web,websecure"
+      - "traefik.http.routers.user-api.tls=true"
+      - "traefik.http.services.user-api.loadbalancer.server.port=8080"
+      - "prometheus.scrape=true"
+      - "prometheus.job=user-api"
+      - "prometheus.port=8080"
+
+  # Application Layer - agentic-ai-api (New App)
+  agentic-ai-api:
+    build:
+      context: ../../apps/ai-powered-development/ai-agent
+      dockerfile: Dockerfile
+    container_name: platform-agentic-ai
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - DATABASE_URL=postgres://agentic_ai:devadmin@platform-postgres:5432/agentic_ai_db
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITLAB_TOKEN=${GITLAB_TOKEN}
+      - GEMINI_MODEL=gemini-2.5-flash
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
+      - GITHUB_SSH_KEY_FILE=/run/secrets/agentic_ai_github_ssh_key
+      - GIT_USER_NAME=${GIT_USER_NAME}
+      - GIT_USER_EMAIL=${GIT_USER_EMAIL}
+      - BOOTSTRAP_REPO_FULL_NAME=${BOOTSTRAP_REPO_FULL_NAME}
+      - BOOTSTRAP_GITHUB_TOKEN=${BOOTSTRAP_GITHUB_TOKEN}
+      - BOOTSTRAP_SSH_KEY=${BOOTSTRAP_SSH_KEY}
+    secrets:
+      - agentic_ai_github_ssh_key
+    networks:
+      - platform-network
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 800M
+        reservations:
+          memory: 400M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.agentic-ai.rule=Host(`ai.nano.platform`)"
+      - "traefik.http.routers.agentic-ai.entrypoints=web,websecure"
+      - "traefik.http.routers.agentic-ai.tls=true"
+      - "traefik.http.services.agentic-ai.loadbalancer.server.port=3000"
+      - "prometheus.scrape=true"
+      - "prometheus.job=agentic-ai"
+      - "prometheus.port=3000"
+
+  # AI-Powered Development - Agent Node (The Sensor)
+  agent-node:
+    build:
+      context: ../../apps/ai-powered-development/agent-node
+      dockerfile: Dockerfile
+    container_name: platform-agent-node
+    restart: unless-stopped
+    environment:
+      - NODE_NAME=nano-devops-node
+      - BRAIN_URL=http://platform-agentic-ai:3000/v1/incidents/report
+      - COMMAND_PORT=8080
+      - MONITOR_INTERVAL=30s
+      - LOG_TAIL_LINES=100
+      - ENV=production
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    group_add:
+      - "102" # docker group GID trên Alpine — verify: getent group docker | cut -d: -f3
+    networks:
+      - platform-network
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+    depends_on:
+      agentic-ai-api:
+        condition: service_started
+
+networks:
+  platform-network:
+    external: true
+
+volumes:
+  odoo-data:
+    driver: local
+    driver_opts: {type: none, o: bind, device: /opt/platform/data/odoo}
+  odoo-addons:
+    driver: local
+    driver_opts: {type: none, o: bind, device: /opt/platform/data/odoo-addons}
+
+secrets:
+  odoo_db_password:
+    file: ../secrets/odoo_db_password.txt
+  agentic_ai_jwt_secret:
+    file: ../secrets/agentic_ai_jwt_secret.txt
+  agentic_ai_admin_key:
+    file: ../secrets/agentic_ai_admin_key.txt
+  agentic_ai_openai_key:
+    file: ../secrets/agentic_ai_openai_key.txt
+  agentic_ai_gemini_key:
+    file: ../secrets/agentic_ai_gemini_key.txt
+  agentic_ai_webhook_secret:
+    file: ../secrets/agentic_ai_webhook_secret.txt
+  agentic_ai_github_ssh_key:
+    file: ../../../.ssh/prod_key
