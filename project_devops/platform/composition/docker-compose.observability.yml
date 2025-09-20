@@ -1,0 +1,275 @@
+version: '3.8'
+
+# Nano DevOps Platform - Observability Stack
+# Focus: Monitoring, Logging, Tracing, Alerting
+
+x-logging:
+  &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # Observability Layer - Prometheus
+  platform-prometheus:
+    image: prom/prometheus:v2.48.1
+    container_name: platform-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ../config/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - platform-network
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+        reservations:
+          memory: 200M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.nano.platform`)"
+      - "traefik.http.routers.prometheus.entrypoints=web"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  # Observability Layer - Grafana
+  platform-grafana:
+    image: grafana/grafana:10.2.0
+    container_name: platform-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD_FILE=/run/secrets/grafana_password
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    secrets:
+      - grafana_password
+    networks:
+      - platform-network
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+        reservations:
+          memory: 150M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.nano.platform`)"
+      - "traefik.http.routers.grafana.entrypoints=web"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  # Observability Layer - Loki
+  platform-loki:
+    image: grafana/loki:2.9.2
+    container_name: platform-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ../config/loki:/etc/loki:ro
+      - loki-data:/loki
+    networks:
+      - platform-network
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+        reservations:
+          memory: 150M
+
+  # Observability Layer - Jaeger
+  platform-jaeger:
+    image: jaegertracing/all-in-one:1.53
+    container_name: platform-jaeger
+    restart: unless-stopped
+    ports:
+      - "6831:6831/udp"
+      - "16686:16686"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - platform-network
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+        reservations:
+          memory: 150M
+
+  # Observability Layer - Alertmanager
+  platform-alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: platform-alertmanager
+    restart: unless-stopped
+    volumes:
+      - ../config/alertmanager:/config
+      - alertmanager-data:/data
+    command:
+      - '--config.file=/config/alertmanager.yml'
+      - '--storage.path=/data'
+    networks:
+      - platform-network
+    ports:
+      - "9093:9093"
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+        reservations:
+          memory: 50M
+
+  # Exporters
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: platform-postgres-exporter
+    restart: unless-stopped
+    volumes:
+      - ../config/postgres-exporter/entrypoint.sh:/entrypoint.sh:ro
+    secrets:
+      - postgres_password
+    networks:
+      - platform-network
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+    labels:
+      - "prometheus.scrape=true"
+      - "prometheus.job=postgres-exporter"
+      - "prometheus.port=9187"
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.58.0
+    container_name: platform-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://platform-redis:6379"
+    networks:
+      - platform-network
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+    labels:
+      - "prometheus.scrape=true"
+      - "prometheus.job=redis-exporter"
+      - "prometheus.port=9121"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    container_name: platform-cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - platform-network
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+    labels:
+      - "prometheus.scrape=true"
+      - "prometheus.job=cadvisor"
+      - "prometheus.port=8080"
+
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: platform-node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - platform-network
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+    labels:
+      - "prometheus.scrape=true"
+      - "prometheus.job=node-exporter"
+      - "prometheus.port=9100"
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: platform-blackbox-exporter
+    restart: unless-stopped
+    networks:
+      - platform-network
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+    labels:
+      - "prometheus.scrape=true"
+      - "prometheus.job=blackbox-exporter"
+      - "prometheus.port=9115"
+
+networks:
+  platform-network:
+    external: true
+
+volumes:
+  prometheus-data:
+    driver: local
+    driver_opts: {type: none, o: bind, device: /opt/platform/data/prometheus}
+  grafana-data:
+    driver: local
+    driver_opts: {type: none, o: bind, device: /opt/platform/data/grafana}
+  loki-data:
+    driver: local
+    driver_opts: {type: none, o: bind, device: /opt/platform/data/loki}
+  alertmanager-data:
+    driver: local
+    driver_opts: {type: none, o: bind, device: /opt/platform/data/alertmanager}
+
+secrets:
+  grafana_password:
+    file: ../secrets/grafana_password.txt
