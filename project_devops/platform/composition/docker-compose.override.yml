@@ -1,0 +1,22 @@
+version: '3.8'
+
+# Docker Compose Override for Nano DevOps Platform
+# Purpose: Environment-specific overrides (development/local)
+
+services:
+  # Add development-specific overrides here if needed
+  # For example, mapping additional volumes for local source code
+
+  platform-postgres:
+    # Ensure standard ports are exposed for local debugging if necessary
+    ports:
+      - "5432:5432"
+
+  platform-redis:
+    ports:
+      - "6379:6379"
+
+  # odoo:
+  #   # Development specific Odoo settings
+  #   environment:
+  #     - ODOO_LOAD_DEMO=yes # Load demo data for initial setup
