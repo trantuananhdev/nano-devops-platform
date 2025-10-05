@@ -1,0 +1,14 @@
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - https://odoo:8069/web/login
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - target_label: __address__
+        replacement: platform-blackbox-exporter:9115
+      - target_label: instance
+        replacement: odoo

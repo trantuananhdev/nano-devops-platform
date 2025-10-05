@@ -1,0 +1,451 @@
+# Prometheus Alert Rules for Nano DevOps Platform
+# Critical service health and resource threshold alerts
+
+groups:
+  - name: service_health
+    interval: 30s
+    rules:
+      # Critical Service Down Alerts
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: monitoring
+        annotations:
+          summary: "Prometheus is down"
+          description: "Prometheus has been down for more than 1 minute."
+
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: monitoring
+        annotations:
+          summary: "Grafana is down"
+          description: "Grafana has been down for more than 1 minute."
+
+      - alert: LokiDown
+        expr: up{job="loki"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: monitoring
+        annotations:
+          summary: "Loki is down"
+          description: "Loki has been down for more than 1 minute."
+
+      - alert: TraefikDown
+        expr: up{job="traefik"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: edge
+        annotations:
+          summary: "Traefik is down"
+          description: "Traefik reverse proxy has been down for more than 1 minute. All traffic routing is affected."
+
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL exporter is down"
+          description: "PostgreSQL exporter has been down for more than 1 minute. Database metrics unavailable."
+
+      - alert: PostgreSQLServiceDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL service is down"
+          description: "PostgreSQL database service is not responding. All database operations are affected."
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis exporter is down"
+          description: "Redis exporter has been down for more than 1 minute. Cache metrics unavailable."
+
+      - alert: RedisServiceDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: cache
+        annotations:
+          summary: "Redis service is down"
+          description: "Redis cache service is not responding. Caching operations are affected."
+
+  - name: application_health
+    interval: 30s
+    rules:
+      # Traefik Error Rate Alert
+      - alert: HighTraefikErrorRate
+        expr: |
+          sum(rate(traefik_entrypoint_requests_total{code=~"5.."}[5m])) 
+          / 
+          sum(rate(traefik_entrypoint_requests_total[5m])) 
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: edge
+        annotations:
+          summary: "High Traefik error rate"
+          description: "Traefik error rate (5xx) is above 5% for more than 5 minutes. Current error rate: {{ $value | humanizePercentage }}"
+
+      # Traefik High Latency Alert
+      - alert: HighTraefikLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(traefik_entrypoint_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: edge
+        annotations:
+          summary: "High Traefik latency"
+          description: "Traefik P95 latency is above 1 second for more than 10 minutes. Current P95 latency: {{ $value }}s"
+
+      # Traefik High 4xx Rate Alert
+      - alert: HighTraefik4xxRate
+        expr: |
+          sum(rate(traefik_entrypoint_requests_total{code=~"4.."}[5m])) 
+          / 
+          sum(rate(traefik_entrypoint_requests_total[5m])) 
+          > 0.10
+        for: 5m
+        labels:
+          severity: warning
+          component: edge
+        annotations:
+          summary: "High Traefik 4xx rate"
+          description: "Traefik 4xx error rate is above 10% for more than 5 minutes. Current rate: {{ $value | humanizePercentage }}"
+
+  - name: database_health
+    interval: 30s
+    rules:
+      # PostgreSQL High Connection Count
+      - alert: PostgreSQLHighConnections
+        expr: |
+          sum(pg_stat_database_numbackends) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL high connection count"
+          description: "PostgreSQL has more than 80 active connections for more than 5 minutes. Current connections: {{ $value }}"
+
+      # PostgreSQL Database Size Growing
+      - alert: PostgreSQLDatabaseSizeHigh
+        expr: |
+          sum(pg_database_size_bytes) > 10737418240
+        for: 1h
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL database size is high"
+          description: "PostgreSQL database size is above 10GB. Current size: {{ $value | humanize1024 }}B"
+
+  - name: cache_health
+    interval: 30s
+    rules:
+      # Redis Low Hit Rate
+      - alert: RedisLowHitRate
+        expr: |
+          (
+            rate(redis_keyspace_hits_total[5m]) 
+            / 
+            (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]))
+          ) < 0.80
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis low hit rate"
+          description: "Redis cache hit rate is below 80% for more than 10 minutes. Current hit rate: {{ $value | humanizePercentage }}"
+
+      # Redis High Memory Usage
+      - alert: RedisHighMemoryUsage
+        expr: |
+          (redis_memory_used_bytes / redis_memory_max_bytes) > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is above 90% for more than 5 minutes. Current usage: {{ $value | humanizePercentage }}"
+
+  - name: health_api_health
+    interval: 30s
+    rules:
+      # Health API Service Down
+      - alert: HealthApiDown
+        expr: up{job="health-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: application
+          service: health-api
+        annotations:
+          summary: "Health API service is down"
+          description: "The health-api service has been down for more than 1 minute (up{job=\"health-api\"} == 0)."
+
+      # Health API High Latency (P95)
+      - alert: HealthApiHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(health_api_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: application
+          service: health-api
+        annotations:
+          summary: "Health API high latency (P95 > 1s)"
+          description: "Health API P95 request latency is above 1 second for more than 10 minutes. Current P95 latency: {{ $value }}s."
+
+      - alert: DataApiDown
+        expr: up{job="data-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: application
+          service: data-api
+        annotations:
+          summary: "Data API service is down"
+          description: "The data-api service has been down for more than 1 minute (up{job=\"data-api\"} == 0)."
+
+      - alert: DataApiHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(data_api_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: application
+          service: data-api
+        annotations:
+          summary: "Data API high latency (P95 > 1s)"
+          description: "Data API P95 request latency is above 1 second for more than 10 minutes. Current P95 latency: {{ $value }}s."
+
+      - alert: DataApiDbErrors
+        expr: |
+          sum(rate(data_api_db_errors_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: application
+          service: data-api
+        annotations:
+          summary: "Data API database errors detected"
+          description: "Data API is experiencing database errors at a rate above 0.1 errors/second for more than 5 minutes."
+
+      - alert: AggregatorApiDown
+        expr: up{job="aggregator-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: application
+          service: aggregator-api
+        annotations:
+          summary: "Aggregator API service is down"
+          description: "The aggregator-api service has been down for more than 1 minute (up{job=\"aggregator-api\"} == 0)."
+
+      - alert: AggregatorApiHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(aggregator_api_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: application
+          service: aggregator-api
+        annotations:
+          summary: "Aggregator API high latency (P95 > 1s)"
+          description: "Aggregator API P95 request latency is above 1 second for more than 10 minutes. Current P95 latency: {{ $value }}s."
+
+      - alert: AggregatorApiServiceCallFailures
+        expr: |
+          sum(rate(aggregator_api_service_calls_total{status!~"2.."}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: application
+          service: aggregator-api
+        annotations:
+          summary: "Aggregator API service call failures detected"
+          description: "Aggregator API is experiencing service call failures at a rate above 0.1 failures/second for more than 5 minutes."
+
+      # User API Alerts
+      - alert: UserApiDown
+        expr: up{job="user-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: application
+          service: user-api
+        annotations:
+          summary: "User API service is down"
+          description: "The user-api service has been down for more than 1 minute (up{job=\"user-api\"} == 0)."
+
+      - alert: UserApiHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(user_api_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: application
+          service: user-api
+        annotations:
+          summary: "User API high latency detected"
+          description: "User API p95 latency is above 1 second for more than 10 minutes."
+
+      - alert: UserApiHighValidationErrors
+        expr: |
+          sum(rate(user_api_validation_errors_total[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: application
+          service: user-api
+        annotations:
+          summary: "User API high validation error rate detected"
+          description: "User API is experiencing validation errors at a rate above 1 error/second for more than 5 minutes."
+
+      - alert: UserApiDatabaseErrors
+        expr: |
+          sum(rate(user_api_db_errors_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: application
+          service: user-api
+        annotations:
+          summary: "User API database errors detected"
+          description: "User API is experiencing database errors at a rate above 0.1 errors/second for more than 5 minutes."
+
+  - name: resource_monitoring
+    interval: 30s
+    rules:
+      # High Memory Usage Alert
+      - alert: HighMemoryUsage
+        expr: |
+          (sum(container_memory_usage_bytes{name!=""}) / 6144000000) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High memory usage detected"
+          description: "Total memory usage is above 85% ({{ $value }}%) of 6GB limit for more than 5 minutes. Current usage: {{ $value }}%."
+
+      # Critical Memory Usage Alert
+      - alert: CriticalMemoryUsage
+        expr: |
+          (sum(container_memory_usage_bytes{name!=""}) / 6144000000) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Critical memory usage detected"
+          description: "Total memory usage is above 95% ({{ $value }}%) of 6GB limit for more than 2 minutes. System may become unstable."
+
+      # High CPU Usage Alert
+      - alert: HighCPUUsage
+        expr: |
+          sum(rate(container_cpu_usage_seconds_total{name!=""}[5m])) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High CPU usage detected"
+          description: "Total CPU usage is above 80% ({{ $value }}%) for more than 10 minutes."
+
+      # Service Memory Exhaustion Warning
+      - alert: ServiceMemoryExhaustion
+        expr: |
+          (container_memory_usage_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Service memory exhaustion warning"
+          description: "Service {{ $labels.name }} is using more than 90% ({{ $value }}%) of its memory limit for more than 5 minutes."
+
+      # Disk Usage Alerts
+      - alert: DiskNearlyFull
+        expr: |
+          100 - ((node_filesystem_avail_bytes{mountpoint="/",fstype!="rootfs"} * 100) / node_filesystem_size_bytes{mountpoint="/",fstype!="rootfs"}) > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Disk nearly full"
+          description: "Disk usage is above 85% ({{ $value }}%) on mount point {{ $labels.mountpoint }} for more than 5 minutes. Available: {{ $value | humanize1024 }}B."
+
+      - alert: DiskCritical
+        expr: |
+          100 - ((node_filesystem_avail_bytes{mountpoint="/",fstype!="rootfs"} * 100) / node_filesystem_size_bytes{mountpoint="/",fstype!="rootfs"}) > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Disk critical - nearly full"
+          description: "Disk usage is above 95% ({{ $value }}%) on mount point {{ $labels.mountpoint }} for more than 2 minutes. Immediate action required. Available: {{ $value | humanize1024 }}B."
+
+  - name: monitoring_health
+    interval: 30s
+    rules:
+      # Prometheus High Scrape Duration
+      - alert: PrometheusHighScrapeDuration
+        expr: |
+          prometheus_target_interval_length_seconds > 60
+        for: 5m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Prometheus high scrape duration"
+          description: "Prometheus target scrape duration is above 60 seconds for more than 5 minutes. This may indicate performance issues."
+
+      # Prometheus High Series Count
+      - alert: PrometheusHighSeriesCount
+        expr: |
+          prometheus_tsdb_head_series > 100000
+        for: 1h
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Prometheus high series count"
+          description: "Prometheus has more than 100,000 time series. This may indicate high cardinality issues. Current series: {{ $value }}"
