@@ -1,0 +1,24 @@
+# Dynamic configuration
+http:
+  middlewares:
+    redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+
+  certificates:
+    - certFile: /etc/traefik/certs/nano.platform.crt
+      keyFile: /etc/traefik/certs/nano.platform.key
+    - certFile: /etc/traefik/certs/rootCA.crt
+      keyFile: /etc/traefik/certs/rootCA.key
+
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/nano.platform.crt
+        keyFile: /etc/traefik/certs/nano.platform.key

@@ -1,0 +1,56 @@
+# Traefik Configuration
+# Edge Layer - Reverse Proxy
+
+api:
+  dashboard: true
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+    http:
+      tls: {}
+
+ping: {}
+
+providers:
+  docker:
+    endpoint: "tcp://socket-proxy:2375"
+    exposedByDefault: false
+    network: platform-network
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+log:
+  level: INFO
+  format: json
+
+accessLog:
+  format: json
+
+# tls:
+#   certificates:
+#     - certFile: /etc/traefik/certs/dev/localhost.crt
+#       keyFile: /etc/traefik/certs/dev/localhost.key
+#     - certFile: /etc/traefik/certs/dev/odoo.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/odoo.nano.platform.key
+#     - certFile: /etc/traefik/certs/dev/grafana.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/grafana.nano.platform.key
+#     - certFile: /etc/traefik/certs/dev/prometheus.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/prometheus.nano.platform.key
+#     - certFile: /etc/traefik/certs/dev/jaeger.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/jaeger.nano.platform.key
+#     - certFile: /etc/traefik/certs/dev/alertmanager.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/alertmanager.nano.platform.key
+#     - certFile: /etc/traefik/certs/dev/loki.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/loki.nano.platform.key
+#     - certFile: /etc/traefik/certs/dev/ai.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/ai.nano.platform.key
