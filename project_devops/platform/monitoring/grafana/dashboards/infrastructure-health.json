@@ -1,0 +1,399 @@
+{
+  "dashboard": {
+    "title": "Infrastructure Health",
+    "tags": ["infrastructure", "resources", "health"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+        "type": "stat",
+        "title": "Total Memory Usage",
+        "targets": [
+          {
+            "expr": "sum(container_memory_usage_bytes{name!=\"\"}) / 1024 / 1024 / 1024",
+            "refId": "A",
+            "legendFormat": "Used (GB)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decgbytes",
+            "decimals": 2,
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 4, "color": "yellow" },
+                { "value": 5.5, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+        "type": "stat",
+        "title": "Memory Usage %",
+        "targets": [
+          {
+            "expr": "(sum(container_memory_usage_bytes{name!=\"\"}) / 6144000000) * 100",
+            "refId": "A",
+            "legendFormat": "Usage %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 1,
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 70, "color": "yellow" },
+                { "value": 90, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+        "type": "stat",
+        "title": "Total CPU Usage %",
+        "targets": [
+          {
+            "expr": "sum(rate(container_cpu_usage_seconds_total{name!=\"\"}[5m])) * 100",
+            "refId": "A",
+            "legendFormat": "CPU %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 1,
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 70, "color": "yellow" },
+                { "value": 90, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+        "type": "stat",
+        "title": "Services Health",
+        "targets": [
+          {
+            "expr": "count(up == 1)",
+            "refId": "A",
+            "legendFormat": "Healthy"
+          },
+          {
+            "expr": "count(up == 0)",
+            "refId": "B",
+            "legendFormat": "Down"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "red" },
+                { "value": 1, "color": "green" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 20 },
+        "type": "stat",
+        "title": "Disk Usage %",
+        "targets": [
+          {
+            "expr": "100 - ((node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"} * 100) / node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"rootfs\"})",
+            "refId": "A",
+            "legendFormat": "Usage %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 1,
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 70, "color": "yellow" },
+                { "value": 85, "color": "orange" },
+                { "value": 95, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "gridPos": { "h": 4, "w": 6, "x": 6, "y": 20 },
+        "type": "stat",
+        "title": "Disk Available (GB)",
+        "targets": [
+          {
+            "expr": "node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"} / 1024 / 1024 / 1024",
+            "refId": "A",
+            "legendFormat": "Available"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decgbytes",
+            "decimals": 2,
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "red" },
+                { "value": 10, "color": "yellow" },
+                { "value": 50, "color": "green" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "gridPos": { "h": 4, "w": 6, "x": 12, "y": 20 },
+        "type": "stat",
+        "title": "Disk Total (GB)",
+        "targets": [
+          {
+            "expr": "node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"rootfs\"} / 1024 / 1024 / 1024",
+            "refId": "A",
+            "legendFormat": "Total"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decgbytes",
+            "decimals": 2,
+            "color": { "mode": "fixed", "fixedColor": "blue" }
+          }
+        }
+      },
+      {
+        "id": 12,
+        "gridPos": { "h": 4, "w": 6, "x": 18, "y": 20 },
+        "type": "stat",
+        "title": "Disk Used (GB)",
+        "targets": [
+          {
+            "expr": "(node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"rootfs\"} - node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"}) / 1024 / 1024 / 1024",
+            "refId": "A",
+            "legendFormat": "Used"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decgbytes",
+            "decimals": 2,
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 50, "color": "yellow" },
+                { "value": 100, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+        "type": "timeseries",
+        "title": "Memory Usage by Service",
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{name!=\"\"} / 1024 / 1024 / 1024",
+            "refId": "A",
+            "legendFormat": "{{name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decgbytes",
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+        "type": "timeseries",
+        "title": "CPU Usage by Service",
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{name!=\"\"}[5m]) * 100",
+            "refId": "A",
+            "legendFormat": "{{name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+        "type": "timeseries",
+        "title": "Total Memory Usage Trend",
+        "targets": [
+          {
+            "expr": "sum(container_memory_usage_bytes{name!=\"\"}) / 1024 / 1024 / 1024",
+            "refId": "A",
+            "legendFormat": "Total Memory (GB)"
+          },
+          {
+            "expr": "6",
+            "refId": "B",
+            "legendFormat": "Limit (6GB)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decgbytes",
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+        "type": "table",
+        "title": "Service Resource Usage",
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{name!=\"\"} / 1024 / 1024",
+            "refId": "A",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "mbytes",
+            "custom": {
+              "displayMode": "list",
+              "inspect": false
+            }
+          },
+          "overrides": [
+            {
+              "matcher": { "id": "byName", "options": "name" },
+              "properties": [
+                { "id": "displayName", "value": "Service" }
+              ]
+            },
+            {
+              "matcher": { "id": "byName", "options": "Value" },
+              "properties": [
+                { "id": "displayName", "value": "Memory (MB)" },
+                { "id": "custom.width", "value": 150 }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": true,
+              "displayName": "Memory (MB)"
+            }
+          ]
+        }
+      },
+      {
+        "id": 13,
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+        "type": "timeseries",
+        "title": "Disk Usage by Mount Point",
+        "targets": [
+          {
+            "expr": "100 - ((node_filesystem_avail_bytes{fstype!=\"rootfs\"} * 100) / node_filesystem_size_bytes{fstype!=\"rootfs\"})",
+            "refId": "A",
+            "legendFormat": "{{mountpoint}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 1,
+            "color": { "mode": "palette-classic" },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 70, "color": "yellow" },
+                { "value": 85, "color": "orange" },
+                { "value": 95, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 14,
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+        "type": "timeseries",
+        "title": "Disk Usage Trend",
+        "targets": [
+          {
+            "expr": "(node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"rootfs\"} - node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"}) / 1024 / 1024 / 1024",
+            "refId": "A",
+            "legendFormat": "Used (GB)"
+          },
+          {
+            "expr": "node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"rootfs\"} / 1024 / 1024 / 1024",
+            "refId": "B",
+            "legendFormat": "Total (GB)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decgbytes",
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {}
+  }
+}
