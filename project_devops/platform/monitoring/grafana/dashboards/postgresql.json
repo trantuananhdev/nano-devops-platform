@@ -1,0 +1,195 @@
+{
+  "dashboard": {
+    "title": "PostgreSQL",
+    "tags": ["postgresql", "database", "data-layer"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+        "type": "stat",
+        "title": "PostgreSQL Exporter Status",
+        "targets": [
+          {
+            "expr": "up{job=\"postgres\"}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "DOWN - Exporter Not Deployed", "color": "red"}, "1": {"text": "UP", "color": "green"}}}
+            ],
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "red"}, {"value": 1, "color": "green"}]}
+          }
+        }
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+        "type": "stat",
+        "title": "Active Connections",
+        "targets": [
+          {
+            "expr": "pg_stat_database_numbackends",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "thresholds"},
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}, {"value": 50, "color": "yellow"}, {"value": 100, "color": "red"}]}
+          }
+        }
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+        "type": "stat",
+        "title": "Database Size",
+        "targets": [
+          {
+            "expr": "pg_database_size_bytes",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "color": {"mode": "thresholds"},
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}]}
+          }
+        }
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+        "type": "stat",
+        "title": "Transactions per Second",
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_xact_commit[5m]) + rate(pg_stat_database_xact_rollback[5m])",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "color": {"mode": "thresholds"},
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}]}
+          }
+        }
+      },
+      {
+        "id": 5,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "type": "timeseries",
+        "title": "Connection Count",
+        "targets": [
+          {
+            "expr": "pg_stat_database_numbackends",
+            "refId": "A",
+            "legendFormat": "{{datname}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 6,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "type": "timeseries",
+        "title": "Query Performance - Tuples Fetched/Returned",
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_tup_fetched[5m])",
+            "refId": "A",
+            "legendFormat": "Fetched {{datname}}"
+          },
+          {
+            "expr": "rate(pg_stat_database_tup_returned[5m])",
+            "refId": "B",
+            "legendFormat": "Returned {{datname}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 7,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "type": "timeseries",
+        "title": "Database Size Over Time",
+        "targets": [
+          {
+            "expr": "pg_database_size_bytes",
+            "refId": "A",
+            "legendFormat": "{{datname}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 8,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "type": "timeseries",
+        "title": "Active Queries",
+        "targets": [
+          {
+            "expr": "pg_stat_activity_count{state=\"active\"}",
+            "refId": "A",
+            "legendFormat": "Active"
+          },
+          {
+            "expr": "pg_stat_activity_count{state=\"idle\"}",
+            "refId": "B",
+            "legendFormat": "Idle"
+          },
+          {
+            "expr": "pg_stat_activity_count{state=\"idle in transaction\"}",
+            "refId": "C",
+            "legendFormat": "Idle in Transaction"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 9,
+        "gridPos": {"h": 4, "w": 24, "x": 0, "y": 20},
+        "type": "text",
+        "title": "Note",
+        "options": {
+          "content": "**PostgreSQL Exporter Required**: This dashboard requires the PostgreSQL exporter to be deployed. Add postgres-exporter service to docker-compose.yml and configure Prometheus to scrape it. See monitoring-architecture.md for details.",
+          "mode": "markdown"
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {}
+  }
+}

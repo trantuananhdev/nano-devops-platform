@@ -1,0 +1,178 @@
+{
+  "dashboard": {
+    "title": "Platform Overview",
+    "tags": ["platform", "overview"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+        "type": "stat",
+        "title": "Prometheus Status",
+        "targets": [
+          {
+            "expr": "up{job=\"prometheus\"}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}
+            ],
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "red"}, {"value": 1, "color": "green"}]}
+          }
+        }
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+        "type": "stat",
+        "title": "Traefik Status",
+        "targets": [
+          {
+            "expr": "up{job=\"traefik\"}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}
+            ],
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "red"}, {"value": 1, "color": "green"}]}
+          }
+        }
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+        "type": "stat",
+        "title": "Grafana Status",
+        "targets": [
+          {
+            "expr": "up{job=\"grafana\"}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}
+            ],
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "red"}, {"value": 1, "color": "green"}]}
+          }
+        }
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+        "type": "stat",
+        "title": "Loki Status",
+        "targets": [
+          {
+            "expr": "up{job=\"loki\"}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}
+            ],
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "red"}, {"value": 1, "color": "green"}]}
+          }
+        }
+      },
+      {
+        "id": 5,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "type": "timeseries",
+        "title": "Prometheus Time Series Samples",
+        "targets": [
+          {
+            "expr": "prometheus_tsdb_head_samples",
+            "refId": "A",
+            "legendFormat": "Samples"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 6,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "type": "timeseries",
+        "title": "Prometheus Time Series",
+        "targets": [
+          {
+            "expr": "prometheus_tsdb_head_series",
+            "refId": "A",
+            "legendFormat": "Series"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 7,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "type": "timeseries",
+        "title": "Traefik Request Rate",
+        "targets": [
+          {
+            "expr": "rate(traefik_entrypoint_requests_total[5m])",
+            "refId": "A",
+            "legendFormat": "{{entrypoint}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 8,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "type": "timeseries",
+        "title": "Traefik Request Duration",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(traefik_entrypoint_request_duration_seconds_bucket[5m]))",
+            "refId": "A",
+            "legendFormat": "p95 {{entrypoint}}"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(traefik_entrypoint_request_duration_seconds_bucket[5m]))",
+            "refId": "B",
+            "legendFormat": "p99 {{entrypoint}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {}
+  }
+}

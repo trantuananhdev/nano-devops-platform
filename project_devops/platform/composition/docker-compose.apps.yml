@@ -1,0 +1,193 @@
+version: '3.8'
+
+# Nano DevOps Platform - Applications
+# Focus: Odoo, Microservices
+
+x-logging:
+  &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # Application Layer - Odoo 16
+  odoo:
+    image: odoo:16.0
+    container_name: platform-odoo
+    restart: unless-stopped
+    environment:
+      - HOST=platform-postgres
+      - PORT=5432
+      - USER=odoo
+      - PASSWORD=devadmin
+      - ODOO_LOAD_DEMO=no
+      - ODOO_HTTP_PORT=8069
+      - ODOO_PROXY_MODE=true
+      - ODOO_MAX_CRON_THREADS=1
+    secrets:
+      - odoo_db_password
+    volumes:
+      - odoo-data:/var/lib/odoo
+      - odoo-addons:/mnt/extra-addons
+    networks:
+      - platform-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8069/web/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+        reservations:
+          memory: 300M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.odoo.rule=Host(`odoo.localhost`)"
+      - "traefik.http.routers.odoo.entrypoints=websecure"
+      - "traefik.http.routers.odoo.tls=true"
+      - "traefik.http.routers.odoo-http.rule=Host(`odoo.localhost`)"
+      - "traefik.http.routers.odoo-http.entrypoints=web"
+      - "traefik.http.routers.odoo-http.middlewares=redirect-to-https"
+      - "traefik.http.services.odoo.loadbalancer.server.port=8069"
+      - "prometheus.scrape=true"
+      - "prometheus.job=odoo"
+      - "prometheus.port=8069"
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+
+  # Application Layer - health-api
+  health-api:
+    build:
+      context: ../../apps/health-api
+      dockerfile: Dockerfile
+    container_name: platform-health-api
+    restart: unless-stopped
+    networks:
+      - platform-network
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.health-api.rule=Host(`health.localhost`)"
+      - "traefik.http.routers.health-api.entrypoints=web"
+      - "traefik.http.services.health-api.loadbalancer.server.port=8080"
+      - "prometheus.scrape=true"
+      - "prometheus.job=health-api"
+      - "prometheus.port=8080"
+
+  # Application Layer - data-api
+  data-api:
+    build:
+      context: ../../apps/data-api
+      dockerfile: Dockerfile
+    container_name: platform-data-api
+    restart: unless-stopped
+    environment:
+      - POSTGRES_HOST=platform-postgres
+      - POSTGRES_DB=platform_db
+      - POSTGRES_USER=platform_user
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    networks:
+      - platform-network
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.data-api.rule=Host(`data.localhost`)"
+      - "traefik.http.routers.data-api.entrypoints=web"
+      - "traefik.http.services.data-api.loadbalancer.server.port=8080"
+      - "prometheus.scrape=true"
+      - "prometheus.job=data-api"
+      - "prometheus.port=8080"
+
+  # Application Layer - aggregator-api
+  aggregator-api:
+    build:
+      context: ../../apps/aggregator-api
+      dockerfile: Dockerfile
+    container_name: platform-aggregator-api
+    restart: unless-stopped
+    environment:
+      - HEALTH_API_URL=http://health-api:8080
+      - DATA_API_URL=http://data-api:8080
+    networks:
+      - platform-network
+    depends_on:
+      health-api:
+        condition: service_started
+      data-api:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.aggregator-api.rule=Host(`aggregator.localhost`)"
+      - "traefik.http.routers.aggregator-api.entrypoints=web"
+      - "traefik.http.services.aggregator-api.loadbalancer.server.port=8080"
+      - "prometheus.scrape=true"
+      - "prometheus.job=aggregator-api"
+      - "prometheus.port=8080"
+
+  # Application Layer - user-api
+  user-api:
+    build:
+      context: ../../apps/user-api
+      dockerfile: Dockerfile
+    container_name: platform-user-api
+    restart: unless-stopped
+    environment:
+      - POSTGRES_HOST=platform-postgres
+      - POSTGRES_DB=platform_db
+      - POSTGRES_USER=platform_user
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    networks:
+      - platform-network
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.user-api.rule=Host(`user.localhost`)"
+      - "traefik.http.routers.user-api.entrypoints=web"
+      - "traefik.http.services.user-api.loadbalancer.server.port=8080"
+      - "prometheus.scrape=true"
+      - "prometheus.job=user-api"
+      - "prometheus.port=8080"
+
+networks:
+  platform-network:
+    external: true
+
+volumes:
+  odoo-data:
+    driver: local
+    driver_opts: {type: none, o: bind, device: /opt/platform/data/odoo}
+  odoo-addons:
+    driver: local
+    driver_opts: {type: none, o: bind, device: /opt/platform/data/odoo-addons}
+
+secrets:
+  odoo_db_password:
+    file: ../secrets/odoo_db_password.txt

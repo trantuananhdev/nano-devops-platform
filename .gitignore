@@ -1,0 +1,34 @@
+# Folders to ignore
+ai-system/
+docs-ai-context/
+docs-root.md
+
+# Vagrant
+.vagrant/
+
+# SSH keys
+id_rsa
+id_rsa.pub
+.ssh/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-wheel-metadata/
+.installed.cfg
+*.egg-info/
+*.egg
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*~
+
+# Environment files
+**/.env
