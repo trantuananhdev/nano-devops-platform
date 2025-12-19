@@ -1,0 +1,24 @@
+{
+  "name": "ai-agent",
+  "version": "1.0.0",
+  "description": "AI-Powered Development - Core Agent",
+  "private": true,
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js",
+    "migrate": "node migrate.js",
+    "smoke-test": "node src/tests/smoke-test.js",
+    "lint": "node -e \"console.log('no-lint-config-yet')\""
+  },
+  "dependencies": {
+    "axios": "^1.13.6",
+    "dotenv": "^17.3.1",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.20.0",
+    "prom-client": "^15.1.0"
+  }
+}
+
