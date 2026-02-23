@@ -1,0 +1,151 @@
+name: "CI: Enterprise Monorepo Pipeline"
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Hủy các lượt build cũ nếu có commit mới cùng PR (Tiết kiệm tài nguyên)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # --- STAGE 1: DETECTION ---
+  detect-changes:
+    name: Intelligence Center
+    runs-on: ubuntu-24.04
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3 # Cập nhật v3
+        id: filter
+        with:
+          filters: |
+            health-api: 'project_devops/apps/health-api/**'
+            data-api: 'project_devops/apps/data-api/**'
+            aggregator-api: 'project_devops/apps/aggregator-api/**'
+            user-api: 'project_devops/apps/user-api/**'
+            digital-fte-platform: 'project_devops/apps/digital-fte-platform/**'
+            platform:
+              - 'project_devops/platform/**'
+              - 'project_devops/ci/**'
+
+  # --- STAGE 2: QUALITY & SECURITY (Parallel) ---
+  lint-and-scan:
+    name: Security & Quality
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Gitleaks (Hard-fail on Secrets)
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          exit-code: 1 # Phát hiện secret là phải dừng ngay!
+
+      - name: Run Hadolint (Docker Check)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          recursive: true
+          failure-threshold: error
+
+      - name: Run Semgrep SAST
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/default
+
+  # --- STAGE 3: THE FACTORY ---
+  platform-validation:
+    name: Platform Validation
+    runs-on: ubuntu-24.04
+    if: needs.detect-changes.outputs.platform == 'true'
+    needs: [detect-changes, lint-and-scan]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Prometheus config (promtool)
+        run: |
+          docker run --rm -v "$PWD/project_devops/platform/config/prometheus:/etc/prometheus:ro" prom/prometheus:v2.48.0 promtool check config /etc/prometheus/prometheus.yml
+      - name: Run Platform Checks
+        run: |
+          bash ./project_devops/platform/ops/pre-flight-check.sh
+          bash ./project_devops/ci/scripts/check-platform-laws.sh
+          bash ./project_devops/ci/scripts/run-tests.sh
+
+  build-test-publish:
+    name: Build & Publish
+    runs-on: ubuntu-24.04
+    if: needs.detect-changes.outputs.services != '[]'
+    needs: [detect-changes, lint-and-scan]
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      max-parallel: 4 # Giới hạn số lượng build song song để tránh nghẽn runner
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Test riêng biệt cho từng service trước khi build
+      - name: Unit Test
+        run: |
+          if [ -f "./project_devops/apps/${{ matrix.service }}/test.sh" ]; then
+            bash ./project_devops/apps/${{ matrix.service }}/test.sh
+          else
+            echo "No specific tests found for ${{ matrix.service }}, skipping."
+          fi
+
+      - name: Build image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project_devops/apps/${{ matrix.service }}
+          push: false # Do not push yet
+          load: true # Load image into docker
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
+
+      - name: Scan image for vulnerabilities with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Push image to GHCR
+        if: github.event_name == 'push'
+        run: docker push ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
+
+  # --- STAGE 4: FINAL STATUS ---
+  ci-status:
+    name: Final Status
+    runs-on: ubuntu-24.04
+    needs: [lint-and-scan, build-test-publish]
+    if: always()
+    steps:
+      - name: Check Final Results
+        run: |
+          if [[ "${{ needs.lint-and-scan.result }}" == "success" && "${{ needs.build-test-publish.result }}" == "success" ]]; then
+            echo "✅ Pipeline hoàn thành xuất sắc!"
+            exit 0
+          else
+            echo "❌ Pipeline thất bại tại một bước nào đó."
+            exit 1
+          fi
