@@ -32,3 +32,6 @@ pip-wheel-metadata/
 
 # Environment files
 **/.env
+
+# Ghost AI Cheatsheet
+GHOST_OPS_CHEATSHEET.md
