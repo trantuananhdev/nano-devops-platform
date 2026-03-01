@@ -1,0 +1,10 @@
+stages:
+  - validate_laws
+  - unit_test
+  - build
+  - security_scan
+  - deploy
+
+policies:
+  fail_on_missing_test: true
+  fail_on_large_change: true

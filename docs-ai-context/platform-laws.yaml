@@ -1,0 +1,33 @@
+delivery:
+  small_batch:
+    max_lines: 300
+
+  trunk_based:
+    max_branch_lifetime_hours: 24
+
+  testability:
+    unit_test_required: true
+
+reliability:
+  slo_required: true
+  error_budget_policy: enforced
+
+architecture:
+  stateless_service: true
+  explicit_data_flow: true
+
+observability:
+  telemetry_required:
+    - logs
+    - metrics
+    - traces
+
+security:
+  secure_pipeline:
+    - sast
+    - dependency_scan
+    - secret_scan
+
+infra:
+  immutable: true
+  idempotent: true
