@@ -1,7 +1,0 @@
-rules:
-
-  - condition: financial_transaction
-    result: strong_consistency
-
-  - condition: multi_region
-    result: eventual_consistency

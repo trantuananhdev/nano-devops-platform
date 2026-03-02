@@ -1,0 +1,50 @@
+# {{SERVICE_NAME}} Service Configuration
+# Add this snippet to project_devops/platform/docker-compose.yml
+
+  {{SERVICE_NAME}}:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME:-owner/repo}/{{SERVICE_NAME}}:${IMAGE_TAG:-latest}
+    # Note: IMAGE_NAME should be set to github.repository (e.g., owner/repo-name)
+    # IMAGE_TAG defaults to 'latest' but should be set to commit SHA for deployments
+    container_name: platform-{{SERVICE_NAME}}
+    restart: unless-stopped
+    build:
+      context: ../../apps/{{SERVICE_NAME}}
+      dockerfile: Dockerfile
+{{#if ENVIRONMENT_VARS}}
+    environment:
+{{#each ENVIRONMENT_VARS}}
+      {{this.name}}: {{this.value}}
+{{/each}}
+{{/if}}
+{{#if SECRETS}}
+    secrets:
+{{#each SECRETS}}
+      - {{this}}
+{{/each}}
+{{/if}}
+    networks:
+      - platform-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: {{START_PERIOD:-15s}}
+    deploy:
+      resources:
+        limits:
+          memory: {{MEMORY_LIMIT:-100M}}
+        reservations:
+          memory: {{MEMORY_RESERVATION:-50M}}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.{{SERVICE_NAME}}.rule=Host(`{{SERVICE_NAME}}.localhost`)"
+      - "traefik.http.routers.{{SERVICE_NAME}}.entrypoints=web"
+      - "traefik.http.services.{{SERVICE_NAME}}.loadbalancer.server.port=8080"
+{{#if DEPENDS_ON}}
+    depends_on:
+{{#each DEPENDS_ON}}
+      {{this.service}}:
+        condition: {{this.condition}}
+{{/each}}
+{{/if}}

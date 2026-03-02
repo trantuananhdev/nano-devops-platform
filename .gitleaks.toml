@@ -1,0 +1,48 @@
+# Gitleaks configuration for Nano DevOps Platform
+# Secret detection rules
+
+title = "Gitleaks config for nano-platform"
+
+[extend]
+# Use default rules
+useDefault = true
+
+# Additional custom rules
+[[rules]]
+id = "nano-platform-secrets"
+description = "Nano Platform specific secrets"
+regex = '''(?i)(?:password|secret|api[_-]?key|token|credential)[\s:=]+['"]?([a-z0-9]{20,})['"]?'''
+entropy = 3.5
+tags = ["secret", "nano-platform"]
+
+# Exclude patterns (false positives)
+[allowlist]
+description = "Allowlist for known false positives"
+paths = [
+  '''\.example$''',
+  '''\.template$''',
+  '''\.sample$''',
+  '''\.md$''',
+  '''\.txt$''',
+  '''\.json$''',
+  '''\.yml$''',
+  '''\.yaml$''',
+  '''\.sh$''',
+  '''\.example\.sh$''',
+  '''\.template\.sh$''',
+  '''\.gitkeep$''',
+  '''\.gitignore$''',
+  '''\.dockerignore$''',
+  '''\.gitleaks\.toml$''',
+  '''\.github/workflows/''',
+  '''project_devops/platform/secrets/.*\.example$''',
+  '''project_devops/platform/secrets/.*\.template$''',
+  '''project_devops/monitoring/grafana/dashboards/''',
+  '''project_devops/monitoring/prometheus/alerts/''',
+]
+
+commits = [
+  '''^Initial commit$''',
+  '''^Merge.*''',
+  '''^Revert.*''',
+]

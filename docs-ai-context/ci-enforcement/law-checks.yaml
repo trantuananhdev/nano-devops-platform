@@ -1,7 +1,0 @@
-checks:
-
-  - name: slo_defined
-  - name: telemetry_present
-  - name: unit_test_present
-  - name: small_batch
-  - name: trunk_based

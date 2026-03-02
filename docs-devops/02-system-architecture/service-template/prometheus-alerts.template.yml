@@ -1,0 +1,29 @@
+# [SERVICE_NAME] Prometheus Alerts
+# Add these alerts to project_devops/monitoring/prometheus/alerts/platform-alerts.yml
+
+      # [SERVICE_NAME] Alerts
+      - alert: [SERVICE_NAME_UPPER]Down
+        expr: up{job="[SERVICE_NAME]"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: application
+          service: [SERVICE_NAME]
+        annotations:
+          summary: "[SERVICE_NAME] service is down"
+          description: "The [SERVICE_NAME] service has been down for more than 1 minute (up{job=\"[SERVICE_NAME]\"} == 0)."
+
+      - alert: [SERVICE_NAME_UPPER]HighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate([METRIC_PREFIX]_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: application
+          service: [SERVICE_NAME]
+        annotations:
+          summary: "[SERVICE_NAME] high latency detected"
+          description: "[SERVICE_NAME] p95 latency is above 1 second for more than 10 minutes."

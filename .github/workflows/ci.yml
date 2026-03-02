@@ -1,0 +1,292 @@
+name: CI Pipeline
+
+# CI Pipeline for Nano DevOps Platform
+# GitOps-compliant CI/CD workflow
+# Stages: lint → build → test → package → security & law checks → ci success
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck on shell scripts
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: 'project_devops'
+          format: gcc
+          severity: warning
+          fail-on-error: false
+
+      - name: Run YAML linting
+        uses: karancode/yamllint-github-action@v2.3.1
+        with:
+          file_or_dir: .
+          config_file_path: .yamllint.yml
+          format: github
+          strict: false
+        continue-on-error: true
+
+      - name: Run Hadolint on Dockerfiles
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: project_devops
+          failure-threshold: warning
+          ignore: DL3008,DL3009
+        continue-on-error: true
+
+      - name: Run Markdown linting
+        uses: DavidAnson/markdownlint-cli2-action@v15
+        with:
+          globs: '**/*.md'
+          exit-code: 0
+        continue-on-error: true
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Health API service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project_devops/apps/health-api
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/health-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Data API service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project_devops/apps/data-api
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/data-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Aggregator API service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project_devops/apps/aggregator-api
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/aggregator-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build User API service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project_devops/apps/user-api
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/user-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker
+        uses: docker/setup-docker-action@v3
+        with:
+          docker-compose: true
+
+      - name: Make test runner executable
+        run: |
+          if [ -f "project_devops/ci/run-tests.sh" ]; then
+            chmod +x project_devops/ci/run-tests.sh
+          fi
+
+      - name: Run tests
+        run: |
+          if [ -f "project_devops/ci/run-tests.sh" ]; then
+            project_devops/ci/run-tests.sh
+          else
+            echo "[INFO] No test runner script found (project_devops/ci/run-tests.sh)."
+            echo "[INFO] Skipping tests for now."
+          fi
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Health API service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project_devops/apps/health-api
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/health-api:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/health-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Data API service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project_devops/apps/data-api
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/data-api:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/data-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Aggregator API service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project_devops/apps/aggregator-api
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/aggregator-api:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/aggregator-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push User API service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./project_devops/apps/user-api
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/user-api:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/user-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  security-and-law-checks:
+    name: Security & Law Checks
+    runs-on: ubuntu-latest
+    needs: package
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for Gitleaks
+
+      - name: Run platform law checks
+        run: |
+          if [ -f "project_devops/ci/check-platform-laws.sh" ]; then
+            chmod +x project_devops/ci/check-platform-laws.sh
+            project_devops/ci/check-platform-laws.sh
+          else
+            echo "[WARN] project_devops/ci/check-platform-laws.sh not found - skipping platform law checks."
+          fi
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: 'shell,yaml,dockerfile'
+          queries: security-extended
+
+      - name: Autobuild CodeQL
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+      - name: Run Semgrep SAST
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/docker
+            p/shell
+            p/yaml
+          generateSarif: "1"
+          outputFormat: "sarif"
+          outputFile: "semgrep.sarif"
+
+      - name: Upload Semgrep results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        id: depcheck
+        with:
+          project: 'nano-platform'
+          path: '.'
+          format: 'SARIF'
+          args: >
+            --enableRetired
+            --failOnCVSS 7
+            --out reports/
+        continue-on-error: true
+
+      - name: Upload Dependency Check results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && steps.depcheck.outcome == 'success'
+        with:
+          sarif_file: reports/dependency-check-report.sarif
+
+      - name: Run Gitleaks Secret Detection
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          repo-path: .
+          config-path: .gitleaks.toml
+          no-git: false
+          verbose: true
+          redact: true
+          exit-code: 0  # Don't fail build, just report
+
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [lint, build, test, package, security-and-law-checks]
+    if: success()
+    steps:
+      - name: CI pipeline completed successfully
+        run: |
+          echo "✅ All CI stages passed"
+          echo "Ready for merge to main branch"

@@ -1,7 +1,0 @@
-environments:
-  - dev
-  - staging
-  - prod
-
-parity: required
-config_externalized: true

@@ -18,23 +18,36 @@ These targets apply to the primary PostgreSQL database and critical application 
 Backups are performed automatically via scripts scheduled on the VM.
 
 ```text
-Cron scheduler
+Cron scheduler (daily at 2 AM)
     ↓
- backup-db.sh
+ backup-all.sh (orchestration)
     ↓
- Database dump + compression
+ ├─► backup-postgres.sh ──► PostgreSQL dump + compression
+ └─► backup-redis.sh ──► Redis RDB snapshot + compression
     ↓
- Store in /opt/platform/data/backup (or configured backup location)
+ Store in /opt/platform/data/backup
 ```
 
 - **Frequency**
-  - At least once per day.
+  - At least once per day (default: 2 AM via cron).
 - **Scope**
-  - PostgreSQL database (full logical dump or physical backup as configured).
+  - PostgreSQL database: Full logical dump using `pg_dump`
+  - Redis data: RDB snapshot or AOF file copy
 - **Location**
-  - Stored on local disk and, optionally, synced to external storage (if configured).
+  - Stored on local disk: `/opt/platform/data/backup`
+  - Optionally synced to external storage (if configured).
 - **Implementation**
-  - Script example: `backup-db.sh` in `/opt/platform/scripts`.
+  - Scripts: `backup-postgres.sh`, `backup-redis.sh`, `backup-all.sh` in `/opt/platform/scripts`
+  - See `backup-automation.md` for detailed documentation
+
+**Backup Format**:
+- PostgreSQL: `postgres_YYYYMMDD_HHMMSS.sql.gz` (compressed SQL dump)
+- Redis: `redis_YYYYMMDD_HHMMSS.rdb.gz` (compressed RDB/AOF file)
+
+**Retention Policy**:
+- Default: 7 days
+- Configurable via `RETENTION_DAYS` environment variable
+- Old backups automatically cleaned up
 
 Backups must be lightweight enough to fit within the storage and memory constraints of the single-node environment.
 

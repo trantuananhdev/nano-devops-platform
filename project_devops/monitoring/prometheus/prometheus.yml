@@ -1,0 +1,80 @@
+# Prometheus Configuration
+# Metrics Collection for Nano DevOps Platform
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    cluster: 'nano-platform'
+    environment: 'production'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Traefik metrics
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:8080']
+    metrics_path: '/metrics'
+
+  # PostgreSQL exporter
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  # Redis exporter
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # Health API Service
+  - job_name: 'health-api'
+    static_configs:
+      - targets: ['health-api:8080']
+    metrics_path: '/metrics'
+
+  # Data API Service
+  - job_name: 'data-api'
+    static_configs:
+      - targets: ['data-api:8080']
+    metrics_path: '/metrics'
+
+  # Aggregator API Service
+  - job_name: 'aggregator-api'
+    static_configs:
+      - targets: ['aggregator-api:8080']
+    metrics_path: '/metrics'
+
+  - job_name: 'user-api'
+    static_configs:
+      - targets: ['user-api:8080']
+    metrics_path: '/metrics'
+
+  # Container resource metrics (via cAdvisor)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Host/Disk metrics (via node_exporter)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+# Alert rules
+rule_files:
+  - '/etc/prometheus/alerts/*.yml'
+
+# Alertmanager configuration (to be added)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093

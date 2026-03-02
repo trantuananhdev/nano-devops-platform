@@ -1,7 +1,0 @@
-when_create_repo:
-
-  create:
-    - apps/
-    - platform/
-    - infra/
-    - ai-context/

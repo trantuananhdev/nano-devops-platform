@@ -1,0 +1,30 @@
+# Traefik Configuration
+# Edge Layer - Reverse Proxy
+
+api:
+  dashboard: true
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: platform-network
+
+log:
+  level: INFO
+  format: json
+
+accessLog:
+  format: json

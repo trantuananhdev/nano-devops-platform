@@ -1,0 +1,528 @@
+version: '3.8'
+
+# Nano DevOps Platform - Base Infrastructure Services
+# Single-node 6GB RAM constraint
+# GitOps-compliant, immutable deployment
+
+services:
+  # Edge Layer - Reverse Proxy
+  traefik:
+    image: traefik:v3.0
+    container_name: platform-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik:/etc/traefik:ro
+    networks:
+      - platform-network
+    command:
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+        reservations:
+          memory: 100M
+    labels:
+      - "traefik.enable=true"
+
+  # Data Layer - Shared PostgreSQL Database
+  platform-postgres:
+    image: postgres:16-alpine
+    container_name: platform-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: platform_db
+      POSTGRES_USER: platform_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - platform-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform_user -d platform_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+        reservations:
+          memory: 1G
+    secrets:
+      - postgres_password
+    labels:
+      - "traefik.enable=false"
+
+  # Cache Layer - Redis
+  platform-redis:
+    image: redis:7-alpine
+    container_name: platform-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - platform-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+        reservations:
+          memory: 100M
+    labels:
+      - "traefik.enable=false"
+
+  # Observability Layer - Prometheus (Metrics Collection)
+  platform-prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: platform-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    networks:
+      - platform-network
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+        reservations:
+          memory: 200M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.localhost`)"
+      - "traefik.http.routers.prometheus.entrypoints=web"
+
+  # Observability Layer - Grafana (Visualization)
+  platform-grafana:
+    image: grafana/grafana:10.2.0
+    container_name: platform-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD_FILE=/run/secrets/grafana_password
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - platform-network
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+        reservations:
+          memory: 150M
+    secrets:
+      - grafana_password
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.localhost`)"
+      - "traefik.http.routers.grafana.entrypoints=web"
+
+  # Observability Layer - Loki (Log Aggregation)
+  platform-loki:
+    image: grafana/loki:2.9.2
+    container_name: platform-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./monitoring/loki:/etc/loki:ro
+      - loki-data:/loki
+    networks:
+      - platform-network
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+        reservations:
+          memory: 150M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.loki.rule=Host(`loki.localhost`)"
+      - "traefik.http.routers.loki.entrypoints=web"
+
+  # Observability Layer - PostgreSQL Exporter
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: platform-postgres-exporter
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/postgres-exporter/entrypoint.sh:/entrypoint.sh:ro
+    secrets:
+      - postgres_password
+    networks:
+      - platform-network
+    ports:
+      - "9187:9187"
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9187/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+        reservations:
+          memory: 25M
+    labels:
+      - "traefik.enable=false"
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+
+  # Observability Layer - Redis Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: platform-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://platform-redis:6379"
+    networks:
+      - platform-network
+    ports:
+      - "9121:9121"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9121/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+        reservations:
+          memory: 25M
+    labels:
+      - "traefik.enable=false"
+    depends_on:
+      platform-redis:
+        condition: service_healthy
+
+  # Observability Layer - cAdvisor (Container Resource Metrics)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    container_name: platform-cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - platform-network
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+        reservations:
+          memory: 50M
+    labels:
+      - "traefik.enable=false"
+
+  # Observability Layer - Node Exporter (Host/Disk Metrics)
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: platform-node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - platform-network
+    ports:
+      - "9100:9100"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+        reservations:
+          memory: 25M
+    labels:
+      - "traefik.enable=false"
+
+  # Application Layer - Health API Service (First Application Service)
+  health-api:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME:-owner/repo}/health-api:${IMAGE_TAG:-latest}
+    # Note: IMAGE_NAME should be set to github.repository (e.g., owner/repo-name)
+    # IMAGE_TAG defaults to 'latest' but should be set to commit SHA for deployments
+    container_name: platform-health-api
+    restart: unless-stopped
+    build:
+      context: ../../apps/health-api
+      dockerfile: Dockerfile
+    networks:
+      - platform-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+        reservations:
+          memory: 25M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.health-api.rule=Host(`health-api.localhost`)"
+      - "traefik.http.routers.health-api.entrypoints=web"
+      - "traefik.http.services.health-api.loadbalancer.server.port=8080"
+
+  # Application Layer - Data API Service (Second Application Service)
+  data-api:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME:-owner/repo}/data-api:${IMAGE_TAG:-latest}
+    # Note: IMAGE_NAME should be set to github.repository (e.g., owner/repo-name)
+    # IMAGE_TAG defaults to 'latest' but should be set to commit SHA for deployments
+    container_name: platform-data-api
+    restart: unless-stopped
+    build:
+      context: ../../apps/data-api
+      dockerfile: Dockerfile
+    environment:
+      POSTGRES_HOST: platform-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: platform_db
+      POSTGRES_USER: platform_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    networks:
+      - platform-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+        reservations:
+          memory: 50M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.data-api.rule=Host(`data-api.localhost`)"
+      - "traefik.http.routers.data-api.entrypoints=web"
+      - "traefik.http.services.data-api.loadbalancer.server.port=8080"
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+    secrets:
+      - postgres_password
+    # Note: POSTGRES_PASSWORD will be available via /run/secrets/postgres_password
+    # The service reads it from environment variable POSTGRES_PASSWORD_FILE or POSTGRES_PASSWORD
+
+  # Application Layer - Aggregator API Service (Third Application Service - Service-to-Service Communication)
+  aggregator-api:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME:-owner/repo}/aggregator-api:${IMAGE_TAG:-latest}
+    # Note: IMAGE_NAME should be set to github.repository (e.g., owner/repo-name)
+    # IMAGE_TAG defaults to 'latest' but should be set to commit SHA for deployments
+    container_name: platform-aggregator-api
+    restart: unless-stopped
+    build:
+      context: ../../apps/aggregator-api
+      dockerfile: Dockerfile
+    environment:
+      HEALTH_API_URL: http://health-api:8080
+      DATA_API_URL: http://data-api:8080
+      SERVICE_TIMEOUT: "5.0"
+    networks:
+      - platform-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+        reservations:
+          memory: 50M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.aggregator-api.rule=Host(`aggregator-api.localhost`)"
+      - "traefik.http.routers.aggregator-api.entrypoints=web"
+      - "traefik.http.services.aggregator-api.loadbalancer.server.port=8080"
+    depends_on:
+      health-api:
+        condition: service_healthy
+      data-api:
+        condition: service_healthy
+
+  user-api:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME:-owner/repo}/user-api:${IMAGE_TAG:-latest}
+    # Note: IMAGE_NAME should be set to github.repository (e.g., owner/repo-name)
+    # IMAGE_TAG defaults to 'latest' but should be set to commit SHA for deployments
+    container_name: platform-user-api
+    restart: unless-stopped
+    build:
+      context: ../../apps/user-api
+      dockerfile: Dockerfile
+    environment:
+      POSTGRES_HOST: platform-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: platform_db
+      POSTGRES_USER: platform_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    networks:
+      - platform-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+        reservations:
+          memory: 50M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.user-api.rule=Host(`user-api.localhost`)"
+      - "traefik.http.routers.user-api.entrypoints=web"
+      - "traefik.http.services.user-api.loadbalancer.server.port=8080"
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+    secrets:
+      - postgres_password
+
+# Networks
+networks:
+  platform-network:
+    driver: bridge
+    name: platform-network
+
+# Volumes - Persistent Data Storage
+volumes:
+  postgres-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/platform/data/postgres
+  redis-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/platform/data/redis
+  prometheus-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/platform/data/prometheus
+  grafana-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/platform/data/grafana
+  loki-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/platform/data/loki
+
+# Secrets (to be managed via Docker secrets or environment files)
+secrets:
+  postgres_password:
+    external: false
+    file: ./secrets/postgres_password.txt
+  grafana_password:
+    external: false
+    file: ./secrets/grafana_password.txt

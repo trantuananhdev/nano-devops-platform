@@ -1,7 +1,0 @@
-error_budget:
-
-  burn_rate_threshold: 2
-
-actions_on_exhaustion:
-  - freeze_release
-  - focus_on_reliability

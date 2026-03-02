@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""
+{{SERVICE_NAME}} Service
+{{SERVICE_DESCRIPTION}}
+"""
+
+from flask import Flask, jsonify{{#if REQUEST_IMPORT}}, request{{/if}}
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Histogram
+{{#if TIME_IMPORT}}import time{{/if}}
+{{#if DB_IMPORT}}import psycopg2
+import os{{/if}}
+{{#if SYS_IMPORT}}import sys{{/if}}
+
+app = Flask(__name__)
+
+{{#if DB_CONFIG}}
+# Database connection configuration
+def get_db_password():
+    """Get database password from environment variable or Docker secret file"""
+    password_file = os.getenv('POSTGRES_PASSWORD_FILE', '/run/secrets/postgres_password')
+    if os.path.exists(password_file):
+        with open(password_file, 'r') as f:
+            return f.read().strip()
+    return os.getenv('POSTGRES_PASSWORD', 'platform_password')
+
+DB_CONFIG = {
+    'host': os.getenv('POSTGRES_HOST', 'platform-postgres'),
+    'port': os.getenv('POSTGRES_PORT', '5432'),
+    'database': os.getenv('POSTGRES_DB', 'platform_db'),
+    'user': os.getenv('POSTGRES_USER', 'platform_user'),
+    'password': get_db_password()
+}
+{{/if}}
+
+# Prometheus metrics
+request_count = Counter('{{METRIC_PREFIX}}_requests_total', 'Total number of requests', ['method', 'endpoint'])
+request_duration = Histogram('{{METRIC_PREFIX}}_request_duration_seconds', 'Request duration in seconds', ['method', 'endpoint'])
+{{#if DB_METRICS}}db_errors = Counter('{{METRIC_PREFIX}}_db_errors_total', 'Total database errors', ['operation']){{/if}}
+
+{{#if DB_FUNCTIONS}}
+def get_db_connection():
+    """Get database connection"""
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        return conn
+    except Exception as e:
+        app.logger.error(f"Database connection error: {e}")
+        db_errors.labels(operation='connect').inc()
+        return None
+{{/if}}
+
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check endpoint{{#if DB_CHECK}} - verifies database connectivity{{/if}}"""
+{{#if DB_CHECK}}
+    db_status = 'unknown'
+    try:
+        conn = get_db_connection()
+        if conn:
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.close()
+            conn.close()
+            db_status = 'connected'
+        else:
+            db_status = 'disconnected'
+    except Exception as e:
+        app.logger.error(f"Health check database error: {e}")
+        db_status = 'error'
+    
+    status_code = 200 if db_status == 'connected' else 503
+    return jsonify({
+        'status': 'healthy' if db_status == 'connected' else 'unhealthy',
+        'service': '{{SERVICE_NAME}}',
+        'version': '1.0.0',
+        'database': db_status
+    }), status_code
+{{else}}
+    return jsonify({
+        'status': 'healthy',
+        'service': '{{SERVICE_NAME}}',
+        'version': '1.0.0'
+    }), 200
+{{/if}}
+
+@app.route('/metrics', methods=['GET'])
+def metrics():
+    """Prometheus metrics endpoint"""
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+@app.route('/', methods=['GET'])
+def root():
+    """Root endpoint"""
+    return jsonify({
+        'message': '{{SERVICE_NAME}} Service',
+        'version': '1.0.0',
+        'endpoints': ['/health', '/metrics'{{#if CUSTOM_ENDPOINTS}}{{#each CUSTOM_ENDPOINTS}}, '{{this}}'{{/each}}{{/if}}]
+    }), 200
+
+{{#if CUSTOM_ROUTES}}
+# Add your custom routes here
+{{/if}}
+
+@app.before_request
+def before_request():
+    """Track request start time"""
+    request.start_time = time.time()
+
+@app.after_request
+def after_request(response):
+    """Track request metrics"""
+    request_count.labels(method=request.method, endpoint=request.endpoint or 'unknown').inc()
+    duration = time.time() - request.start_time
+    request_duration.labels(method=request.method, endpoint=request.endpoint or 'unknown').observe(duration)
+    return response
+
+{{#if DB_INIT}}
+if __name__ == '__main__':
+    # Initialize database on startup
+    if not init_db():
+        app.logger.error("Failed to initialize database - service may not function correctly")
+        sys.exit(1)
+    
+    app.run(host='0.0.0.0', port=8080, debug=False)
+{{else}}
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080, debug=False)
+{{/if}}

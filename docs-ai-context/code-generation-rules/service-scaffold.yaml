@@ -1,9 +1,0 @@
-when_create_service:
-
-  use_golden_path: service.yaml
-
-  auto_generate:
-    - healthcheck
-    - telemetry
-    - slo_config
-    - test_structure

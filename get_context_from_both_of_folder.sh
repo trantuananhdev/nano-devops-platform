@@ -26,4 +26,15 @@ find "$TARGET_DIR_2" -maxdepth 4 -not -path "*/.*" -not -path "./node_modules/*"
     echo -e "\n\n"
 ' \; > "$TARGET_DIR_2/$OUTPUT_FILE_2"
 
+TARGET_DIR_3="./ai-system"
+OUTPUT_FILE_3="get_final_aisystem_context.md"
+
+find "$TARGET_DIR_3" -maxdepth 4 -not -path "*/.*" -not -path "./node_modules/*" -not -name "$OUTPUT_FILE_3" -type f -exec sh -c '
+    echo "=================================================="
+    echo "SOURCE_PATH: {}"
+    echo "=================================================="
+    cat "{}"
+    echo -e "\n\n"
+' \; > "$TARGET_DIR_3/$OUTPUT_FILE_3"
+
 echo "Xong! Check trong 2 folder nhé bạn."
