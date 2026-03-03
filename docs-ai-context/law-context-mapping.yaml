@@ -1,0 +1,18 @@
+foundation:
+  - delivery.small_batch
+  - delivery.trunk_based
+
+service_template:
+  - reliability.slo_required
+  - observability.telemetry_required
+  - architecture.stateless_service
+
+ci_cd:
+  - delivery.testability
+  - security.secure_pipeline
+
+runtime:
+  - infra.immutable
+
+observability:
+  - reliability.error_budget_policy

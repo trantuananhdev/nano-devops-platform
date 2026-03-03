@@ -1,0 +1,18 @@
+service:
+  structure:
+    layers:
+      - domain
+      - application
+      - infrastructure
+
+  runtime:
+    healthcheck: required
+    resource_limits: required
+
+  observability:
+    logs: structured
+    metrics: enabled
+    traces: enabled
+
+  reliability:
+    slo: required

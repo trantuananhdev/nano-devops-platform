@@ -1,0 +1,7 @@
+rules:
+
+  - condition: read_heavy
+    result: read_replica
+
+  - condition: write_heavy
+    result: sharding

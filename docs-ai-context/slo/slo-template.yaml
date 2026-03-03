@@ -1,0 +1,4 @@
+slo:
+  availability: 99.9
+  latency_p95_ms: 300
+  error_rate: 1%
