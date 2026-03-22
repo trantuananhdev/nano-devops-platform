@@ -35,6 +35,11 @@ print_usage() {
     echo "  test            Run platform-level tests."
     echo "  migrate         Run database migrations to the latest version."
     echo "  deploy <svc> <tag> Deploy a new version of a service."
+    echo ""
+    echo "AI Platform Commands:"
+    echo "  ai-up           Start Agentic-AI services."
+    echo "  ai-logs         Follow logs for the Agentic-AI service."
+    echo "  ai-migrate      Run database migrations for the Agentic-AI service."
 }
 
 # --- Command Implementation ---
@@ -83,6 +88,24 @@ cmd_deploy() {
     SERVICE_NAME=$1 IMAGE_TAG=$2 bash ./project_devops/platform/ops/deployment/deploy.sh
 }
 
+# --- AI Platform Specific Commands ---
+cmd_ai_up() {
+    echo "Starting Agentic-AI services..."
+    $COMPOSE $COMPOSE_FILES up -d agentic-ai-api
+}
+
+cmd_ai_logs() {
+    echo "Following logs for Agentic-AI service..."
+    $COMPOSE $COMPOSE_FILES logs -f agentic-ai-api
+}
+
+cmd_ai_migrate() {
+    echo "Running database migrations for Agentic-AI..."
+    # AI Platform migrations via node-pg-migrate or similar if needed
+    # But for now, let's assume it's part of the standard flow
+    $COMPOSE $COMPOSE_FILES exec agentic-ai-api npm run migrate || echo "Migration command failed or not configured in package.json."
+}
+
 # --- Main Dispatcher ---
 COMMAND="${1:-}"
 
@@ -112,6 +135,15 @@ case "$COMMAND" in
         ;;
     deploy)
         cmd_deploy "${2:-}" "${3:-}"
+        ;;
+    ai-up)
+        cmd_ai_up
+        ;;
+    ai-logs)
+        cmd_ai_logs
+        ;;
+    ai-migrate)
+        cmd_ai_migrate
         ;;
     *)
         echo "Error: Unknown command '$COMMAND'"

@@ -62,4 +62,21 @@ else
   echo "[WARN] Integration test script not found: test-deployment-scripts.sh"
 fi
 
-echo "[INFO] CI test stage completed (no blocking tests defined yet)."
+run_section "Platform Smoke Tests"
+SMOKE_TESTS_DIR="${ROOT_DIR}/project_devops/platform/ops/smoke-tests"
+if [ -d "$SMOKE_TESTS_DIR" ]; then
+  echo "[INFO] Running all smoke tests in ${SMOKE_TESTS_DIR}..."
+  for test_file in "${SMOKE_TESTS_DIR}"/smoke-test-*.sh; do
+    if [ -f "$test_file" ]; then
+      echo "[INFO] Executing: $(basename "$test_file")"
+      bash "$test_file" || {
+        echo "[ERROR] Smoke test failed: $(basename "$test_file")"
+        exit 1
+      }
+    fi
+  done
+else
+  echo "[INFO] Smoke tests directory not found. Skipping."
+fi
+
+echo "[INFO] CI test stage completed (all platform tests passed)."

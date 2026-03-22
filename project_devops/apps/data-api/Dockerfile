@@ -1,21 +1,31 @@
 # data-api Service
 # PostgreSQL integration service (<200MB RAM)
 
-FROM python:3.11-alpine
+# --- Stage 1: Builder ---
+FROM python:3.11-alpine as builder
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apk add --no-cache wget postgresql-dev gcc musl-dev
+# Install build dependencies
+RUN apk add --no-cache gcc musl-dev postgresql-dev
 
-# Install Python dependencies
-RUN pip install --no-cache-dir flask prometheus-client psycopg2-binary alembic
+# Install Python dependencies into a temporary directory
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Copy application code
+# --- Stage 2: Final ---
+FROM python:3.11-alpine
+
+WORKDIR /app
+
+# Copy only the installed dependencies from builder
+COPY --from=builder /install /usr/local
+
+# Copy application code and migrations
 COPY src/ /app/
-# Copy migrations for alembic (if running migrations via this container)
-COPY --chown=appuser:appuser . /app/
+
+# Install runtime dependencies (wget for healthcheck, libpq for postgres)
+RUN apk add --no-cache wget libpq
 
 # Run as non-root user
 RUN addgroup -g 1000 appuser && \
@@ -27,9 +37,14 @@ USER appuser
 # Expose port
 EXPOSE 8080
 
+# Environment variables for Gunicorn
+ENV GUNICORN_WORKERS=2
+ENV GUNICORN_THREADS=4
+ENV GUNICORN_BIND=0.0.0.0:8080
+
 # Health check
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=15s \
   CMD wget --quiet --tries=1 --spider http://localhost:8080/health || exit 1
 
-# Run application
-CMD ["python", "app.py"]
+# Run application using Gunicorn (Production-ready WSGI server)
+CMD ["sh", "-c", "gunicorn --workers $GUNICORN_WORKERS --threads $GUNICORN_THREADS --bind $GUNICORN_BIND app:app"]

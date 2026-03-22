@@ -23,7 +23,7 @@ RUN apk add --no-cache wget
 {{/if}}
 
 # Install Python dependencies
-RUN pip install --no-cache-dir {{PYTHON_DEPS:-flask prometheus-client}}
+RUN pip install --no-cache-dir --break-system-packages {{PYTHON_DEPS:-flask prometheus-client}}
 
 # Copy application code
 COPY src/ /app/

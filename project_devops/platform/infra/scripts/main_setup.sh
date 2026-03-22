@@ -49,6 +49,14 @@ log_info "Step 7/8: Setting up mkcert and generating development certificates...
 log_info "Step 8/8: Setting up platform system service..."
 "$SCRIPT_DIR/system/platform_service_setup.sh"
 
+log_info "Step 9/9: Updating /etc/hosts with platform domains..."
+DOMAINS="odoo.nano.platform ai.nano.platform grafana.nano.platform prometheus.nano.platform aggregator.nano.platform user.nano.platform data.nano.platform health.nano.platform"
+for d in $DOMAINS; do
+    if ! grep -q "$d" /etc/hosts; then
+        echo "127.0.0.1 $d" >> /etc/hosts
+    fi
+done
+
 log_info "✅ All core system setup steps completed!"
 
 # --- Platform Application Bootstrap ---
@@ -99,9 +107,9 @@ if [ -n "$PLATFORM_COMPOSITION_PATH" ]; then
     # This script needs to know where the source is, assuming it finds it via /tmp/infra or similar
     "$SCRIPT_DIR/certs/generate_dev_certs.sh" "$PLATFORM_COMPOSITION_PATH"
 
-  log_info "Attempting to start platform services as user '$DEPLOY_USER' via system service..."
-  rc-service nano-platform start
-  log_info "Platform services are starting in the background."
+  log_info "Attempting to restart platform services as user '$DEPLOY_USER' to pick up code changes..."
+  rc-service nano-platform restart
+  log_info "Platform services are restarting in the background."
 else
     log_error "Could not find platform source. Bootstrap failed. Please mount the repo to /workspace or use COPY_PROJECT_DEVOPS=1."
 fi

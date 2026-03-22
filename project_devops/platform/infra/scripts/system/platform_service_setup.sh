@@ -70,13 +70,32 @@ start() {
     
     einfo "Starting platform at: \$PLATFORM_PATH"
     
+    # Senior DevOps: Generate TLS certificates if they don't exist
+    CERT_GEN_SCRIPT="/opt/platform/src/nano-project-devops/project_devops/platform/infra/scripts/system/generate_certs.sh"
+    if [ -f "\$CERT_GEN_SCRIPT" ]; then
+        einfo "Generating TLS certificates..."
+        sh "\$CERT_GEN_SCRIPT"
+    fi
+
+    # Senior DevOps: Ensure .env is linked to the composition directory
+    # This fixes the "variable is not set" WARN when running docker compose manually
+    DOTENV_ROOT="/opt/platform/src/nano-project-devops/.env"
+    ENV_FILE_ARG=""
+    if [ -f "\$DOTENV_ROOT" ]; then
+        einfo "Linking .env from root to composition directory"
+        ln -sf "\$DOTENV_ROOT" "\$PLATFORM_PATH/.env"
+        # Explicitly use it as an argument too for maximum robustness
+        ENV_FILE_ARG="--env-file \$DOTENV_ROOT"
+    fi
+
     # Start the platform as the deploy user with all modules
-    COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.observability.yml -f docker-compose.apps.yml"
+    # Added --build to ensure code changes are picked up during provision/restart
+    COMPOSE_CMD="docker compose \$ENV_FILE_ARG -f docker-compose.yml -f docker-compose.observability.yml -f docker-compose.apps.yml"
     if [ -f "\$PLATFORM_PATH/docker-compose.override.yml" ]; then
         COMPOSE_CMD="\$COMPOSE_CMD -f docker-compose.override.yml"
     fi
 
-    su - "$DEPLOY_USER" -c "cd '\$PLATFORM_PATH' && \$COMPOSE_CMD up -d"
+    su - "$DEPLOY_USER" -c "cd '\$PLATFORM_PATH' && \$COMPOSE_CMD up -d --build"
     
     eend \$?
 }
@@ -86,7 +105,13 @@ stop() {
     
     PLATFORM_PATH=\$(find_composition_path)
     if [ -n "\$PLATFORM_PATH" ]; then
-        COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.observability.yml -f docker-compose.apps.yml"
+        DOTENV_ROOT="/opt/platform/src/nano-project-devops/.env"
+        ENV_FILE_ARG=""
+        if [ -f "\$DOTENV_ROOT" ]; then
+            ENV_FILE_ARG="--env-file \$DOTENV_ROOT"
+        fi
+
+        COMPOSE_CMD="docker compose \$ENV_FILE_ARG -f docker-compose.yml -f docker-compose.observability.yml -f docker-compose.apps.yml"
         if [ -f "\$PLATFORM_PATH/docker-compose.override.yml" ]; then
             COMPOSE_CMD="\$COMPOSE_CMD -f docker-compose.override.yml"
         fi
@@ -103,7 +128,13 @@ stop() {
 status() {
     PLATFORM_PATH=\$(find_composition_path)
     if [ -n "\$PLATFORM_PATH" ]; then
-        COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.observability.yml -f docker-compose.apps.yml"
+        DOTENV_ROOT="/opt/platform/src/nano-project-devops/.env"
+        ENV_FILE_ARG=""
+        if [ -f "\$DOTENV_ROOT" ]; then
+            ENV_FILE_ARG="--env-file \$DOTENV_ROOT"
+        fi
+
+        COMPOSE_CMD="docker compose \$ENV_FILE_ARG -f docker-compose.yml -f docker-compose.observability.yml -f docker-compose.apps.yml"
         if [ -f "\$PLATFORM_PATH/docker-compose.override.yml" ]; then
             COMPOSE_CMD="\$COMPOSE_CMD -f docker-compose.override.yml"
         fi

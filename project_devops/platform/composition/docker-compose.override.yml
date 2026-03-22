@@ -16,7 +16,7 @@ services:
     ports:
       - "6379:6379"
 
-  odoo:
-    # Development specific Odoo settings
-    environment:
-      - ODOO_LOAD_DEMO=yes # Load demo data for initial setup
+  # odoo:
+  #   # Development specific Odoo settings
+  #   environment:
+  #     - ODOO_LOAD_DEMO=yes # Load demo data for initial setup

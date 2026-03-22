@@ -65,6 +65,11 @@ generate_secret() {
 generate_secret "postgres_password"
 generate_secret "grafana_password"
 generate_secret "odoo_db_password"
+generate_secret "agentic_ai_jwt_secret"
+generate_secret "agentic_ai_admin_key"
+generate_secret "agentic_ai_openai_key"
+generate_secret "agentic_ai_webhook_secret"
+generate_secret "agentic_ai_gemini_key"
 
 log_info "=========================================="
 log_info "Secrets generation completed successfully!"

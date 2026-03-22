@@ -8,7 +8,7 @@ server:
   grpc_listen_port: 9096
 
 common:
-  instance_addr: 127.0.0.1
+  instance_addr: 0.0.0.0
   path_prefix: /loki
   storage:
     filesystem:
@@ -16,6 +16,7 @@ common:
       rules_directory: /loki/rules
   replication_factor: 1
   ring:
+    instance_addr: 127.0.0.1
     kvstore:
       store: inmemory
 
@@ -27,7 +28,7 @@ schema_config:
       schema: v11
       index:
         prefix: index_
-        period: 168h  # 7 days retention
+        period: 24h
 
 storage_config:
   boltdb_shipper:
@@ -70,7 +71,7 @@ ruler:
     local:
       directory: /loki/rules
   rule_path: /loki/rules
-  alertmanager_url: http://localhost:9093
+  alertmanager_url: http://platform-alertmanager:9093
   ring:
     kvstore:
       store: inmemory

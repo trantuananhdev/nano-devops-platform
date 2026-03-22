@@ -98,9 +98,16 @@ for dir in $data_dirs; do
     if [ ! -d "$PLATFORM_ROOT/data/$dir" ]; then
         log_info "Creating $PLATFORM_ROOT/data/$dir..."
         mkdir -p "$PLATFORM_ROOT/data/$dir"
-    else
-        log_info "Directory $PLATFORM_ROOT/data/$dir already exists."
     fi
+    
+    # Special subdirectories for Loki to ensure it can start
+    if [ "$dir" = "loki" ]; then
+        mkdir -p "$PLATFORM_ROOT/data/loki/chunks" "$PLATFORM_ROOT/data/loki/rules" "$PLATFORM_ROOT/data/loki/boltdb-shipper-active" "$PLATFORM_ROOT/data/loki/boltdb-shipper-cache" "$PLATFORM_ROOT/data/loki/boltdb-shipper-compactor"
+    fi
+
+    # CTO Fix: Ensure these directories are writable by container users (UIDs vary)
+    # For now, we set them to be owned by the deploy user and world-writable for dev-parity
+    chmod -R 777 "$PLATFORM_ROOT/data/$dir"
 done
 
 if [ ! -d "$PLATFORM_ROOT/backups" ]; then

@@ -16,13 +16,18 @@ entryPoints:
   websecure:
     address: ":443"
     http:
-      tls:
+      tls: {}
+
+ping: {}
 
 providers:
   docker:
-    endpoint: "unix:///var/run/docker.sock"
+    endpoint: "tcp://socket-proxy:2375"
     exposedByDefault: false
     network: platform-network
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
 
 log:
   level: INFO
@@ -31,19 +36,21 @@ log:
 accessLog:
   format: json
 
-tls:
-  certificates:
-    - certFile: /etc/traefik/certs/dev/localhost.crt
-      keyFile: /etc/traefik/certs/dev/localhost.key
-    - certFile: /etc/traefik/certs/dev/odoo.localhost.crt
-      keyFile: /etc/traefik/certs/dev/odoo.localhost.key
-    - certFile: /etc/traefik/certs/dev/grafana.localhost.crt
-      keyFile: /etc/traefik/certs/dev/grafana.localhost.key
-    - certFile: /etc/traefik/certs/dev/prometheus.localhost.crt
-      keyFile: /etc/traefik/certs/dev/prometheus.localhost.key
-    - certFile: /etc/traefik/certs/dev/jaeger.localhost.crt
-      keyFile: /etc/traefik/certs/dev/jaeger.localhost.key
-    - certFile: /etc/traefik/certs/dev/alertmanager.localhost.crt
-      keyFile: /etc/traefik/certs/dev/alertmanager.localhost.key
-    - certFile: /etc/traefik/certs/dev/loki.localhost.crt
-      keyFile: /etc/traefik/certs/dev/loki.localhost.key
+# tls:
+#   certificates:
+#     - certFile: /etc/traefik/certs/dev/localhost.crt
+#       keyFile: /etc/traefik/certs/dev/localhost.key
+#     - certFile: /etc/traefik/certs/dev/odoo.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/odoo.nano.platform.key
+#     - certFile: /etc/traefik/certs/dev/grafana.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/grafana.nano.platform.key
+#     - certFile: /etc/traefik/certs/dev/prometheus.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/prometheus.nano.platform.key
+#     - certFile: /etc/traefik/certs/dev/jaeger.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/jaeger.nano.platform.key
+#     - certFile: /etc/traefik/certs/dev/alertmanager.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/alertmanager.nano.platform.key
+#     - certFile: /etc/traefik/certs/dev/loki.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/loki.nano.platform.key
+#     - certFile: /etc/traefik/certs/dev/ai.nano.platform.crt
+#       keyFile: /etc/traefik/certs/dev/ai.nano.platform.key

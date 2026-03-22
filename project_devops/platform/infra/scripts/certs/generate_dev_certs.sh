@@ -19,7 +19,7 @@ else
     REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
     CERT_DIR="$REPO_ROOT/project_devops/platform/config/traefik/certs/dev"
 fi
-HOSTS="localhost odoo.localhost grafana.localhost prometheus.localhost jaeger.localhost alertmanager.localhost loki.localhost"
+HOSTS="localhost odoo.nano.platform grafana.nano.platform prometheus.nano.platform jaeger.nano.platform alertmanager.nano.platform loki.nano.platform ai.nano.platform"
 
 mkdir -p "$CERT_DIR"
 

@@ -46,19 +46,9 @@ services:
     volumes:
       - ../config/traefik:/etc/traefik:ro
       - ../config/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - /opt/platform/config/traefik/certs:/etc/traefik/certs:ro
     networks:
       - platform-network
-    command:
-      - --api.dashboard=true
-      - --api.insecure=true
-      - --providers.docker=true
-      - --providers.docker.endpoint=tcp://socket-proxy:2375
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      - --providers.file.directory=/etc/traefik/
-      - --providers.file.watch=true
-      - --entrypoints.websecure.http.tls=true
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/ping"]
       interval: 10s
