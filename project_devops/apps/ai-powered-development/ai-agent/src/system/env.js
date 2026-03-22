@@ -38,6 +38,8 @@ function loadEnv() {
 
   const optional = [
     "GITHUB_WEBHOOK_SECRET",
+    "GITHUB_TOKEN",
+    "GITLAB_TOKEN",
     "GEMINI_API_KEY",
     "OPENAI_API_KEY",
     "GEMINI_MODEL",
