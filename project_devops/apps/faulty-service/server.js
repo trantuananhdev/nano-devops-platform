@@ -39,7 +39,7 @@ app.get('/sync-data', async (req, res) => {
     // Nếu có 2 request cùng lúc gọi vào đây, một cái sẽ gây crash do truy cập tài nguyên đang bị khóa
     console.error('🔥 [CRITICAL] Data Sync Conflict: Multiple concurrent processes detected!');
     console.error('Stack Trace: Error: ConcurrentModificationException at InternalState.sync');
-    process.exit(1); 
+    return res.status(409).json({ error: 'Data Sync Conflict: Another synchronization process is already running.' });
   }
 
   isProcessing = true;
