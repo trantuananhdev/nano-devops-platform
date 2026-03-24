@@ -256,6 +256,34 @@ services:
       - "prometheus.job=agentic-ai"
       - "prometheus.port=3000"
 
+  # TeenCare AI - Autonomous Behavioral Intelligence
+  teencare-ai-service:
+    build:
+      context: ../../apps/Project-A
+      dockerfile: Dockerfile
+    container_name: platform-teencare-ai
+    restart: unless-stopped
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your_default_key}
+      - ENV=production
+    networks:
+      - platform-network
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+        reservations:
+          memory: 200M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.teencare.rule=Host(`teencare.nano.platform`)"
+      - "traefik.http.routers.teencare.entrypoints=web,websecure"
+      - "traefik.http.routers.teencare.tls=true"
+      - "traefik.http.services.teencare.loadbalancer.server.port=8000"
+      - "prometheus.scrape=true"
+      - "prometheus.job=teencare-ai"
+      - "prometheus.port=8000"
+
   # AI-Powered Development - Agent Node (The Sensor)
   agent-node:
     build:

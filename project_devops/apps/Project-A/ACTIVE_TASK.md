@@ -1,7 +1,7 @@
 ## 🎯 ACTIVE TASK ##
 
 > **Dán yêu cầu từ bài test 60 phút vào đây.**
-
+Chuyển transcript hàng tuần thành structured behavioral report, có sử dụng history của các tuần trước.
 Sau khi dán, tôi (AI) sẽ tự động:
 1. Phân tích yêu cầu theo tư duy Senior Applied AI.
 2. Thiết kế Pipeline RAG & Evaluation.
