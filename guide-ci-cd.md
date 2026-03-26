@@ -73,34 +73,38 @@ Nano Platform tích hợp khả năng **AIOps** thực thụ:
 
 ---
 
-## **5. Hướng dẫn thực hành Step-by-Step**
+## **5. Hướng dẫn thực hành Step-by-Step (Demo với faulty-service)**
 
-### **Bước 1: Kích hoạt luồng CI**
-1. Thực hiện thay đổi nhỏ trong mã nguồn (ví dụ: `project_devops/apps/health-api/src/app.py`).
+### **Bước 1: Kích hoạt luồng CI (V4.0 Update)**
+1. Thực hiện thay đổi mã nguồn trong `faulty-service` (ví dụ: cập nhật log version tại `project_devops/apps/faulty-service/server.js`).
 2. Thực hiện Commit & Push lên GitHub:
    ```bash
    git add .
-   git commit -m "feat: optimize health-api response"
+   git commit -m "feat: upgrade faulty-service to V4.0"
    git push origin main
    ```
-3. Truy cập tab **Actions** trên GitHub, theo dõi cho đến khi pipeline báo xanh. Copy 7 ký tự đầu của **Commit SHA** (ID bản build).
+3. Truy cập tab **Actions** trên GitHub, theo dõi cho đến khi pipeline báo xanh tại job **Build & Publish**. Copy 7 ký tự đầu của **Commit SHA** (ID bản build).
 
 ### **Bước 2: Thực thi luồng CD trên VM**
 1. Truy cập vào server điều khiển: `vagrant ssh`.
 2. Sử dụng mã SHA vừa lấy để triển khai dịch vụ:
    ```bash
    # Cú pháp: ./cli.sh deploy <service_name> <tag/sha>
-   ./cli.sh deploy health-api a1b2c3d
+   ./cli.sh deploy faulty-service a1b2c3d
    ```
-3. Hệ thống sẽ tự động thực hiện: **Pull -> Deploy -> Health Check**.
+3. Hệ thống sẽ tự động thực hiện: **Pull (từ GHCR) -> Deploy -> Health Check**.
 
 ### **Bước 3: Xác thực & Giám sát**
 1. Kiểm tra trạng thái runtime: `docker ps`.
-2. Chạy smoke test để đảm bảo API hoạt động đúng logic mới:
+2. Gọi API để kích hoạt log mới:
    ```bash
-   bash project_devops/platform/ops/smoke-tests/smoke-test-health-api.sh
+   curl http://localhost:8080/status
    ```
-3. (Tùy chọn) Truy cập **Grafana Dashboard** để xem sự thay đổi về metrics sau khi deploy.
+3. Kiểm tra logs container để xác nhận phiên bản V4.0:
+   ```bash
+   docker logs platform-faulty-service
+   ```
+   *Kết quả mong đợi: `🚀 [CI/CD V4.0] Demo: End-to-End flow with faulty-service is complete`*
 
 ---
 **Nano DevOps Platform - Engineering Excellence through Efficiency and Intelligence.**
