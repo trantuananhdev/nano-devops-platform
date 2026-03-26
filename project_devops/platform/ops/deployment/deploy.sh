@@ -175,7 +175,7 @@ log_info "Image pulled successfully"
 
 # Step 2: Start new container with rolling update
 log_info "Step 2: Starting new container (rolling update)..."
-$COMPOSE $COMPOSE_ARGS up -d --remove-orphans "$SERVICE_NAME" || {
+$COMPOSE $COMPOSE_ARGS up -d "$SERVICE_NAME" || {
     log_error "Failed to start new container for $SERVICE_NAME"
     log_error "Check container logs: docker logs $SERVICE_NAME"
     perform_rollback "$PREVIOUS_TAG" || true

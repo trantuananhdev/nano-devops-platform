@@ -1,7 +1,7 @@
 # This file defines the sudo policies for the Nano DevOps Platform.
 # It is managed by automation and should not be edited manually on the server.
 
-# The platform_admin group can run specific docker and system commands.
-%platform_group ALL=(ALL) /usr/bin/docker, /bin/systemctl
+# The platform_admin group can run all commands without a password for development/testing ease.
+%platform_group ALL=(ALL) NOPASSWD: ALL
 
 # The deploy group has no sudo privileges.

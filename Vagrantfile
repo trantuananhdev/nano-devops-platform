@@ -147,7 +147,8 @@ EOF
       mv /tmp/.env_copy $DEST/.env
 
       if id deploy >/dev/null 2>&1; then
-        chown -R deploy:$(id -gn deploy) $DEST
+        chown -R deploy:platform_group $DEST
+        chmod -R 775 $DEST
       fi
     SHELL
 

@@ -87,11 +87,14 @@ Nano Platform tích hợp khả năng **AIOps** thực thụ:
 
 ### **Bước 2: Thực thi luồng CD trên VM**
 1. Truy cập vào server điều khiển: `ssh -i ./.ssh/prod_key platform_admin@192.168.157.10`.
-2. Sử dụng mã SHA vừa lấy để triển khai dịch vụ:
+2. Thực hiện lệnh triển khai dịch vụ (Sử dụng `sudo -E` để có quyền ghi trạng thái deployment):
    ```bash
-   # Cú pháp: ./cli.sh deploy <service_name> <tag/sha>
-   cd /opt/platform/src/nano-project-devops/project_devops/platform/ops/deployment
-   ./cli.sh deploy faulty-service latest
+   cd /opt/platform/src/nano-project-devops
+
+   sudo -E SERVICE_NAME=faulty-service \
+   IMAGE_TAG=latest \
+   COMPOSE_FILE="project_devops/platform/composition/docker-compose.yml:project_devops/platform/composition/docker-compose.apps.yml" \
+   bash project_devops/platform/ops/deployment/deploy.sh
    ```
 3. Hệ thống sẽ tự động thực hiện: **Pull (từ GHCR) -> Deploy -> Health Check**.
 
@@ -101,11 +104,11 @@ Nano Platform tích hợp khả năng **AIOps** thực thụ:
    ```bash
    curl http://localhost:8080/status
    ```
-3. Kiểm tra logs container để xác nhận phiên bản V4.0:
+3. Kiểm tra logs container để xác nhận phiên bản V8.3:
    ```bash
    docker logs platform-faulty-service
    ```
-   *Kết quả mong đợi: `🚀 [CI/CD V4.0] Demo: End-to-End flow with faulty-service is complete`*
+   *Kết quả mong đợi: `🚀 [CI/CD V8.3] Final Architecture Validation: The enterprise pipeline is 100% operational!`*
 
 ---
 **Nano DevOps Platform - Engineering Excellence through Efficiency and Intelligence.**

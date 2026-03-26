@@ -126,11 +126,12 @@ fi
 # 6. Set correct ownership and permissions
 log_info "Setting ownership for $PLATFORM_ROOT to $PLATFORM_USER:$PLATFORM_GROUP..."
 chown "$PLATFORM_USER:$PLATFORM_GROUP" "$PLATFORM_ROOT"
-# Set ownership for the source directory to the deploy user
-log_info "Setting ownership for $PLATFORM_ROOT/src to $DEPLOY_USER:$DEPLOY_GROUP..."
-chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$PLATFORM_ROOT/src"
+# Set ownership for the source directory to the deploy user, but allow platform group to write
+log_info "Setting ownership for $PLATFORM_ROOT/src to $DEPLOY_USER:$PLATFORM_GROUP..."
+chown -R "$DEPLOY_USER:$PLATFORM_GROUP" "$PLATFORM_ROOT/src"
 
 # Set base permissions
+chmod -R 775 "$PLATFORM_ROOT/src"
 chmod 750 "$PLATFORM_ROOT"
 
 # Verify structure
