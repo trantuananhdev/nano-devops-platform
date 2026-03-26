@@ -2,9 +2,10 @@ name: "CI: Enterprise Monorepo Pipeline"
 
 on:
   pull_request:
-    branches: [main]
+    branches: ["**"]
   push:
-    branches: [main]
+    branches: ["**"]
+  workflow_dispatch: # Cho phép kích hoạt thủ công từ giao diện GitHub
 
 # Hủy các lượt build cũ nếu có commit mới cùng PR (Tiết kiệm tài nguyên)
 concurrency:
@@ -95,7 +96,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -131,7 +131,6 @@ jobs:
           severity: 'HIGH,CRITICAL'
 
       - name: Push image to GHCR
-        if: github.event_name == 'push'
         run: docker push ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
 
   # --- STAGE 4: FINAL STATUS ---
