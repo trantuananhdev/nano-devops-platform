@@ -284,6 +284,59 @@ services:
       - "traefik.http.routers.teencare.tls=true"
       - "traefik.http.services.teencare.loadbalancer.server.port=8501"
 
+  teencare-lms-api:
+    build:
+      context: ../../apps/teencare
+      dockerfile: lms_api/Dockerfile
+    container_name: platform-teencare-lms-api
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=sqlite:///./teencare_lms.db
+    env_file:
+      - ../../apps/teencare/.env
+    networks:
+      - platform-network
+    ports:
+      - "8008:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+        reservations:
+          memory: 150M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.teencare-lms-api.rule=Host(`teencare-lms-api.nano.platform`)"
+      - "traefik.http.routers.teencare-lms-api.entrypoints=web,websecure"
+      - "traefik.http.routers.teencare-lms-api.tls=true"
+      - "traefik.http.services.teencare-lms-api.loadbalancer.server.port=8000"
+
+  teencare-lms-web:
+    build:
+      context: ../../apps/teencare/lms_web
+      dockerfile: Dockerfile
+    container_name: platform-teencare-lms-web
+    restart: unless-stopped
+    networks:
+      - platform-network
+    ports:
+      - "5173:5173"
+    depends_on:
+      teencare-lms-api:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 250M
+        reservations:
+          memory: 120M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.teencare-lms-web.rule=Host(`teencare-lms-web.nano.platform`)"
+      - "traefik.http.routers.teencare-lms-web.entrypoints=web,websecure"
+      - "traefik.http.routers.teencare-lms-web.tls=true"
+      - "traefik.http.services.teencare-lms-web.loadbalancer.server.port=5173"
+
   # AI-Powered Development - Agent Node (The Sensor)
   agent-node:
     build:

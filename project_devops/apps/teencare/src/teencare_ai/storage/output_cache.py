@@ -10,9 +10,16 @@ class LatestOutputCache:
     Stores the latest successful output per teen_id for stale_data fallback.
     """
 
-    def __init__(self, path: str | Path = "samples/runs/latest_output_by_teen.json"):
+    def __init__(self, path: str | Path | None = None):
+        if path is None:
+            # MVP: Fallback to a relative path that works in most dev layouts
+            path = "samples/runs/latest_output_by_teen.json"
         self._path = Path(path)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            # Fallback for read-only filesystems or permission issues
+            pass
 
     def _load(self) -> dict[str, Any]:
         if not self._path.exists():

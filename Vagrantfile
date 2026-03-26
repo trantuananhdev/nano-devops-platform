@@ -27,6 +27,10 @@ Vagrant.configure("2") do |config|
 
   # Forward TeenCare AI Dashboard (Streamlit) to Host
   config.vm.network "forwarded_port", guest: 8501, host: 8501, auto_correct: true
+  # Forward TeenCare LMS API
+  config.vm.network "forwarded_port", guest: 8008, host: 8008, auto_correct: true
+  # Forward TeenCare LMS Web (React)
+  config.vm.network "forwarded_port", guest: 5173, host: 5173, auto_correct: true
 
   config.vm.provision "shell", run: "always", inline: <<-SHELL
     set -e
@@ -198,6 +202,11 @@ EOF
 
       chmod -R +x /tmp/infra/scripts/
 
+      # Fix permissions for all shell scripts in the workspace
+      echo "[SETUP] Fixing permissions for all shell scripts..."
+      find /opt/platform/src/nano-project-devops -name "*.sh" -exec chmod +x {} + || true
+      find /workspace -name "*.sh" -exec chmod +x {} + || true
+
       # Run orchestrator (must be idempotent!)
       NONINTERACTIVE=1 /tmp/infra/scripts/main_setup.sh
 
@@ -242,6 +251,8 @@ SERVICES:
 - Grafana:    https://grafana.nano.platform
 - Prometheus: https://prometheus.nano.platform
 - AI Agent:   https://ai.nano.platform
+- TeenCare Web: https://teencare-lms-web.nano.platform
+- TeenCare API: https://teencare-lms-api.nano.platform
 - Traefik:    http://#{STATIC_IP}:8080
 
 ACCESS:

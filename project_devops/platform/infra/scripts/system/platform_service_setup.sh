@@ -97,6 +97,11 @@ start() {
 
     su - "$DEPLOY_USER" -c "cd '\$PLATFORM_PATH' && \$COMPOSE_CMD up -d --build"
     
+    # Senior DevOps: Seed data for TeenCare LMS if it's new
+    # This ensures "vagrant provision" gives a ready-to-use app
+    einfo "Seeding TeenCare LMS data..."
+    su - "$DEPLOY_USER" -c "cd '\$PLATFORM_PATH' && docker compose exec -T teencare-lms-api python scripts/seed.py" || true
+
     eend \$?
 }
 
@@ -152,6 +157,15 @@ chmod +x "$SERVICE_PATH"
 # Add the service to the default runlevel
 rc-update add "$SERVICE_NAME" default
 
-echo "Service '$SERVICE_NAME' has been created and enabled."
+# Start or restart the service to apply changes
+if rc-service "$SERVICE_NAME" status >/dev/null 2>&1; then
+    echo "Restarting service '$SERVICE_NAME'..."
+    rc-service "$SERVICE_NAME" restart
+else
+    echo "Starting service '$SERVICE_NAME'..."
+    rc-service "$SERVICE_NAME" start
+fi
+
+echo "Service '$SERVICE_NAME' has been created, enabled, and started."
 echo "You can manage it with: rc-service $SERVICE_NAME [start|stop|restart|status]"
 echo "=========================================="

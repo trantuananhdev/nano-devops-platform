@@ -4,11 +4,11 @@ function createGeminiProvider() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
-  // Default to gemini-2.5-flash as per user's preference
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-  const apiVersion = process.env.GEMINI_API_VERSION || "v1beta";
-  const temperature = process.env.GEMINI_TEMPERATURE ? Number(process.env.GEMINI_TEMPERATURE) : 0.2;
-  const maxTokens = process.env.GEMINI_MAX_TOKENS ? Number(process.env.GEMINI_MAX_TOKENS) : 2048;
+  // Always use gemini-2.5-flash as per user's preference
+  const model = "gemini-2.5-flash";
+  const apiVersion = "v1beta";
+  const temperature = 0.2;
+  const maxTokens = 2048;
 
   async function chatText({ messages }) {
     // Senior Fix: Align with user provided sample business logic
@@ -29,11 +29,7 @@ function createGeminiProvider() {
         {
           parts: [{ text: prompt }]
         }
-      ],
-      generationConfig: {
-        temperature,
-        maxOutputTokens: maxTokens,
-      },
+      ]
     };
 
     const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${apiKey}`;
@@ -49,20 +45,25 @@ function createGeminiProvider() {
       }
     );
 
-    const text =
-      resp.data &&
-      resp.data.candidates &&
-      resp.data.candidates[0] &&
-      resp.data.candidates[0].content &&
-      resp.data.candidates[0].content.parts &&
-      resp.data.candidates[0].content.parts[0] &&
-      resp.data.candidates[0].content.parts[0].text;
+    const text = resp.data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response";
 
-    if (!text) {
+    if (text === "No response") {
       throw new Error(`Gemini returned empty or invalid response: ${JSON.stringify(resp.data)}`);
     }
 
-    return text;
+    // Clean markdown if present
+    let cleanedText = text.trim();
+    if (cleanedText.startsWith("```")) {
+      const lines = cleanedText.split("\n");
+      if (lines.length >= 2) {
+        const startIdx = lines[0].startsWith("```") ? 1 : 0;
+        const lastIdx = lines.length - 1;
+        const endIdx = lines[lastIdx].trim() === "```" ? lastIdx : undefined;
+        cleanedText = lines.slice(startIdx, endIdx).join("\n").trim();
+      }
+    }
+
+    return cleanedText;
   }
 
   return { chatText, model, temperature, maxTokens };

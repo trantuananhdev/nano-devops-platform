@@ -12,9 +12,16 @@ class DQCache:
     Key: session_id + normalized text.
     """
 
-    def __init__(self, path: str | Path = "samples/runs/diarization_cache.json"):
+    def __init__(self, path: str | Path | None = None):
+        if path is None:
+            # MVP: Fallback to a relative path that works in most dev layouts
+            path = "samples/runs/diarization_cache.json"
         self._path = Path(path)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            # Fallback for read-only filesystems or permission issues
+            pass
 
     def _load(self) -> dict[str, Speaker]:
         if not self._path.exists():

@@ -29,7 +29,7 @@ fi
 echo "Enabling zram-init service..."
 rc-update add zram-init boot
 
-# Configure zram-init to use 3GB
+# Apply configuration to zram-init
 echo "Configuring zram-init for 3GB..."
 cat > /etc/conf.d/zram-init <<'EOF'
 load_on_start=yes
@@ -39,9 +39,19 @@ type0=swap
 size0=3072
 EOF
 
-# Restart zram-init service to apply changes
-echo "Restarting zram-init service..."
-rc-service zram-init restart
+# Restart zram-init service to apply changes, handling potential stop failures
+echo "Applying zram-init configuration..."
+if rc-service zram-init status > /dev/null 2>&1; then
+    echo "zram-init is already running, attempting to restart..."
+    # If restart fails (often due to swapoff issues), we try to start it just in case
+    rc-service zram-init restart || {
+        echo "Warning: zram-init restart failed, trying to ensure it is started..."
+        rc-service zram-init start || true
+    }
+else
+    echo "zram-init is not running, starting it..."
+    rc-service zram-init start
+fi
 
 # Wait a moment for zram to initialize
 sleep 2

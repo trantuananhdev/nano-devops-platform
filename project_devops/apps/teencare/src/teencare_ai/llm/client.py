@@ -228,12 +228,15 @@ class GeminiLLMClient(LLMClient):
         if not api_key:
             raise ValueError("Missing GEMINI_API_KEY")
         
+        # User specified: Always use gemini-2.5-flash
+        model_name = "gemini-2.5-flash"
+            
         return GeminiLLMClient(
             api_key=api_key,
-            model_name=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
-            api_version=os.environ.get("GEMINI_API_VERSION", "v1beta"),
-            temperature=float(os.environ.get("GEMINI_TEMPERATURE", "0.2")),
-            timeout_s=float(os.environ.get("GEMINI_TIMEOUT_MS", "60000")) / 1000.0
+            model_name=model_name,
+            api_version="v1beta",
+            temperature=0.2,
+            timeout_s=60.0
         )
 
     def generate_parent_copilot(
@@ -275,18 +278,15 @@ class GeminiLLMClient(LLMClient):
                 {
                     "parts": [{"text": prompt}]
                 }
-            ],
-            "generationConfig": {
-                "temperature": self._temperature,
-                "response_mime_type": "application/json",
-            },
+            ]
         }
 
-        url = f"https://generativelanguage.googleapis.com/{self._api_version}/models/{self._model}:generateContent?key={self._api_key}"
+        url = f"https://generativelanguage.googleapis.com/{self._api_version}/models/{self._model}:generateContent"
 
         try:
             resp = requests.post(
                 url,
+                params={"key": self._api_key},
                 headers={"Content-Type": "application/json"},
                 data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
                 timeout=self._timeout_s
@@ -295,18 +295,32 @@ class GeminiLLMClient(LLMClient):
             
             data = resp.json()
             
-            # Extract text using geminiProvider.js extraction logic
-            text = (
-                data.get("candidates") and 
-                data["candidates"][0].get("content") and 
-                data["candidates"][0]["content"].get("parts") and 
-                data["candidates"][0]["content"]["parts"][0].get("text")
-            )
+            # Extract text using safe extraction logic similar to user's optional chaining
+            text = "No response"
+            candidates = data.get("candidates")
+            if candidates and len(candidates) > 0:
+                content = candidates[0].get("content")
+                if content:
+                    parts = content.get("parts")
+                    if parts and len(parts) > 0:
+                        text = parts[0].get("text") or "No response"
 
-            if not text:
+            if text == "No response":
                 raise ValueError(f"Gemini returned empty or invalid response: {json.dumps(data)}")
 
-            output: ParentCopilotOutput = json.loads(text)
+            # Clean markdown if present
+            cleaned_text = text.strip()
+            if cleaned_text.startswith("```"):
+                # Extract content between first ```json or ``` and last ```
+                lines = cleaned_text.splitlines()
+                if len(lines) >= 2:
+                    # Skip first line if it starts with ```
+                    start_idx = 1 if lines[0].startswith("```") else 0
+                    # Skip last line if it ends with ```
+                    end_idx = -1 if lines[-1].strip() == "```" else None
+                    cleaned_text = "\n".join(lines[start_idx:end_idx]).strip()
+
+            output: ParentCopilotOutput = json.loads(cleaned_text)
             # Basic validation of required fields
             required = ["session_id", "insights", "risk_level", "risk_reasoning", "recommendations", "confidence"]
             for field in required:
