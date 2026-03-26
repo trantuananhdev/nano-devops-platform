@@ -13,7 +13,7 @@ let requestLogs = [];
  * Càng gọi endpoint /status nhiều, RAM càng tăng dần.
  */
 app.get('/status', (req, res) => {
-  console.log('--- CI/CD Flow Test: Received status check request ---');
+  console.log('🚀 [CI/CD RE-TEST] Platform is active and monitoring faulty-service');
   const meta = {
     timestamp: new Date(),
     headers: req.headers,
