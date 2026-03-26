@@ -79,7 +79,7 @@ jobs:
     name: Build & Publish
     runs-on: ubuntu-24.04
     if: needs.detect-changes.outputs.services != '[]'
-    needs: [detect-changes] # Bỏ lint-and-scan để luôn tự động build được (Auto Build)
+    needs: [detect-changes] # Hoàn toàn độc lập với lint-and-scan để luôn Auto-Build được
     permissions:
       contents: read
       packages: write
