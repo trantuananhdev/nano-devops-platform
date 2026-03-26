@@ -5,6 +5,7 @@ const port = process.env.PORT || 8080;
 // Giả lập một Database local trong bộ nhớ
 let userCache = {};
 let requestLogs = [];
+const MAX_LOG_SIZE = 100; // Limit the number of stored request logs to prevent memory leaks
 
 /**
  * BUG 1: Memory Leak ngầm (Hidden Leak)
@@ -21,7 +22,11 @@ app.get('/status', (req, res) => {
     // Giả lập dữ liệu nặng được đính kèm vào mỗi log request
     payload: new Array(1000).fill("ghost-log-data-segment-" + Math.random())
   };
-  requestLogs.push(meta); 
+  requestLogs.push(meta);
+  // Enforce log size limit
+  if (requestLogs.length > MAX_LOG_SIZE) {
+    requestLogs.shift(); // Remove the oldest log
+  }
   
   res.json({ 
     status: 'online', 
