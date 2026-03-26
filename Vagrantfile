@@ -25,6 +25,9 @@ Vagrant.configure("2") do |config|
     netmask: "255.255.255.0",
     auto_config: false
 
+  # Forward TeenCare AI Dashboard (Streamlit) to Host
+  config.vm.network "forwarded_port", guest: 8501, host: 8501, auto_correct: true
+
   config.vm.provision "shell", run: "always", inline: <<-SHELL
     set -e
     echo "[NET] Starting Intelligent Network Setup..."

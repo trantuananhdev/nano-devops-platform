@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TeenCare Parent Copilot Output",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["session_id", "insights", "risk_level", "risk_reasoning", "recommendations", "confidence"],
+  "properties": {
+    "session_id": { "type": "string", "minLength": 1 },
+    "insights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["observation", "evidence", "pattern_match"],
+        "properties": {
+          "observation": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "string", "minLength": 1 },
+          "pattern_match": { "type": "string" }
+        }
+      }
+    },
+    "risk_level": { "type": "string", "enum": ["low", "medium", "high"] },
+    "risk_reasoning": { "type": "string", "minLength": 1 },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["action", "timing", "expected_outcome"],
+        "properties": {
+          "action": { "type": "string", "minLength": 1 },
+          "timing": { "type": "string", "minLength": 1 },
+          "expected_outcome": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "confidence": { "type": "string", "enum": ["high", "medium", "low_signal"] },
+    "flag": { "type": "string" }
+  }
+}
+

@@ -1,0 +1,100 @@
+{
+  "teen_demo_001": {
+    "session_id": "session_demo_002",
+    "insights": [
+      {
+        "observation": "Teen đang overload lịch, dễ dẫn đến cảm xúc tiêu cực.",
+        "evidence": "[PARENT]: vướng ba lịch một lúc luôn... khó chịu chứ",
+        "pattern_match": ""
+      },
+      {
+        "observation": "Teen có dấu hiệu bực bội/cáu kỉnh và có thể trút cảm xúc lên người xung quanh.",
+        "evidence": "[TEEN]: cáu với mọi người xung quanh ấy",
+        "pattern_match": ""
+      },
+      {
+        "observation": "Khi được hỏi, teen có xu hướng trả lời 'bình thường' thay vì chia sẻ thật.",
+        "evidence": "[TEEN]: Có ạ... Con nói là bình thường",
+        "pattern_match": ""
+      }
+    ],
+    "risk_level": "medium",
+    "risk_reasoning": "Có dấu hiệu căng thẳng/cảm xúc tiêu cực trong transcript.",
+    "recommendations": [
+      {
+        "action": "Hỏi con 1 câu về lịch tuần này trước bữa tối",
+        "timing": "Tối nay",
+        "expected_outcome": "Giúp con chủ động chia sẻ áp lực lịch thay vì giữ trong lòng"
+      },
+      {
+        "action": "Thống nhất 1 câu 'dừng lại' khi con bắt đầu cáu và hẹn nói lại sau 10 phút",
+        "timing": "Cuối tuần này",
+        "expected_outcome": "Giảm xung đột và tạo thói quen tạm dừng để điều chỉnh cảm xúc"
+      },
+      {
+        "action": "Thử hỏi con theo thang điểm 0-10: 'Hôm nay con mệt mấy điểm?' rồi hỏi tiếp 1 câu",
+        "timing": "Trong 24h tới",
+        "expected_outcome": "Tăng khả năng con trả lời cụ thể thay vì phản xạ 'bình thường'"
+      }
+    ],
+    "confidence": "high",
+    "_meta": {
+      "prompt_version": "v0.1",
+      "temperature": 0.0,
+      "attempt": 0,
+      "validation": {
+        "schema_valid": true,
+        "grounding_scores": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "hallucination_flag": false
+      },
+      "step1": {
+        "turns": 12,
+        "quality_score": 0.73,
+        "method": "rule_based",
+        "llm_assisted_turns": 0,
+        "avg_turn_confidence": 0.6625
+      },
+      "timings_ms": {
+        "step1": 0,
+        "step2": 0,
+        "llm": 0,
+        "validation": 0
+      },
+      "pipeline_ms": 1
+    },
+    "_delivery": {
+      "session_id": "session_demo_002",
+      "channel": "push",
+      "title": "Có dấu hiệu căng thẳng — gợi ý 1–2 việc cụ thể",
+      "summary_bullets": [
+        "Teen đang overload lịch, dễ dẫn đến cảm xúc tiêu cực.",
+        "Teen có dấu hiệu bực bội/cáu kỉnh và có thể trút cảm xúc lên người xung quanh.",
+        "Khi được hỏi, teen có xu hướng trả lời 'bình thường' thay vì chia sẻ thật."
+      ],
+      "actions": [
+        {
+          "label": "Hỏi con 1 câu về lịch tuần này trước bữa tối",
+          "timing": "Tối nay",
+          "details": "Giúp con chủ động chia sẻ áp lực lịch thay vì giữ trong lòng"
+        },
+        {
+          "label": "Thống nhất 1 câu 'dừng lại' khi con bắt đầu cáu và hẹn nói lại sau 10 phút",
+          "timing": "Cuối tuần này",
+          "details": "Giảm xung đột và tạo thói quen tạm dừng để điều chỉnh cảm xúc"
+        },
+        {
+          "label": "Thử hỏi con theo thang điểm 0-10: 'Hôm nay con mệt mấy điểm?' rồi hỏi tiếp 1 câu",
+          "timing": "Trong 24h tới",
+          "details": "Tăng khả năng con trả lời cụ thể thay vì phản xạ 'bình thường'"
+        }
+      ],
+      "risk_level": "medium",
+      "confidence": "high",
+      "flag": ""
+    }
+  }
+}

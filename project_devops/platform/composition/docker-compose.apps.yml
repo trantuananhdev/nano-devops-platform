@@ -256,18 +256,21 @@ services:
       - "prometheus.job=agentic-ai"
       - "prometheus.port=3000"
 
-  # TeenCare AI - Autonomous Behavioral Intelligence
-  teencare-ai-service:
+  # TeenCare AI - Parent Copilot (Gemini Powered)
+  teencare-ai:
     build:
-      context: ../../apps/Project-A
+      context: ../../apps/teencare
       dockerfile: Dockerfile
     container_name: platform-teencare-ai
     restart: unless-stopped
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-your_default_key}
-      - ENV=production
+    command: streamlit run scripts/mentor_dashboard.py --server.port=8501 --server.address=0.0.0.0
+    entrypoint: ""
+    env_file:
+      - ../../apps/teencare/.env
     networks:
       - platform-network
+    ports:
+      - "8501:8501"
     deploy:
       resources:
         limits:
@@ -279,10 +282,7 @@ services:
       - "traefik.http.routers.teencare.rule=Host(`teencare.nano.platform`)"
       - "traefik.http.routers.teencare.entrypoints=web,websecure"
       - "traefik.http.routers.teencare.tls=true"
-      - "traefik.http.services.teencare.loadbalancer.server.port=8000"
-      - "prometheus.scrape=true"
-      - "prometheus.job=teencare-ai"
-      - "prometheus.port=8000"
+      - "traefik.http.services.teencare.loadbalancer.server.port=8501"
 
   # AI-Powered Development - Agent Node (The Sensor)
   agent-node:

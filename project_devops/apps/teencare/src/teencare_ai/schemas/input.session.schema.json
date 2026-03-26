@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TeenCare Session Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["session_id", "teen_id", "raw_transcript", "session_date", "family_goals"],
+  "properties": {
+    "session_id": { "type": "string", "minLength": 1 },
+    "teen_id": { "type": "string", "minLength": 1 },
+    "raw_transcript": { "type": "string" },
+    "session_date": { "type": "string", "minLength": 1 },
+    "family_goals": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
+
