@@ -118,6 +118,7 @@ services:
 
   # Faulty Service v2 (Complex Bug Target)
   faulty-service:
+    image: ${REGISTRY:-ghcr.io}/${GITHUB_REPOSITORY_OWNER:-trantuananhdev}/faulty-service:${IMAGE_TAG:-latest}
     build:
       context: ../../apps/faulty-service
       dockerfile: Dockerfile

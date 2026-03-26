@@ -119,7 +119,9 @@ jobs:
           context: ./project_devops/apps/${{ matrix.service }}
           push: false # Do not push yet
           load: true # Load image into docker
-          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:latest
 
       - name: Scan image for vulnerabilities with Trivy
         uses: aquasecurity/trivy-action@master
@@ -132,7 +134,9 @@ jobs:
           severity: 'HIGH,CRITICAL'
 
       - name: Push image to GHCR
-        run: docker push ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:latest
 
   # --- STAGE 4: FINAL STATUS ---
   ci-status:

@@ -86,10 +86,11 @@ Nano Platform tích hợp khả năng **AIOps** thực thụ:
 3. Truy cập tab **Actions** trên GitHub, theo dõi cho đến khi pipeline báo xanh tại job **Build & Publish**. Copy 7 ký tự đầu của **Commit SHA** (ID bản build).
 
 ### **Bước 2: Thực thi luồng CD trên VM**
-1. Truy cập vào server điều khiển: `vagrant ssh`.
+1. Truy cập vào server điều khiển: `ssh -i ./.ssh/prod_key platform_admin@192.168.157.10`.
 2. Sử dụng mã SHA vừa lấy để triển khai dịch vụ:
    ```bash
    # Cú pháp: ./cli.sh deploy <service_name> <tag/sha>
+   cd /opt/platform/src/nano-project-devops/project_devops/platform/ops/deployment
    ./cli.sh deploy faulty-service latest
    ```
 3. Hệ thống sẽ tự động thực hiện: **Pull (từ GHCR) -> Deploy -> Health Check**.

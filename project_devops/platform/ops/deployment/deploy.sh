@@ -11,6 +11,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-project_devops/platform/composition/docker-compose
 SERVICE_NAME="${SERVICE_NAME:-}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 REGISTRY="${REGISTRY:-ghcr.io}"
+GITHUB_REPOSITORY_OWNER="${GITHUB_REPOSITORY_OWNER:-trantuananhdev}"
 IMAGE_NAME="${IMAGE_NAME:-owner/repo}"
 HEALTH_CHECK_TIMEOUT="${HEALTH_CHECK_TIMEOUT:-60}"
 DEPLOYMENT_STATE_FILE="${DEPLOYMENT_STATE_FILE:-$(dirname "$0")/.deployment-state}"
@@ -84,7 +85,7 @@ perform_rollback() {
     
     # Restore previous tag
     export IMAGE_TAG="$previous_tag"
-    $COMPOSE -f "$COMPOSE_FILE" up -d --no-deps "$SERVICE_NAME" || {
+    $COMPOSE $COMPOSE_ARGS up -d --no-deps "$SERVICE_NAME" || {
         log_error "Failed to rollback to previous image"
         return 1
     }
@@ -110,15 +111,26 @@ if [ -z "$SERVICE_NAME" ]; then
     exit 1
 fi
 
-if [ ! -f "$COMPOSE_FILE" ]; then
-    log_error "Docker Compose file not found: $COMPOSE_FILE"
-    exit 1
-fi
+# Prepare COMPOSE_ARGS for multiple files
+COMPOSE_ARGS=""
+# Use a more portable way to split colon-separated paths
+old_ifs="$IFS"
+IFS=':'
+for i in $COMPOSE_FILE; do
+    if [ ! -f "$i" ]; then
+        log_error "Docker Compose file not found: $i"
+        IFS="$old_ifs"
+        exit 1
+    fi
+    COMPOSE_ARGS="$COMPOSE_ARGS -f $i"
+done
+IFS="$old_ifs"
 
 log_info "Starting deployment for service: $SERVICE_NAME"
 log_info "Image tag: $IMAGE_TAG"
 log_info "Registry: $REGISTRY"
-log_info "Compose file: $COMPOSE_FILE"
+log_info "Compose files: $COMPOSE_FILE"
+log_info "Compose arguments: $COMPOSE_ARGS"
 
 # Pre-deployment validation
 log_info "Pre-deployment validation..."
@@ -149,9 +161,11 @@ fi
 
 # Step 1: Pull new image from registry
 log_info "Step 1: Pulling new image from registry ($REGISTRY)..."
-# Export IMAGE_TAG for docker-compose to use if service references it via environment variable
+# Export variables for docker-compose to use
 export IMAGE_TAG
-$COMPOSE -f "$COMPOSE_FILE" pull "$SERVICE_NAME" || {
+export REGISTRY
+export GITHUB_REPOSITORY_OWNER
+$COMPOSE $COMPOSE_ARGS pull "$SERVICE_NAME" || {
     log_error "Failed to pull image for $SERVICE_NAME"
     log_error "Ensure docker-compose.yml references registry image with IMAGE_TAG variable"
     log_error "Example: image: ${REGISTRY}/owner/repo:\${IMAGE_TAG:-latest}"
@@ -161,12 +175,25 @@ log_info "Image pulled successfully"
 
 # Step 2: Start new container with rolling update
 log_info "Step 2: Starting new container (rolling update)..."
-$COMPOSE -f "$COMPOSE_FILE" up -d --remove-orphans "$SERVICE_NAME" || {
+$COMPOSE $COMPOSE_ARGS up -d --remove-orphans "$SERVICE_NAME" || {
     log_error "Failed to start new container for $SERVICE_NAME"
     log_error "Check container logs: docker logs $SERVICE_NAME"
     perform_rollback "$PREVIOUS_TAG" || true
     exit 1
 }
+
+# Resolve container name/ID for health check after container is started/recreated
+if [ -z "${SERVICE_CONTAINER_NAME:-}" ] || [ "$SERVICE_CONTAINER_NAME" = "$SERVICE_NAME" ] || [ -n "${RESOLVED_ID:-}" ]; then
+    log_info "Resolving container ID for $SERVICE_NAME after deployment..."
+    RESOLVED_ID=$($COMPOSE $COMPOSE_ARGS ps -q "$SERVICE_NAME" 2>/dev/null || echo "")
+    if [ -n "$RESOLVED_ID" ]; then
+        SERVICE_CONTAINER_NAME="$RESOLVED_ID"
+        log_info "Resolved $SERVICE_NAME to container ID: $SERVICE_CONTAINER_NAME"
+    else
+        log_warn "Could not resolve container ID for $SERVICE_NAME, falling back to name: $SERVICE_NAME"
+        SERVICE_CONTAINER_NAME="$SERVICE_NAME"
+    fi
+fi
 
 # Step 3: Wait for health check with enhanced diagnostics
 log_info "Step 3: Waiting for health check (timeout: ${HEALTH_CHECK_TIMEOUT}s)..."
