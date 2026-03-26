@@ -13,7 +13,7 @@ let requestLogs = [];
  * Càng gọi endpoint /status nhiều, RAM càng tăng dần.
  */
 app.get('/status', (req, res) => {
-  console.log('🚀 [CI/CD V2.0] Auto-Build logic: Success regardless of lint warnings');
+  console.log('🚀 [CI/CD V3.0] Auto-Build logic: Success regardless of lint warnings');
   const meta = {
     timestamp: new Date(),
     headers: req.headers,
