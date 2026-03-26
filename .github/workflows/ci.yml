@@ -28,6 +28,7 @@ jobs:
             data-api: 'project_devops/apps/data-api/**'
             aggregator-api: 'project_devops/apps/aggregator-api/**'
             user-api: 'project_devops/apps/user-api/**'
+            faulty-service: 'project_devops/apps/faulty-service/**'
             digital-fte-platform: 'project_devops/apps/digital-fte-platform/**'
             platform:
               - 'project_devops/platform/**'
