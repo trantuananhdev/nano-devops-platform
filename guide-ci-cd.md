@@ -75,12 +75,12 @@ Nano Platform tích hợp khả năng **AIOps** thực thụ:
 
 ## **5. Hướng dẫn thực hành Step-by-Step (Demo với faulty-service)**
 
-### **Bước 1: Kích hoạt luồng CI (V5.0 Update)**
+### **Bước 1: Kích hoạt luồng CI (V7.0 Final Test)**
 1. Thực hiện thay đổi mã nguồn trong `faulty-service` (ví dụ: cập nhật log version tại `project_devops/apps/faulty-service/server.js`).
 2. Thực hiện Commit & Push lên GitHub:
    ```bash
    git add .
-   git commit -m "feat: upgrade faulty-service to V5.0 - Final Validation"
+   git commit -m "feat: final architecture test V7.0"
    git push origin main
    ```
 3. Truy cập tab **Actions** trên GitHub, theo dõi cho đến khi pipeline báo xanh tại job **Build & Publish**. Copy 7 ký tự đầu của **Commit SHA** (ID bản build).
