@@ -23,6 +23,12 @@ app.get('/status', (req, res) => {
   };
   requestLogs.push(meta); 
   
+  // BUG FIX: Limit the size of requestLogs to prevent memory leaks
+  const MAX_LOGS = 1000; // Keep only the last 1000 requests
+  if (requestLogs.length > MAX_LOGS) {
+    requestLogs = requestLogs.slice(requestLogs.length - MAX_LOGS);
+  }
+
   res.json({ 
     status: 'online', 
     requestsHandled: requestLogs.length,
