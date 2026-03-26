@@ -108,7 +108,7 @@ Nano Platform tích hợp khả năng **AIOps** thực thụ:
    ```bash
    docker logs platform-faulty-service
    ```
-   *Kết quả mong đợi: `🚀 [CI/CD V8.3] Final Architecture Validation: The enterprise pipeline is 100% operational!`*
+   *Kết quả mong đợi: `🚀 [CI/CD newest-001] Final Architecture Validation: The enterprise pipeline is 100% operational!`*
 
 ---
 **Nano DevOps Platform - Engineering Excellence through Efficiency and Intelligence.**
