@@ -1,0 +1,17 @@
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_status_codes: [200, 302]
+      preferred_ip_protocol: ip4
+
+  # Platform dev TLS (*.nano.platform self-signed / private CA)
+  https_2xx_insecure:
+    prober: http
+    timeout: 15s
+    http:
+      valid_status_codes: [200, 302]
+      preferred_ip_protocol: ip4
+      tls_config:
+        insecure_skip_verify: true

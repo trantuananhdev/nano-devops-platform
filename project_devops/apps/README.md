@@ -33,3 +33,10 @@ apps/
 - Service-specific docker-compose service definitions
 - Tests for each service
 - Service documentation
+
+## AI CRM Demo (Phase 4)
+
+| App | URL (lab) | Docs |
+|-----|-----------|------|
+| `ai-crm-pipeline/` | `https://crm-ingest.nano.platform` | [DEMO_PLATFORM_PLAN](./ai-crm-pipeline/docs/DEMO_PLATFORM_PLAN.md) |
+| `crm-demo-ui/` | `https://crm-demo.nano.platform` | [DEMO_RUNBOOK](./ai-crm-pipeline/docs/DEMO_RUNBOOK.md) |

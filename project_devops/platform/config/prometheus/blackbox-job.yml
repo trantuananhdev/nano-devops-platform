@@ -1,14 +1,14 @@
-  - job_name: 'blackbox'
+# Reference fragment — active config is in prometheus.yml (job: blackbox-https)
+  - job_name: 'blackbox-https'
     metrics_path: /probe
     params:
-      module: [http_2xx]
+      module: [https_2xx_insecure]
     static_configs:
       - targets:
-        - https://odoo:8069/web/login
+        - https://health.nano.platform/health
+        - https://crm-ingest.nano.platform/health
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
       - target_label: __address__
         replacement: platform-blackbox-exporter:9115
-      - target_label: instance
-        replacement: odoo

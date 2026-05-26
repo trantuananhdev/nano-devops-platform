@@ -20,6 +20,13 @@ entryPoints:
 
 ping: {}
 
+# Prometheus metrics (scraped via docker_sd job=traefik)
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true
+
 providers:
   docker:
     endpoint: "tcp://socket-proxy:2375"
@@ -36,21 +43,13 @@ log:
 accessLog:
   format: json
 
-# tls:
-#   certificates:
-#     - certFile: /etc/traefik/certs/dev/localhost.crt
-#       keyFile: /etc/traefik/certs/dev/localhost.key
-#     - certFile: /etc/traefik/certs/dev/odoo.nano.platform.crt
-#       keyFile: /etc/traefik/certs/dev/odoo.nano.platform.key
-#     - certFile: /etc/traefik/certs/dev/grafana.nano.platform.crt
-#       keyFile: /etc/traefik/certs/dev/grafana.nano.platform.key
-#     - certFile: /etc/traefik/certs/dev/prometheus.nano.platform.crt
-#       keyFile: /etc/traefik/certs/dev/prometheus.nano.platform.key
-#     - certFile: /etc/traefik/certs/dev/jaeger.nano.platform.crt
-#       keyFile: /etc/traefik/certs/dev/jaeger.nano.platform.key
-#     - certFile: /etc/traefik/certs/dev/alertmanager.nano.platform.crt
-#       keyFile: /etc/traefik/certs/dev/alertmanager.nano.platform.key
-#     - certFile: /etc/traefik/certs/dev/loki.nano.platform.crt
-#       keyFile: /etc/traefik/certs/dev/loki.nano.platform.key
-#     - certFile: /etc/traefik/certs/dev/ai.nano.platform.crt
-#       keyFile: /etc/traefik/certs/dev/ai.nano.platform.key
+# Static TLS fallback (same files as dynamic.yml + generate_certs.sh)
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/nano.platform.crt
+      keyFile: /etc/traefik/certs/nano.platform.key
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/nano.platform.crt
+        keyFile: /etc/traefik/certs/nano.platform.key

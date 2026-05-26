@@ -1,0 +1,79 @@
+{
+  "title": "CRM AI Pipeline",
+  "uid": "crm-pipeline-demo",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 2,
+  "tags": ["crm", "phase4", "tnt-demo"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Ingest requests / min",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "sum(rate(crm_ingest_requests_total[5m])) by (channel, status)",
+          "legendFormat": "{{channel}} {{status}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Queue depth",
+      "type": "gauge",
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+      "targets": [{"expr": "crm_queue_depth"}]
+    },
+    {
+      "id": 3,
+      "title": "LLM latency (p95)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(crm_llm_latency_seconds_bucket[5m])) by (le))"}
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Leads by channel (accepted ingest)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "description": "Proxy for lead volume per channel — accepted webhook rate",
+      "targets": [
+        {
+          "expr": "sum(rate(crm_ingest_requests_total{status=\"accepted\"}[5m])) by (channel)",
+          "legendFormat": "{{channel}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Auto-reply (1h)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 8},
+      "targets": [
+        {
+          "expr": "sum(increase(crm_auto_reply_total[1h])) by (status)",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Alerts sent",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 8},
+      "targets": [{"expr": "sum(increase(crm_alerts_sent_total[1h])) by (alert_type)", "legendFormat": "{{alert_type}}"}]
+    },
+    {
+      "id": 5,
+      "title": "Jobs processed",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 16},
+      "targets": [
+        {"expr": "sum(rate(crm_worker_jobs_processed_total[5m])) by (status)", "legendFormat": "{{status}}"}
+      ]
+    }
+  ]
+}

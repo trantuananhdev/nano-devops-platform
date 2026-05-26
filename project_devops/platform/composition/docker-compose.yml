@@ -13,7 +13,8 @@ x-logging:
 services:
   # Security Layer - Docker Socket Proxy
   socket-proxy:
-    image: tecnativa/docker-socket-proxy:0.2
+    # GHCR: reliable when GITHUB_TOKEN login runs (see docker_registry_login.sh)
+    image: ghcr.io/tecnativa/docker-socket-proxy:0.2
     container_name: platform-socket-proxy
     restart: unless-stopped
     volumes:
@@ -39,6 +40,9 @@ services:
     image: traefik:v3.1
     container_name: platform-traefik
     restart: unless-stopped
+    depends_on:
+      socket-proxy:
+        condition: service_started
     ports:
       - "80:80"
       - "443:443"
@@ -63,9 +67,11 @@ services:
           memory: 80M
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=platform-network"
       - "prometheus.scrape=true"
       - "prometheus.job=traefik"
       - "prometheus.port=8080"
+      - "prometheus.path=/metrics"
 
   # Data Layer - Shared PostgreSQL Database
   platform-postgres:
@@ -85,11 +91,11 @@ services:
     networks:
       - platform-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d platform_db"]
+      test: ["CMD-SHELL", "pg_isready -U platform_user -d platform_db"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 60s
     deploy:
       resources:
         limits:
