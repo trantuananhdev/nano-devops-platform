@@ -28,29 +28,32 @@ fi
 log_info "Step 1/8: Installing base packages..."
 "$SCRIPT_DIR/system/base_packages.sh"
 
-log_info "Step 2/8: Setting up Docker..."
+log_info "Step 2/9: Setting up Docker..."
 "$SCRIPT_DIR/system/docker_setup.sh"
 
-log_info "Step 3/8: Setting up filesystem and users..."
+log_info "Step 3/9: Setting up filesystem and users..."
 "$SCRIPT_DIR/system/filesystem_users.sh"
 
-log_info "Step 4/8: Setting up User SSH and Sudo..."
+log_info "Step 4/9: Docker registry login (GitHub .env → ghcr.io + pre-pull)..."
+"$SCRIPT_DIR/system/docker_registry_login.sh" || log_info "Registry login warnings (see log)"
+
+log_info "Step 5/9: Setting up User SSH and Sudo..."
 "$SCRIPT_DIR/system/user_ssh_setup.sh"
 
-log_info "Step 5/8: Applying kernel tuning..."
+log_info "Step 6/9: Applying kernel tuning..."
 "$SCRIPT_DIR/system/sysctl_tuning.sh"
 
-log_info "Step 6/8: Configuring zram..."
+log_info "Step 7/9: Configuring zram..."
 "$SCRIPT_DIR/system/zram_config.sh"
 
-log_info "Step 7/8: Setting up mkcert and generating development certificates..."
+log_info "Step 8/9: Setting up mkcert and generating development certificates..."
 "$SCRIPT_DIR/system/mkcert_setup.sh"
 
-log_info "Step 8/8: Setting up platform system service..."
+log_info "Step 9/9: Setting up platform system service..."
 "$SCRIPT_DIR/system/platform_service_setup.sh"
 
-log_info "Step 9/9: Updating /etc/hosts with platform domains..."
-DOMAINS="odoo.nano.platform ai.nano.platform grafana.nano.platform prometheus.nano.platform aggregator.nano.platform user.nano.platform data.nano.platform health.nano.platform"
+log_info "Updating /etc/hosts with platform domains..."
+DOMAINS="odoo.nano.platform ai.nano.platform grafana.nano.platform prometheus.nano.platform aggregator.nano.platform user.nano.platform data.nano.platform health.nano.platform faulty.nano.platform crm-ingest.nano.platform crm-demo.nano.platform"
 for d in $DOMAINS; do
     if ! grep -q "$d" /etc/hosts; then
         echo "127.0.0.1 $d" >> /etc/hosts
@@ -103,9 +106,11 @@ if [ -n "$PLATFORM_COMPOSITION_PATH" ]; then
     log_info "Generating missing secrets..."
     "$SCRIPT_DIR/system/setup_secrets.sh" "$PLATFORM_COMPOSITION_PATH"
 
-    log_info "Generating development certificates..."
-    # This script needs to know where the source is, assuming it finds it via /tmp/infra or similar
-    "$SCRIPT_DIR/certs/generate_dev_certs.sh" "$PLATFORM_COMPOSITION_PATH"
+    log_info "Generating Traefik wildcard TLS (HTTPS for *.nano.platform)..."
+    "$SCRIPT_DIR/system/generate_certs.sh"
+
+    log_info "Generating per-host dev certificates (optional mkcert)..."
+    "$SCRIPT_DIR/certs/generate_dev_certs.sh" "$PLATFORM_COMPOSITION_PATH" || true
 
   log_info "Attempting to restart platform services as user '$DEPLOY_USER' to pick up code changes..."
   rc-service nano-platform restart

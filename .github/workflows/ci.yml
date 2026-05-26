@@ -32,6 +32,9 @@ jobs:
             user-api: 'project_devops/apps/user-api/**'
             faulty-service: 'project_devops/apps/faulty-service/**'
             digital-fte-platform: 'project_devops/apps/digital-fte-platform/**'
+            crm-ingestion-api: 'project_devops/apps/ai-crm-pipeline/**'
+            crm-ai-worker: 'project_devops/apps/ai-crm-pipeline/crm-ai-worker/**'
+            crm-demo-ui: 'project_devops/apps/crm-demo-ui/**'
             infra:
               - 'project_devops/platform/**'
               - 'project_devops/ci/**'
@@ -123,12 +126,31 @@ jobs:
             echo "No specific tests found for ${{ matrix.service }}, skipping."
           fi
 
+      - name: Resolve build context
+        if: matrix.service != 'infra'
+        run: |
+          case "${{ matrix.service }}" in
+            crm-ingestion-api)
+              echo "BUILD_CONTEXT=./project_devops/apps/ai-crm-pipeline" >> "$GITHUB_ENV"
+              echo "DOCKERFILE=crm-ingestion-api/Dockerfile" >> "$GITHUB_ENV"
+              ;;
+            crm-ai-worker)
+              echo "BUILD_CONTEXT=./project_devops/apps/ai-crm-pipeline/crm-ai-worker" >> "$GITHUB_ENV"
+              echo "DOCKERFILE=Dockerfile" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "BUILD_CONTEXT=./project_devops/apps/${{ matrix.service }}" >> "$GITHUB_ENV"
+              echo "DOCKERFILE=Dockerfile" >> "$GITHUB_ENV"
+              ;;
+          esac
+
       - name: Build image
         if: matrix.service != 'infra'
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: ./project_devops/apps/${{ matrix.service }}
+          context: ${{ env.BUILD_CONTEXT }}
+          file: ${{ env.DOCKERFILE || format('{0}/Dockerfile', env.BUILD_CONTEXT) }}
           push: false # Do not push yet
           load: true # Load image into docker
           tags: |

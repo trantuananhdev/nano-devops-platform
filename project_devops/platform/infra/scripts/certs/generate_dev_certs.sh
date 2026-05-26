@@ -45,4 +45,11 @@ else
   done
 fi
 
-echo "[certs] Certificates ready at $CERT_DIR"
+echo "[certs] Per-host dev certificates ready at $CERT_DIR"
+
+# Traefik bind mount requires wildcard cert at /opt/platform/config/traefik/certs
+WILDCARD_SCRIPT="$SCRIPT_DIR/../system/generate_certs.sh"
+if [ -f "$WILDCARD_SCRIPT" ]; then
+  echo "[certs] Syncing Traefik wildcard TLS for HTTPS..."
+  sh "$WILDCARD_SCRIPT"
+fi

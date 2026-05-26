@@ -75,10 +75,15 @@ services:
           memory: 100M
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=platform-network"
       - "traefik.http.routers.health-api.rule=Host(`health.nano.platform`)"
-      - "traefik.http.routers.health-api.entrypoints=web,websecure"
+      - "traefik.http.routers.health-api.entrypoints=websecure"
       - "traefik.http.routers.health-api.tls=true"
       - "traefik.http.services.health-api.loadbalancer.server.port=8080"
+      - "traefik.http.routers.health-api-http.rule=Host(`health.nano.platform`)"
+      - "traefik.http.routers.health-api-http.entrypoints=web"
+      - "traefik.http.routers.health-api-http.middlewares=redirect-to-https@file"
+      - "traefik.http.routers.health-api-http.service=health-api"
       - "prometheus.scrape=true"
       - "prometheus.job=health-api"
       - "prometheus.port=8080"
@@ -108,10 +113,15 @@ services:
           memory: 150M
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=platform-network"
       - "traefik.http.routers.data-api.rule=Host(`data.nano.platform`)"
-      - "traefik.http.routers.data-api.entrypoints=web,websecure"
+      - "traefik.http.routers.data-api.entrypoints=websecure"
       - "traefik.http.routers.data-api.tls=true"
       - "traefik.http.services.data-api.loadbalancer.server.port=8080"
+      - "traefik.http.routers.data-api-http.rule=Host(`data.nano.platform`)"
+      - "traefik.http.routers.data-api-http.entrypoints=web"
+      - "traefik.http.routers.data-api-http.middlewares=redirect-to-https@file"
+      - "traefik.http.routers.data-api-http.service=data-api"
       - "prometheus.scrape=true"
       - "prometheus.job=data-api"
       - "prometheus.port=8080"
@@ -141,10 +151,15 @@ services:
           memory: 100M
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=platform-network"
       - "traefik.http.routers.faulty.rule=Host(`faulty.nano.platform`)"
-      - "traefik.http.routers.faulty.entrypoints=web,websecure"
+      - "traefik.http.routers.faulty.entrypoints=websecure"
       - "traefik.http.routers.faulty.tls=true"
       - "traefik.http.services.faulty.loadbalancer.server.port=8080"
+      - "traefik.http.routers.faulty-http.rule=Host(`faulty.nano.platform`)"
+      - "traefik.http.routers.faulty-http.entrypoints=web"
+      - "traefik.http.routers.faulty-http.middlewares=redirect-to-https@file"
+      - "traefik.http.routers.faulty-http.service=faulty"
       - "com.github.repo=trantuananhdev/nano-devops-platform"
       - "com.ghost-engineer.managed=true"
       - "prometheus.scrape=true"
@@ -174,10 +189,15 @@ services:
           memory: 150M
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=platform-network"
       - "traefik.http.routers.aggregator-api.rule=Host(`aggregator.nano.platform`)"
-      - "traefik.http.routers.aggregator-api.entrypoints=web,websecure"
+      - "traefik.http.routers.aggregator-api.entrypoints=websecure"
       - "traefik.http.routers.aggregator-api.tls=true"
       - "traefik.http.services.aggregator-api.loadbalancer.server.port=8080"
+      - "traefik.http.routers.aggregator-api-http.rule=Host(`aggregator.nano.platform`)"
+      - "traefik.http.routers.aggregator-api-http.entrypoints=web"
+      - "traefik.http.routers.aggregator-api-http.middlewares=redirect-to-https@file"
+      - "traefik.http.routers.aggregator-api-http.service=aggregator-api"
       - "prometheus.scrape=true"
       - "prometheus.job=aggregator-api"
       - "prometheus.port=8080"
@@ -207,10 +227,15 @@ services:
           memory: 200M
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=platform-network"
       - "traefik.http.routers.user-api.rule=Host(`user.nano.platform`)"
-      - "traefik.http.routers.user-api.entrypoints=web,websecure"
+      - "traefik.http.routers.user-api.entrypoints=websecure"
       - "traefik.http.routers.user-api.tls=true"
       - "traefik.http.services.user-api.loadbalancer.server.port=8080"
+      - "traefik.http.routers.user-api-http.rule=Host(`user.nano.platform`)"
+      - "traefik.http.routers.user-api-http.entrypoints=web"
+      - "traefik.http.routers.user-api-http.middlewares=redirect-to-https@file"
+      - "traefik.http.routers.user-api-http.service=user-api"
       - "prometheus.scrape=true"
       - "prometheus.job=user-api"
       - "prometheus.port=8080"
@@ -255,13 +280,143 @@ services:
           memory: 400M
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=platform-network"
       - "traefik.http.routers.agentic-ai.rule=Host(`ai.nano.platform`)"
-      - "traefik.http.routers.agentic-ai.entrypoints=web,websecure"
+      - "traefik.http.routers.agentic-ai.entrypoints=websecure"
       - "traefik.http.routers.agentic-ai.tls=true"
       - "traefik.http.services.agentic-ai.loadbalancer.server.port=3000"
+      - "traefik.http.routers.agentic-ai-http.rule=Host(`ai.nano.platform`)"
+      - "traefik.http.routers.agentic-ai-http.entrypoints=web"
+      - "traefik.http.routers.agentic-ai-http.middlewares=redirect-to-https@file"
+      - "traefik.http.routers.agentic-ai-http.service=agentic-ai"
       - "prometheus.scrape=true"
       - "prometheus.job=agentic-ai"
       - "prometheus.port=3000"
+
+  # AI-Driven CRM Pipeline — Ingestion (FastAPI)
+  crm-ingestion-api:
+    build:
+      context: ../../apps/ai-crm-pipeline
+      dockerfile: crm-ingestion-api/Dockerfile
+    container_name: platform-crm-ingestion
+    restart: unless-stopped
+    env_file:
+      - ../../../.env
+    environment:
+      - PORT=8080
+      - REDIS_URL=redis://platform-redis:6379/0
+      - CRM_DATABASE_URL=postgresql://crm_user:devadmin@platform-postgres:5432/crm_db
+      - CRM_WEBHOOK_SECRET=${CRM_WEBHOOK_SECRET:-}
+      - CRM_DEMO_API_KEY=${CRM_DEMO_API_KEY:-}
+      - CORS_ORIGINS=https://crm-demo.nano.platform,http://localhost:5173
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - GEMINI_API_VERSION=${GEMINI_API_VERSION:-v1beta}
+      - AGENTIC_AI_URL=http://platform-agentic-ai:3000
+    networks:
+      - platform-network
+    depends_on:
+      platform-redis:
+        condition: service_healthy
+      platform-postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 140M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=platform-network"
+      - "traefik.http.routers.crm-ingest.rule=Host(`crm-ingest.nano.platform`)"
+      - "traefik.http.routers.crm-ingest.entrypoints=websecure"
+      - "traefik.http.routers.crm-ingest.tls=true"
+      - "traefik.http.services.crm-ingest.loadbalancer.server.port=8080"
+      - "traefik.http.routers.crm-ingest-http.rule=Host(`crm-ingest.nano.platform`)"
+      - "traefik.http.routers.crm-ingest-http.entrypoints=web"
+      - "traefik.http.routers.crm-ingest-http.middlewares=redirect-to-https@file"
+      - "traefik.http.routers.crm-ingest-http.service=crm-ingest"
+      - "prometheus.scrape=true"
+      - "prometheus.job=crm-ingestion-api"
+      - "prometheus.port=8080"
+
+  # AI-Driven CRM Pipeline — AI Worker (Gemini + alerts)
+  crm-ai-worker:
+    build:
+      context: ../../apps/ai-crm-pipeline/crm-ai-worker
+      dockerfile: Dockerfile
+    container_name: platform-crm-worker
+    restart: unless-stopped
+    env_file:
+      - ../../../.env
+    environment:
+      - REDIS_URL=redis://platform-redis:6379/0
+      - CRM_DATABASE_URL=postgresql://crm_user:devadmin@platform-postgres:5432/crm_db
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - GEMINI_API_VERSION=${GEMINI_API_VERSION:-v1beta}
+      - GEMINI_TEMPERATURE=${GEMINI_TEMPERATURE:-0.2}
+      - GEMINI_MAX_TOKENS=${GEMINI_MAX_TOKENS:-2048}
+      - GEMINI_TIMEOUT_MS=${GEMINI_TIMEOUT_MS:-45000}
+      - AGENTIC_AI_URL=http://platform-agentic-ai:3000
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - LARK_WEBHOOK_URL=${LARK_WEBHOOK_URL:-}
+      - ALERT_ENABLED=${ALERT_ENABLED:-true}
+      - AUTO_REPLY_ENABLED=${AUTO_REPLY_ENABLED:-true}
+      - CRM_DEMO_LLM_FALLBACK=${CRM_DEMO_LLM_FALLBACK:-true}
+      - CRM_WORKER_JOB_DELAY_MS=${CRM_WORKER_JOB_DELAY_MS:-1200}
+      - GEMINI_HTTP_RETRIES=${GEMINI_HTTP_RETRIES:-3}
+      - CRM_EVENTS_CHANNEL=crm:events:leads
+      - METRICS_PORT=9100
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+    networks:
+      - platform-network
+    depends_on:
+      platform-redis:
+        condition: service_healthy
+      platform-postgres:
+        condition: service_healthy
+      crm-ingestion-api:
+        condition: service_started
+    labels:
+      - "prometheus.scrape=true"
+      - "prometheus.job=crm-ai-worker"
+      - "prometheus.port=9100"
+
+  # Phase 4 — TNT AI CRM Command Center (React demo UI)
+  crm-demo-ui:
+    build:
+      context: ../../apps/crm-demo-ui
+      dockerfile: Dockerfile
+      args:
+        VITE_CRM_API_BASE: ""
+        VITE_SSE_URL: ""
+    container_name: platform-crm-demo-ui
+    restart: unless-stopped
+    networks:
+      - platform-network
+    depends_on:
+      crm-ingestion-api:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=platform-network"
+      - "traefik.http.routers.crm-demo.rule=Host(`crm-demo.nano.platform`)"
+      - "traefik.http.routers.crm-demo.entrypoints=websecure"
+      - "traefik.http.routers.crm-demo.tls=true"
+      - "traefik.http.services.crm-demo.loadbalancer.server.port=80"
+      - "traefik.http.routers.crm-demo-http.rule=Host(`crm-demo.nano.platform`)"
+      - "traefik.http.routers.crm-demo-http.entrypoints=web"
+      - "traefik.http.routers.crm-demo-http.middlewares=redirect-to-https@file"
+      - "traefik.http.routers.crm-demo-http.service=crm-demo"
 
   # AI-Powered Development - Agent Node (The Sensor)
   agent-node:

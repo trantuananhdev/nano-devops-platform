@@ -50,6 +50,29 @@ done
 
 log_info "Docker is running correctly."
 
+# Reduce Docker Hub 429 rate limits for anonymous pulls (base images: python, node, etc.)
+DAEMON_JSON="/etc/docker/daemon.json"
+if [ ! -f "$DAEMON_JSON" ] || ! grep -q 'registry-mirrors' "$DAEMON_JSON" 2>/dev/null; then
+    log_info "Configuring Docker Hub registry mirror (mirror.gcr.io)..."
+    mkdir -p /etc/docker
+    if [ -f "$DAEMON_JSON" ]; then
+        cp "$DAEMON_JSON" "${DAEMON_JSON}.bak"
+    fi
+    cat > "$DAEMON_JSON" <<'EOF'
+{
+  "registry-mirrors": ["https://mirror.gcr.io"]
+}
+EOF
+    log_info "Restarting Docker to apply registry mirror..."
+    rc-service docker restart
+    RETRY=0
+    while ! docker info >/dev/null 2>&1; do
+        RETRY=$((RETRY + 1))
+        [ "$RETRY" -ge 15 ] && log_error "Docker failed to restart after daemon.json update"
+        sleep 2
+    done
+fi
+
 # Create external network if not exists
 if ! docker network inspect platform-network >/dev/null 2>&1; then
     log_info "Creating external platform-network..."

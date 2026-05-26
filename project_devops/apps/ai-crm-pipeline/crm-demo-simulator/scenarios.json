@@ -1,0 +1,104 @@
+[
+  {
+    "id": "multi_channel_mix",
+    "title_vi": "★ Đa kênh đồng thời (FB + TikTok + Shopee)",
+    "description_vi": "Một lượt bấm — 3 kênh inbox đổ vào cùng trung tâm: Tagalog, Indo, Malay. Đúng mô hình TNT gom traffic.",
+    "crm_stage_vi": "Tiếp nhận đa kênh → Một hàng đợi → AI phân loại từng tin",
+    "ai_focus_vi": "Cùng lúc hiểu 3 ngôn ngữ, không cần mở 3 app inbox.",
+    "icon": "🌐",
+    "channels": ["facebook", "tiktok", "shopee"],
+    "delay_ms": 900,
+    "messages": [
+      {"template_id": "cancel_angry_tl", "channel": "facebook", "overrides": {"customer_name": "Maria Santos", "order_id": "8821"}},
+      {"template_id": "price_serum_id", "channel": "tiktok", "overrides": {"customer_name": "Siti Rahayu"}},
+      {"template_id": "shopee_delay_ms", "channel": "shopee", "overrides": {"customer_name": "Ahmad Zulkifli"}}
+    ]
+  },
+  {
+    "id": "live_tiktok_surge",
+    "title_vi": "Đổ traffic Live TikTok",
+    "description_vi": "Sau live 8.8: hàng loạt inbox hỏi giá serum, màu son, voucher — CS không kịp trả lời.",
+    "crm_stage_vi": "Tiếp nhận → Phân loại → Trả lời tự động",
+    "ai_focus_vi": "Gemini trả lời FAQ đa ngôn ngữ (ID/TL), chỉ escalate tin mua số lượng lớn.",
+    "icon": "📺",
+    "delay_ms": 600,
+    "messages": [
+      {"template_id": "price_serum_id", "channel": "tiktok", "overrides": {"customer_name": "Siti Rahayu", "phone": "+62 812 9901 2234"}},
+      {"template_id": "live_stream_q", "channel": "tiktok"},
+      {"template_id": "voucher_ask_id", "channel": "tiktok", "overrides": {"customer_name": "Budi Santoso"}},
+      {"template_id": "mask_pack_tt", "channel": "tiktok"}
+    ]
+  },
+  {
+    "id": "cancel_storm_facebook",
+    "title_vi": "Bão tin hủy đơn Facebook",
+    "description_vi": "Ads chạy mạnh + delay JNT: khách Philippines & Indo đòi hủy, đe chargeback.",
+    "crm_stage_vi": "Tiếp nhận → Cảnh báo Leader → CS senior xử lý",
+    "ai_focus_vi": "Nhận diện cancel_order + sentiment negative, Telegram/Lark báo ngay — không auto-reply.",
+    "icon": "🔥",
+    "delay_ms": 700,
+    "messages": [
+      {"template_id": "cancel_angry_tl", "channel": "facebook", "overrides": {"customer_name": "Maria Santos", "phone": "+63 917 8821 004", "order_id": "8821"}},
+      {"template_id": "cancel_angry_id", "channel": "facebook", "overrides": {"customer_name": "Rina Wijaya", "order_id": "ID-772991"}},
+      {"template_id": "rude_cancel_tl", "channel": "facebook"},
+      {"template_id": "angry_delay_2", "channel": "facebook", "overrides": {"customer_name": "Juan Dela Cruz"}}
+    ]
+  },
+  {
+    "id": "shopee_flash_traffic",
+    "title_vi": "Flash sale Shopee (MY)",
+    "description_vi": "Traffic từ banner 8.8: hỏi COD, tracking, flash price — 1 trang Shopee Official.",
+    "crm_stage_vi": "Tiếp nhận → Auto-reply COD/tracking → Chốt đơn",
+    "ai_focus_vi": "Trả lời nhanh tiếng Malay; escalate khiếu nại giao sai hàng.",
+    "icon": "🛒",
+    "delay_ms": 550,
+    "messages": [
+      {"template_id": "flash_sale_sp", "channel": "shopee", "overrides": {"customer_name": "Ahmad Zulkifli"}},
+      {"template_id": "cod_confirm_ms", "channel": "shopee"},
+      {"template_id": "tracking_shopee", "channel": "shopee", "overrides": {"customer_name": "Nurul Izzah", "order_id": "241188223401"}},
+      {"template_id": "shopee_delay_ms", "channel": "shopee"}
+    ]
+  },
+  {
+    "id": "complaint_escalation",
+    "title_vi": "Khiếu nại & đòi hoàn tiền",
+    "description_vi": "Gói hỏng, trừ tiền 2 lần, giao sai màu — cần SLA Leader < 5 phút.",
+    "crm_stage_vi": "Tiếp nhận → Phân loại complaint → Escalate",
+    "ai_focus_vi": "Tóm tắt vụ việc + order_id; không hứa refund tự động.",
+    "icon": "⚠️",
+    "delay_ms": 800,
+    "messages": [
+      {"template_id": "wrong_item_ms", "channel": "shopee", "overrides": {"customer_name": "Lee Mei Ling", "order_id": "241199887712"}},
+      {"template_id": "wallet_lost_sp", "channel": "shopee"},
+      {"template_id": "duplicate_charge", "channel": "facebook", "overrides": {"customer_name": "Ana Reyes", "phone": "+63 998 4412"}},
+      {"template_id": "defective_item", "channel": "generic", "overrides": {"customer_name": "John Tan"}}
+    ]
+  },
+  {
+    "id": "positive_upsell_wave",
+    "title_vi": "Sóng khách hài lòng & tái mua",
+    "description_vi": "Sau chiến dịch serum: review tốt, đặt thêm, hỏi bundle — cơ hội upsell.",
+    "crm_stage_vi": "Tiếp nhận → Auto-reply cảm ơn → Chuyển sales",
+    "ai_focus_vi": "Gợi ý combo / voucher; đánh dấu purchase intent.",
+    "icon": "💚",
+    "delay_ms": 500,
+    "messages": [
+      {"template_id": "praise_review_id", "channel": "tiktok", "overrides": {"customer_name": "Dewi Lestari"}},
+      {"template_id": "serum_positive", "channel": "tiktok"},
+      {"template_id": "reorder_same", "channel": "facebook", "overrides": {"customer_name": "Grace Mendoza"}},
+      {"template_id": "bulk_order_id", "channel": "tiktok", "overrides": {"customer_name": "PT Kosmetik Nusantara", "phone": "+62 21 5566 7788"}}
+    ]
+  },
+  {
+    "id": "single_hot_lead",
+    "title_vi": "1 tin khẩn (demo nhanh)",
+    "description_vi": "Một khách đe chargeback — dùng khi trình bày từng bước CRM + AI.",
+    "crm_stage_vi": "Tiếp nhận → Cảnh báo → Xử lý thủ công",
+    "ai_focus_vi": "Phân loại critical trong <20s; ticker đỏ trên Command Center.",
+    "icon": "🎯",
+    "delay_ms": 0,
+    "messages": [
+      {"template_id": "demo_hot_5", "channel": "generic", "overrides": {"customer_name": "Michael Chen", "phone": "+1 650 555 0199", "order_id": "US-CRITICAL-01"}}
+    ]
+  }
+]

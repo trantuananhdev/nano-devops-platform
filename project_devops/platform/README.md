@@ -11,13 +11,13 @@ This directory contains platform core configurations and shared infrastructure d
 
 ## Contents
 
-- `docker-compose.yml` - Infrastructure services (PostgreSQL, Redis, Traefik, Prometheus, Grafana, Loki)
-- `traefik/` - Traefik reverse proxy configuration
-- `monitoring/` - Monitoring stack configurations
-  - `prometheus/` - Prometheus configuration
-  - `grafana/` - Grafana provisioning and dashboards
-  - `loki/` - Loki configuration
-- `secrets/` - Secret files (not committed to Git)
+- `composition/` — Docker Compose modules (`docker-compose.yml`, `.observability.yml`, `.apps.yml`)
+- `config/` — Traefik, Prometheus, Loki, Postgres init, Alertmanager
+- `monitoring/grafana/` — Dashboards and provisioning (datasources, CRM pipeline)
+- `infra/scripts/` — VM setup, TLS generation, OpenRC `nano-platform` service
+- `ops/smoke-tests/` — HTTPS and observability validation
+- `docs/` — [HTTPS_HOSTS.md](docs/HTTPS_HOSTS.md)
+- `secrets/` — Secret files (not committed to Git; use `*.example`)
 
 ## Services
 
@@ -87,16 +87,27 @@ docker-compose down
 docker-compose down -v
 ```
 
-## Monitoring Access
+## HTTPS (all public apps)
 
-- **Grafana**: http://localhost:3000 (admin/admin by default, change password)
-- **Prometheus**: http://localhost:9090
-- **Loki**: http://localhost:3100
+Every Traefik-routed service uses **TLS on `websecure`** with HTTP redirect. See [docs/HTTPS_HOSTS.md](docs/HTTPS_HOSTS.md).
 
-All services are also accessible via Traefik:
-- http://grafana.localhost
-- http://prometheus.localhost
-- http://loki.localhost
+```bash
+./cli.sh certs          # wildcard *.nano.platform
+./cli.sh up
+./cli.sh smoke-https    # all app endpoints
+./cli.sh smoke-obs      # Grafana + Prometheus
+```
+
+| Service | URL |
+|---------|-----|
+| Grafana | https://grafana.nano.platform (admin / `secrets/grafana_password.txt`) |
+| Prometheus | https://prometheus.nano.platform |
+| CRM Demo | https://crm-demo.nano.platform |
+| CRM API | https://crm-ingest.nano.platform |
+| Microservices | https://health\|data\|aggregator\|user.nano.platform |
+| Agentic AI | https://ai.nano.platform |
+
+**Presenter laptop:** `/etc/hosts` → VM IP for all `*.nano.platform` hosts; trust `rootCA.crt` from `/opt/platform/config/traefik/certs/`.
 
 ## Guidelines
 

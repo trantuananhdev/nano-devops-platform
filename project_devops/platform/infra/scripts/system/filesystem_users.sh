@@ -93,6 +93,9 @@ fi
 
 # 4. Create the required data directories based on docker-compose.yml
 log_info "Creating persistent data directories under $PLATFORM_ROOT/data..."
+mkdir -p "$PLATFORM_ROOT/config/traefik/certs"
+chmod 755 "$PLATFORM_ROOT/config/traefik" "$PLATFORM_ROOT/config/traefik/certs"
+
 data_dirs="postgres redis prometheus grafana loki alertmanager odoo odoo-addons logs"
 for dir in $data_dirs; do
     if [ ! -d "$PLATFORM_ROOT/data/$dir" ]; then

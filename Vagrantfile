@@ -68,7 +68,7 @@ EOF
     # 5. Local Service Discovery (Internal DNS simulation)
     # CTO requirement: Services must resolve each other internally
     # We point these to the Service IP (eth1) instead of 127.0.0.1 for better networking parity
-    DOMAINS="odoo.nano.platform ai.nano.platform grafana.nano.platform prometheus.nano.platform faulty.nano.platform data.nano.platform health.nano.platform user.nano.platform"
+    DOMAINS="odoo.nano.platform ai.nano.platform grafana.nano.platform prometheus.nano.platform aggregator.nano.platform faulty.nano.platform data.nano.platform health.nano.platform user.nano.platform crm-ingest.nano.platform crm-demo.nano.platform"
     
     # Clean up old entries to avoid IP mismatches if NAT subnet changes
     for d in $DOMAINS; do
@@ -146,7 +146,11 @@ EOF
       mv /tmp/.ssh_copy $DEST/.ssh
       mv /tmp/.env_copy $DEST/.env
 
-      if id deploy >/dev/null 2>&1; then
+      # Fix Windows CRLF line endings on all shell scripts (critical for Postgres init scripts)
+      apk add --no-cache dos2unix > /dev/null 2>&1 || true
+      find $DEST/project_devops -type f -name "*.sh" -print0 | xargs -0 dos2unix
+
+      if id deploy > /dev/null 2>&1; then
         chown -R deploy:platform_group $DEST
         chmod -R 775 $DEST
       fi
@@ -240,7 +244,14 @@ SERVICES:
 - Grafana:    https://grafana.nano.platform
 - Prometheus: https://prometheus.nano.platform
 - AI Agent:   https://ai.nano.platform
+- CRM API:    https://crm-ingest.nano.platform
+- CRM Demo:   https://crm-demo.nano.platform  (Phase 4 Command Center UI)
 - Traefik:    http://#{STATIC_IP}:8080
+
+DEMO (Phase 4 — TNT Command Center):
+- Plan: project_devops/apps/ai-crm-pipeline/docs/DEMO_PLATFORM_PLAN.md
+- BE: ai-crm-pipeline | FE: apps/crm-demo-ui (tách riêng)
+- Hosts file (presenter PC): add crm-demo + crm-ingest → VM IP
 
 ACCESS:
 - vagrant ssh
@@ -248,6 +259,15 @@ ACCESS:
 
 MGMT:
 - sudo rc-service nano-platform [start|stop|status]
+
+DOCKER:
+- Registry login uses .env GITHUB_TOKEN (ghcr.io + Docker Hub attempt)
+- Same GitHub account as ai-agent / BOOTSTRAP_REPO_FULL_NAME owner
+
+HTTPS (Grafana / Prometheus / all *.nano.platform):
+- Certs: /opt/platform/config/traefik/certs/ (generate_certs.sh on provision)
+- Presenter PC: add VM IP to hosts + import rootCA.crt into trusted roots
+- Smoke: vagrant ssh -c "bash /workspace/project_devops/platform/ops/smoke-tests/smoke-test-observability.sh"
 
 ==================================================
 

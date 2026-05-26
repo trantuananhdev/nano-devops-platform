@@ -23,45 +23,79 @@ else
     exit 1
 fi
 
+# Root .env (LLM_PROVIDER, GEMINI_API_KEY, TELEGRAM_*, etc.) — no manual export needed
+COMPOSE_ENV_FILE=""
+if [ -f ".env" ]; then
+    COMPOSE_ENV_FILE="--env-file $(pwd)/.env"
+fi
+
 # --- Helper Functions ---
 print_usage() {
     echo "Usage: $0 <command> [options]"
     echo ""
     echo "Commands:"
-    echo "  up              Start all services in development mode."
-    echo "  down            Stop all services."
-    echo "  ps              Show status of all services."
-    echo "  logs [service]  Follow logs for a specific service (or all if not specified)."
-    echo "  test            Run platform-level tests."
-    echo "  migrate         Run database migrations to the latest version."
-    echo "  deploy <svc> <tag> Deploy a new version of a service."
+    echo "  up                  Start all services in development mode."
+    echo "  down                Stop all services."
+    echo "  ps                  Show status of all services."
+    echo "  logs [service]      Follow logs for a specific service (or all if not specified)."
+    echo "  test                Run platform-level tests."
+    echo "  migrate             Run database migrations to the latest version."
+    echo "  deploy <svc> <tag>  Deploy a new version of a service."
+    echo "  redeploy [service]  Rebuild & restart one service (or all). Use after code changes."
+    echo "  certs               Generate wildcard TLS for *.nano.platform (Traefik)."
+    echo "  smoke-obs           Run Grafana + Prometheus HTTPS smoke tests."
+    echo "  smoke-https         Probe all public app HTTPS endpoints."
     echo ""
     echo "AI Platform Commands:"
-    echo "  ai-up           Start Agentic-AI services."
-    echo "  ai-logs         Follow logs for the Agentic-AI service."
-    echo "  ai-migrate      Run database migrations for the Agentic-AI service."
+    echo "  ai-up               Start Agentic-AI services."
+    echo "  ai-logs             Follow logs for the Agentic-AI service."
+    echo "  ai-migrate          Run database migrations for the Agentic-AI service."
 }
 
 # --- Command Implementation ---
+cmd_certs() {
+    local CERT_SCRIPT="project_devops/platform/infra/scripts/system/generate_certs.sh"
+    if [ ! -f "$CERT_SCRIPT" ]; then
+        echo "Error: $CERT_SCRIPT not found"
+        exit 1
+    fi
+    echo "Generating Traefik wildcard TLS (*.nano.platform)..."
+    sh "$CERT_SCRIPT"
+}
+
 cmd_up() {
+    cmd_certs
     echo "Starting all services..."
-    $COMPOSE $COMPOSE_FILES up -d --remove-orphans
+    # shellcheck disable=SC2086
+    $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES up -d --remove-orphans
+}
+
+cmd_smoke_obs() {
+    bash ./project_devops/platform/ops/smoke-tests/smoke-test-observability.sh
+}
+
+cmd_smoke_https() {
+    bash ./project_devops/platform/ops/smoke-tests/smoke-test-https-apps.sh
 }
 
 cmd_down() {
     echo "Stopping all services..."
-    $COMPOSE $COMPOSE_FILES down
+    # shellcheck disable=SC2086
+    $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES down
 }
 
 cmd_ps() {
-    $COMPOSE $COMPOSE_FILES ps
+    # shellcheck disable=SC2086
+    $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES ps
 }
 
 cmd_logs() {
     if [ -z "${1:-}" ]; then
-        $COMPOSE $COMPOSE_FILES logs -f
+        # shellcheck disable=SC2086
+        $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES logs -f
     else
-        $COMPOSE $COMPOSE_FILES logs -f "$1"
+        # shellcheck disable=SC2086
+        $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES logs -f "$1"
     fi
 }
 
@@ -73,7 +107,8 @@ cmd_test() {
 cmd_migrate() {
     echo "Running database migrations..."
     # CTO Fix: Mount alembic.ini and migrations from host to container
-    $COMPOSE $COMPOSE_FILES run --rm \
+    # shellcheck disable=SC2086
+    $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES run --rm \
         -v "$(pwd)/alembic.ini:/app/alembic.ini" \
         -v "$(pwd)/project_devops/platform/migrations:/app/project_devops/platform/migrations" \
         data-api alembic upgrade head
@@ -88,22 +123,41 @@ cmd_deploy() {
     SERVICE_NAME=$1 IMAGE_TAG=$2 bash ./project_devops/platform/ops/deployment/deploy.sh
 }
 
+# Rebuild & restart one service (or all) after code changes on the host.
+# Usage inside VM: ./cli.sh redeploy [service]
+cmd_redeploy() {
+    local SERVICE="${1:-}"
+    if [ -n "$SERVICE" ]; then
+        echo "Rebuilding & restarting service: ${SERVICE}..."
+        # shellcheck disable=SC2086
+        $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES up -d --build --pull missing --no-deps "$SERVICE"
+    else
+        echo "Rebuilding & restarting ALL services..."
+        # shellcheck disable=SC2086
+        $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES up -d --build --pull missing --remove-orphans
+    fi
+    echo "Done. Check logs: $0 logs ${SERVICE:-}"
+}
+
 # --- AI Platform Specific Commands ---
 cmd_ai_up() {
     echo "Starting Agentic-AI services..."
-    $COMPOSE $COMPOSE_FILES up -d agentic-ai-api
+    # shellcheck disable=SC2086
+    $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES up -d agentic-ai-api
 }
 
 cmd_ai_logs() {
     echo "Following logs for Agentic-AI service..."
-    $COMPOSE $COMPOSE_FILES logs -f agentic-ai-api
+    # shellcheck disable=SC2086
+    $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES logs -f agentic-ai-api
 }
 
 cmd_ai_migrate() {
     echo "Running database migrations for Agentic-AI..."
     # AI Platform migrations via node-pg-migrate or similar if needed
     # But for now, let's assume it's part of the standard flow
-    $COMPOSE $COMPOSE_FILES exec agentic-ai-api npm run migrate || echo "Migration command failed or not configured in package.json."
+    # shellcheck disable=SC2086
+    $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES exec agentic-ai-api npm run migrate || echo "Migration command failed or not configured in package.json."
 }
 
 # --- Main Dispatcher ---
@@ -135,6 +189,18 @@ case "$COMMAND" in
         ;;
     deploy)
         cmd_deploy "${2:-}" "${3:-}"
+        ;;
+    redeploy)
+        cmd_redeploy "${2:-}"
+        ;;
+    certs)
+        cmd_certs
+        ;;
+    smoke-obs)
+        cmd_smoke_obs
+        ;;
+    smoke-https)
+        cmd_smoke_https
         ;;
     ai-up)
         cmd_ai_up

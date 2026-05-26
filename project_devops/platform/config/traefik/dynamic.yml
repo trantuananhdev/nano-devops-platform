@@ -12,10 +12,9 @@ tls:
       minVersion: VersionTLS12
 
   certificates:
+    # Wildcard *.nano.platform (generate_certs.sh) — do NOT mount rootCA as server cert
     - certFile: /etc/traefik/certs/nano.platform.crt
       keyFile: /etc/traefik/certs/nano.platform.key
-    - certFile: /etc/traefik/certs/rootCA.crt
-      keyFile: /etc/traefik/certs/rootCA.key
 
   stores:
     default:

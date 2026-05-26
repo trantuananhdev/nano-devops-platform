@@ -47,7 +47,7 @@ groups:
           description: "Traefik reverse proxy has been down for more than 1 minute. All traffic routing is affected."
 
       - alert: PostgreSQLDown
-        expr: up{job="postgres"} == 0
+        expr: up{job="postgres-exporter"} == 0
         for: 1m
         labels:
           severity: critical
@@ -67,7 +67,7 @@ groups:
           description: "PostgreSQL database service is not responding. All database operations are affected."
 
       - alert: RedisDown
-        expr: up{job="redis"} == 0
+        expr: up{job="redis-exporter"} == 0
         for: 1m
         labels:
           severity: warning
@@ -427,16 +427,15 @@ groups:
     interval: 30s
     rules:
       # Prometheus High Scrape Duration
-      - alert: PrometheusHighScrapeDuration
-        expr: |
-          prometheus_target_interval_length_seconds > 60
+      - alert: PrometheusScrapeFailures
+        expr: increase(prometheus_target_scrapes_exceeded_sample_limit_total[15m]) > 0
         for: 5m
         labels:
           severity: warning
           component: monitoring
         annotations:
-          summary: "Prometheus high scrape duration"
-          description: "Prometheus target scrape duration is above 60 seconds for more than 5 minutes. This may indicate performance issues."
+          summary: "Prometheus scrape issues detected"
+          description: "One or more scrape targets are down or exceeding sample limits. Check Status → Targets in Prometheus UI."
 
       # Prometheus High Series Count
       - alert: PrometheusHighSeriesCount

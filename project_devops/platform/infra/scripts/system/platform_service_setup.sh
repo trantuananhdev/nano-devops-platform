@@ -70,23 +70,44 @@ start() {
     
     einfo "Starting platform at: \$PLATFORM_PATH"
     
-    # Senior DevOps: Generate TLS certificates if they don't exist
-    CERT_GEN_SCRIPT="/opt/platform/src/nano-project-devops/project_devops/platform/infra/scripts/system/generate_certs.sh"
-    if [ -f "\$CERT_GEN_SCRIPT" ]; then
-        einfo "Generating TLS certificates..."
-        sh "\$CERT_GEN_SCRIPT"
+    # Traefik HTTPS — wildcard *.nano.platform (must exist before platform-traefik starts)
+    for CERT_GEN_SCRIPT in \
+        /workspace/project_devops/platform/infra/scripts/system/generate_certs.sh \
+        /opt/platform/src/nano-project-devops/project_devops/platform/infra/scripts/system/generate_certs.sh; do
+        if [ -f "\$CERT_GEN_SCRIPT" ]; then
+            einfo "Generating TLS certificates via \$CERT_GEN_SCRIPT"
+            sh "\$CERT_GEN_SCRIPT" || ewarn "Certificate generation failed"
+            break
+        fi
+    done
+    if [ ! -f /opt/platform/config/traefik/certs/nano.platform.crt ]; then
+        ewarn "Missing /opt/platform/config/traefik/certs/nano.platform.crt — HTTPS will not work"
     fi
 
-    # Senior DevOps: Ensure .env is linked to the composition directory
-    # This fixes the "variable is not set" WARN when running docker compose manually
-    DOTENV_ROOT="/opt/platform/src/nano-project-devops/.env"
+    # .env: DEV (/workspace) or PROD-LIKE (/opt/platform/...)
+    DOTENV_ROOT=""
+    for _ef in /workspace/.env /opt/platform/src/nano-project-devops/.env; do
+        if [ -f "\$_ef" ]; then
+            DOTENV_ROOT="\$_ef"
+            break
+        fi
+    done
     ENV_FILE_ARG=""
-    if [ -f "\$DOTENV_ROOT" ]; then
+    if [ -n "\$DOTENV_ROOT" ]; then
         einfo "Linking .env from root to composition directory"
         ln -sf "\$DOTENV_ROOT" "\$PLATFORM_PATH/.env"
-        # Explicitly use it as an argument too for maximum robustness
         ENV_FILE_ARG="--env-file \$DOTENV_ROOT"
     fi
+
+    # Docker Hub / ghcr.io login (GITHUB_TOKEN) before build — same as ai-agent GHCR
+    for _base in /opt/platform/src/nano-project-devops /workspace; do
+        _login="\$_base/project_devops/platform/infra/scripts/system/docker_registry_login.sh"
+        if [ -f "\$_login" ]; then
+            einfo "Docker registry login (GitHub token from .env)..."
+            sh "\$_login" || true
+            break
+        fi
+    done
 
     # Start the platform as the deploy user with all modules
     # Added --build to ensure code changes are picked up during provision/restart
@@ -95,7 +116,22 @@ start() {
         COMPOSE_CMD="\$COMPOSE_CMD -f docker-compose.override.yml"
     fi
 
-    su - "$DEPLOY_USER" -c "cd '\$PLATFORM_PATH' && \$COMPOSE_CMD up -d --build"
+    # Critical edge images — fail fast if pull fails (avoids opaque "No such image")
+    for _img in ghcr.io/tecnativa/docker-socket-proxy:0.2 traefik:v3.1; do
+        if ! su - "$DEPLOY_USER" -c "docker image inspect '\$_img' >/dev/null 2>&1"; then
+            einfo "Pulling required image: \$_img"
+            if ! su - "$DEPLOY_USER" -c "docker pull '\$_img'"; then
+                eerror "Failed to pull \$_img (check network / ghcr.io login)"
+                eend 1
+                return 1
+            fi
+        fi
+    done
+
+    if ! su - "$DEPLOY_USER" -c "cd '\$PLATFORM_PATH' && \$COMPOSE_CMD pull"; then
+        ewarn "compose pull had warnings (continuing if critical images are present)"
+    fi
+    su - "$DEPLOY_USER" -c "cd '\$PLATFORM_PATH' && \$COMPOSE_CMD up -d --build --pull missing"
     
     eend \$?
 }
