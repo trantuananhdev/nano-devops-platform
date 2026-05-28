@@ -68,7 +68,7 @@ EOF
     # 5. Local Service Discovery (Internal DNS simulation)
     # CTO requirement: Services must resolve each other internally
     # We point these to the Service IP (eth1) instead of 127.0.0.1 for better networking parity
-    DOMAINS="odoo.nano.platform ai.nano.platform grafana.nano.platform prometheus.nano.platform aggregator.nano.platform faulty.nano.platform data.nano.platform health.nano.platform user.nano.platform crm-ingest.nano.platform crm-demo.nano.platform"
+    DOMAINS="odoo.nano.platform ai.nano.platform grafana.nano.platform prometheus.nano.platform aggregator.nano.platform faulty.nano.platform data.nano.platform health.nano.platform user.nano.platform crm-ingest.nano.platform crm-demo.nano.platform goclaw.nano.platform"
     
     # Clean up old entries to avoid IP mismatches if NAT subnet changes
     for d in $DOMAINS; do
@@ -246,6 +246,7 @@ SERVICES:
 - AI Agent:   https://ai.nano.platform
 - CRM API:    https://crm-ingest.nano.platform
 - CRM Demo:   https://crm-demo.nano.platform  (Phase 4 Command Center UI)
+- GoClaw:     https://goclaw.nano.platform   (Phase 6 AI Agent Gateway)
 - Traefik:    http://#{STATIC_IP}:8080
 
 DEMO (Phase 4 — TNT Command Center):
