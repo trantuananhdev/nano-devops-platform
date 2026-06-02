@@ -1,2 +1,0 @@
-ALTER TABLE agents
-ADD COLUMN IF NOT EXISTS model_fallback JSONB NOT NULL DEFAULT '{}'::jsonb;

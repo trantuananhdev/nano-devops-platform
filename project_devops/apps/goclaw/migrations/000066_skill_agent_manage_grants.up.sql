@@ -1,2 +1,0 @@
-ALTER TABLE skill_agent_grants
-    ADD COLUMN IF NOT EXISTS can_manage BOOLEAN NOT NULL DEFAULT FALSE;

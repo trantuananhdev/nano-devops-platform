@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 import httpx
 
-from config import _load_gemini_key
+from config import get_next_gemini_key, GEMINI_API_KEYS
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +26,11 @@ class GeminiProvider:
     max_tokens: int
 
 
-def create_gemini_provider() -> GeminiProvider:
-    api_key = _load_gemini_key()
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is not set")
+def create_gemini_provider(*, api_key: str | None = None) -> GeminiProvider:
+    if not GEMINI_API_KEYS and not api_key:
+        raise RuntimeError("No Gemini API keys available. Please set GEMINI_API_KEY_1 to GEMINI_API_KEY_5 in .env")
 
+    fixed_key = (api_key or "").strip() or None
     model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     api_version = os.getenv("GEMINI_API_VERSION", "v1beta")
     temperature = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
@@ -62,34 +62,51 @@ def create_gemini_provider() -> GeminiProvider:
             "generationConfig": generation_config,
         }
 
-        url = (
-            f"https://generativelanguage.googleapis.com/{api_version}"
-            f"/models/{model}:generateContent?key={api_key}"
-        )
-
         max_retries = int(os.getenv("GEMINI_HTTP_RETRIES", "3"))
         backoff_s = float(os.getenv("GEMINI_HTTP_RETRY_BACKOFF_S", "2"))
 
         with httpx.Client(timeout=timeout_ms / 1000.0) as client:
             resp = None
             for attempt in range(max_retries):
-                resp = client.post(
-                    url,
-                    json=body,
-                    headers={"Content-Type": "application/json"},
+                # Get a fresh key for each retry
+                use_key = fixed_key or get_next_gemini_key()
+                url = (
+                    f"https://generativelanguage.googleapis.com/{api_version}"
+                    f"/models/{model}:generateContent?key={use_key}"
                 )
-                if resp.status_code == 429 and attempt + 1 < max_retries:
-                    wait = backoff_s * (2**attempt)
-                    logger.warning(
-                        "Gemini 429, retry %d/%d in %.1fs",
-                        attempt + 1,
-                        max_retries,
-                        wait,
+                try:
+                    resp = client.post(
+                        url,
+                        json=body,
+                        headers={"Content-Type": "application/json"},
                     )
-                    time.sleep(wait)
-                    continue
-                resp.raise_for_status()
-                break
+                    if resp.status_code == 200:
+                        break
+                    elif resp.status_code in (429, 403) and attempt + 1 < max_retries:
+                        # Rate limit or quota exceeded - try next key
+                        logger.warning(
+                            "Gemini %d, trying new key and retry %d/%d in %.1fs",
+                            resp.status_code,
+                            attempt + 1,
+                            max_retries,
+                            backoff_s,
+                        )
+                        time.sleep(backoff_s)
+                        continue
+                    else:
+                        resp.raise_for_status()
+                except httpx.HTTPStatusError as e:
+                    if attempt + 1 < max_retries and e.response.status_code in (429, 403):
+                        logger.warning(
+                            "Gemini error %d, trying new key and retry %d/%d in %.1fs",
+                            e.response.status_code,
+                            attempt + 1,
+                            max_retries,
+                            backoff_s,
+                        )
+                        time.sleep(backoff_s)
+                        continue
+                    raise
             assert resp is not None
             data = resp.json()
 

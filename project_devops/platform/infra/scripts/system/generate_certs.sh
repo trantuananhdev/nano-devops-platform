@@ -18,11 +18,12 @@ if [ ! -f "$CERT_DIR/rootCA.key" ]; then
 fi
 
 # Wildcard server certificate for Traefik HTTPS
-if [ ! -f "$CERT_DIR/nano.platform.key" ] || [ ! -f "$CERT_DIR/nano.platform.crt" ]; then
-    echo "[certs] Generating wildcard certificate for *.nano.platform..."
-    openssl genrsa -out "$CERT_DIR/nano.platform.key" 2048
+# Always regenerate server cert to ensure all domains are included
+echo "[certs] Generating wildcard certificate for *.nano.platform..."
+rm -f "$CERT_DIR/nano.platform.key" "$CERT_DIR/nano.platform.crt" "$CERT_DIR/nano.platform.csr" "$CERT_DIR/nano.platform.ext" "$CERT_DIR/rootCA.srl"
+openssl genrsa -out "$CERT_DIR/nano.platform.key" 2048
 
-    cat <<EOF > "$CERT_DIR/nano.platform.ext"
+cat <<EOF > "$CERT_DIR/nano.platform.ext"
 authorityKeyIdentifier=keyid,issuer
 basicConstraints=CA:FALSE
 keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
@@ -32,23 +33,32 @@ subjectAltName = @alt_names
 [alt_names]
 DNS.1 = nano.platform
 DNS.2 = *.nano.platform
-DNS.3 = grafana.nano.platform
-DNS.4 = prometheus.nano.platform
-DNS.5 = crm-ingest.nano.platform
-DNS.6 = crm-demo.nano.platform
+DNS.3 = odoo.nano.platform
+DNS.4 = ai.nano.platform
+DNS.5 = grafana.nano.platform
+DNS.6 = prometheus.nano.platform
+DNS.7 = aggregator.nano.platform
+DNS.8 = faulty.nano.platform
+DNS.9 = data.nano.platform
+DNS.10 = health.nano.platform
+DNS.11 = user.nano.platform
+DNS.12 = crm-ingest.nano.platform
+DNS.13 = crm-demo.nano.platform
+DNS.14 = goclaw.nano.platform
+DNS.15 = shopee-search.nano.platform
+DNS.16 = shopee-api.nano.platform
 EOF
 
-    openssl req -new -key "$CERT_DIR/nano.platform.key" \
-        -out "$CERT_DIR/nano.platform.csr" \
-        -subj "/C=VN/ST=Hanoi/L=Hanoi/O=NanoDevOps/CN=*.nano.platform"
+openssl req -new -key "$CERT_DIR/nano.platform.key" \
+    -out "$CERT_DIR/nano.platform.csr" \
+    -subj "/C=VN/ST=Hanoi/L=Hanoi/O=NanoDevOps/CN=*.nano.platform"
 
-    openssl x509 -req -in "$CERT_DIR/nano.platform.csr" \
-        -CA "$CERT_DIR/rootCA.crt" -CAkey "$CERT_DIR/rootCA.key" \
-        -CAcreateserial -out "$CERT_DIR/nano.platform.crt" \
-        -days 825 -sha256 -extfile "$CERT_DIR/nano.platform.ext"
+openssl x509 -req -in "$CERT_DIR/nano.platform.csr" \
+    -CA "$CERT_DIR/rootCA.crt" -CAkey "$CERT_DIR/rootCA.key" \
+    -CAcreateserial -out "$CERT_DIR/nano.platform.crt" \
+    -days 825 -sha256 -extfile "$CERT_DIR/nano.platform.ext"
 
-    rm -f "$CERT_DIR/nano.platform.csr" "$CERT_DIR/nano.platform.ext"
-fi
+rm -f "$CERT_DIR/nano.platform.csr" "$CERT_DIR/nano.platform.ext"
 
 chmod 644 "$CERT_DIR"/*.crt 2>/dev/null || true
 chmod 600 "$CERT_DIR"/*.key 2>/dev/null || true

@@ -44,3 +44,7 @@ def _database_url() -> str:
 
 
 DATABASE_URL = _database_url()
+
+# Mặc định bật: demo dùng rule-based, không đốt quota Gemini (~5 req/ngày free tier)
+CRM_SKIP_GEMINI = os.getenv("CRM_SKIP_GEMINI", "true").lower() == "true"
+DEMO_BURST_MAX_MESSAGES = int(os.getenv("DEMO_BURST_MAX_MESSAGES", "3"))

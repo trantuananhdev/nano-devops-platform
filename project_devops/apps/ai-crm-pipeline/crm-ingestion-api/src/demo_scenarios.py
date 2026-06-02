@@ -1,4 +1,4 @@
-"""Kịch bản đổ traffic — trung tâm tiếp nhận TNT (demo presenter)."""
+"""Kịch bản đổ traffic BĐS — demo presenter cho CRM Pipeline."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 
+from config import DEMO_BURST_MAX_MESSAGES
 from demo_templates import build_webhook_body, pick_template
 
 logger = logging.getLogger(__name__)
@@ -59,7 +60,7 @@ def list_scenarios_public() -> list[dict[str, Any]]:
                 "ai_focus_vi": s.get("ai_focus_vi", ""),
                 "icon": s.get("icon", "📩"),
                 "channels": _channels_for_scenario(s),
-                "message_count": len(s.get("messages") or []),
+                "message_count": min(len(s.get("messages") or []), DEMO_BURST_MAX_MESSAGES),
                 "delay_ms": s.get("delay_ms", 500),
             }
         )
@@ -80,7 +81,7 @@ async def run_traffic_burst(
     if not scenario:
         raise ValueError(f"unknown_scenario:{scenario_id}")
 
-    messages = scenario.get("messages") or []
+    messages = (scenario.get("messages") or [])[:max(1, DEMO_BURST_MAX_MESSAGES)]
     delay_s = max(0, int(scenario.get("delay_ms", 500))) / 1000.0
     accepted: list[str] = []
 

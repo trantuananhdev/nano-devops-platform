@@ -1,104 +1,117 @@
 [
   {
-    "id": "multi_channel_mix",
-    "title_vi": "★ Đa kênh đồng thời (FB + TikTok + Shopee)",
-    "description_vi": "Một lượt bấm — 3 kênh inbox đổ vào cùng trung tâm: Tagalog, Indo, Malay. Đúng mô hình TNT gom traffic.",
-    "crm_stage_vi": "Tiếp nhận đa kênh → Một hàng đợi → AI phân loại từng tin",
-    "ai_focus_vi": "Cùng lúc hiểu 3 ngôn ngữ, không cần mở 3 app inbox.",
-    "icon": "🌐",
-    "channels": ["facebook", "tiktok", "shopee"],
+    "id": "apartment_inquiry_burst",
+    "title_vi": "★ Mở bán căn hộ đa kênh",
+    "description_vi": "Khách ồ ạt hỏi về dự án căn hộ cao cấp: giá, diện tích, lịch mở bán, chính sách thanh toán.",
+    "crm_stage_vi": "Tiếp nhận đa kênh → Phân loại → Phân công CS → Theo dõi Pipeline",
+    "ai_focus_vi": "AI phân loại loại BĐS, ngân sách, số phòng ngủ, ý định mua/thuê. Trưởng phòng AI tạo brief triage.",
+    "icon": "🏢",
+    "channels": ["facebook", "tiktok", "zalo"],
     "delay_ms": 900,
     "messages": [
-      {"template_id": "cancel_angry_tl", "channel": "facebook", "overrides": {"customer_name": "Maria Santos", "order_id": "8821"}},
-      {"template_id": "price_serum_id", "channel": "tiktok", "overrides": {"customer_name": "Siti Rahayu"}},
-      {"template_id": "shopee_delay_ms", "channel": "shopee", "overrides": {"customer_name": "Ahmad Zulkifli"}}
+      {"template_id": "apartment_price", "channel": "facebook", "overrides": {"customer_name": "Nguyễn Văn An", "phone": "0901234567", "location": "Q.1, TP.HCM"}},
+      {"template_id": "viewing_schedule", "channel": "zalo", "overrides": {"customer_name": "Trần Thị Bảo", "phone": "0912345678", "location": "Bình Thạnh"}},
+      {"template_id": "apartment_inquiry", "channel": "tiktok", "overrides": {"customer_name": "Lê Minh Cường", "location": "Thủ Đức"}}
     ]
   },
   {
-    "id": "live_tiktok_surge",
-    "title_vi": "Đổ traffic Live TikTok",
-    "description_vi": "Sau live 8.8: hàng loạt inbox hỏi giá serum, màu son, voucher — CS không kịp trả lời.",
-    "crm_stage_vi": "Tiếp nhận → Phân loại → Trả lời tự động",
-    "ai_focus_vi": "Gemini trả lời FAQ đa ngôn ngữ (ID/TL), chỉ escalate tin mua số lượng lớn.",
-    "icon": "📺",
-    "delay_ms": 600,
+    "id": "villa_interest_surge",
+    "title_vi": "Biệt thự cao cấp — Lead đầu tư",
+    "description_vi": "Khách quan tâm biệt thự ven hồ, dự án cao cấp, hỏi thông tin đầu tư và tư vấn pháp lý.",
+    "crm_stage_vi": "Lead cao cấp → AI brief Trưởng phòng → Chăm sóc riêng → Đàm phán",
+    "ai_focus_vi": "Xác định lead đầu tư cao cấp, ngân sách lớn, yêu cầu tư vấn pháp lý chuyên sâu.",
+    "icon": "🏡",
+    "channels": ["facebook", "instagram"],
+    "delay_ms": 1000,
     "messages": [
-      {"template_id": "price_serum_id", "channel": "tiktok", "overrides": {"customer_name": "Siti Rahayu", "phone": "+62 812 9901 2234"}},
-      {"template_id": "live_stream_q", "channel": "tiktok"},
-      {"template_id": "voucher_ask_id", "channel": "tiktok", "overrides": {"customer_name": "Budi Santoso"}},
-      {"template_id": "mask_pack_tt", "channel": "tiktok"}
+      {"template_id": "villa_inquiry", "channel": "facebook", "overrides": {"customer_name": "Phạm Thanh Dũng", "phone": "0923456789", "location": "Thủ Đức, TP.HCM"}},
+      {"template_id": "investment_ask", "channel": "instagram", "overrides": {"customer_name": "Hoàng Thị Giang", "location": "Quận 9"}},
+      {"template_id": "legal_question", "channel": "facebook", "overrides": {"customer_name": "Đỗ Minh Hải", "phone": "0934567890"}}
     ]
   },
   {
-    "id": "cancel_storm_facebook",
-    "title_vi": "Bão tin hủy đơn Facebook",
-    "description_vi": "Ads chạy mạnh + delay JNT: khách Philippines & Indo đòi hủy, đe chargeback.",
-    "crm_stage_vi": "Tiếp nhận → Cảnh báo Leader → CS senior xử lý",
-    "ai_focus_vi": "Nhận diện cancel_order + sentiment negative, Telegram/Lark báo ngay — không auto-reply.",
-    "icon": "🔥",
+    "id": "land_plot_inquiry",
+    "title_vi": "Đất nền dự án — Đầu tư sinh lời",
+    "description_vi": "Khách hỏi đất nền dự án mới: tiềm năng khu vực, pháp lý, giá/m², hạ tầng xung quanh.",
+    "crm_stage_vi": "Lead đầu tư → AI phân tích tiềm năng → Gán CS chuyên đất nền → Follow up",
+    "ai_focus_vi": "Phân loại intent đầu tư vs mua ở thực; kiểm tra budget_range; alert nếu lead có budget cao.",
+    "icon": "🌱",
+    "channels": ["zalo", "facebook"],
     "delay_ms": 700,
     "messages": [
-      {"template_id": "cancel_angry_tl", "channel": "facebook", "overrides": {"customer_name": "Maria Santos", "phone": "+63 917 8821 004", "order_id": "8821"}},
-      {"template_id": "cancel_angry_id", "channel": "facebook", "overrides": {"customer_name": "Rina Wijaya", "order_id": "ID-772991"}},
-      {"template_id": "rude_cancel_tl", "channel": "facebook"},
-      {"template_id": "angry_delay_2", "channel": "facebook", "overrides": {"customer_name": "Juan Dela Cruz"}}
+      {"template_id": "land_inquiry", "channel": "zalo", "overrides": {"customer_name": "Ngô Thị Hương", "phone": "0934567890", "location": "Đồng Nai"}},
+      {"template_id": "potential_ask", "channel": "facebook", "overrides": {"customer_name": "Đinh Văn Khoa", "location": "Long An"}},
+      {"template_id": "legal_land", "channel": "zalo", "overrides": {"customer_name": "Bùi Thị Loan", "phone": "0945678901"}}
     ]
   },
   {
-    "id": "shopee_flash_traffic",
-    "title_vi": "Flash sale Shopee (MY)",
-    "description_vi": "Traffic từ banner 8.8: hỏi COD, tracking, flash price — 1 trang Shopee Official.",
-    "crm_stage_vi": "Tiếp nhận → Auto-reply COD/tracking → Chốt đơn",
-    "ai_focus_vi": "Trả lời nhanh tiếng Malay; escalate khiếu nại giao sai hàng.",
-    "icon": "🛒",
-    "delay_ms": 550,
+    "id": "shophouse_interest",
+    "title_vi": "Shophouse mặt phố — Kinh doanh",
+    "description_vi": "Khách tìm shophouse mặt tiền: vị trí đắc địa, mật độ dân cư, giá thuê/mua, tiềm năng kinh doanh.",
+    "crm_stage_vi": "Lead kinh doanh → Ưu tiên cao → CS chuyên thương mại → Demo thực tế",
+    "ai_focus_vi": "Phân loại transaction_type (mua/thuê), vị trí, budget. Nhận diện lead đang khởi nghiệp.",
+    "icon": "🏪",
+    "channels": ["tiktok", "facebook"],
+    "delay_ms": 600,
     "messages": [
-      {"template_id": "flash_sale_sp", "channel": "shopee", "overrides": {"customer_name": "Ahmad Zulkifli"}},
-      {"template_id": "cod_confirm_ms", "channel": "shopee"},
-      {"template_id": "tracking_shopee", "channel": "shopee", "overrides": {"customer_name": "Nurul Izzah", "order_id": "241188223401"}},
-      {"template_id": "shopee_delay_ms", "channel": "shopee"}
+      {"template_id": "shophouse_inquiry", "channel": "tiktok", "overrides": {"customer_name": "Vũ Thị Oanh", "phone": "0945678901", "location": "Q.3, TP.HCM"}},
+      {"template_id": "business_potential", "channel": "facebook", "overrides": {"customer_name": "Trịnh Văn Phong", "location": "Q.10"}},
+      {"template_id": "shophouse_price", "channel": "tiktok", "overrides": {"customer_name": "Lý Thị Quyên"}}
     ]
   },
   {
-    "id": "complaint_escalation",
-    "title_vi": "Khiếu nại & đòi hoàn tiền",
-    "description_vi": "Gói hỏng, trừ tiền 2 lần, giao sai màu — cần SLA Leader < 5 phút.",
-    "crm_stage_vi": "Tiếp nhận → Phân loại complaint → Escalate",
-    "ai_focus_vi": "Tóm tắt vụ việc + order_id; không hứa refund tự động.",
-    "icon": "⚠️",
-    "delay_ms": 800,
+    "id": "compliance_guard_demo",
+    "title_vi": "★ Compliance Guard (Pháp lý BĐS)",
+    "description_vi": "3 tình huống nhạy cảm: khách hỏi cam kết ROI, khách bức xúc pháp lý, khách muốn xem nhà gấp hôm nay.",
+    "crm_stage_vi": "Triage → Agent 6 Compliance Guard → Cảnh báo → Brief Trưởng phòng AI → Gán CS",
+    "ai_focus_vi": "Agent 6 chặn cam kết ROI + pháp lý vi phạm; Agent 3 tạo brief xử lý tình huống nhạy cảm.",
+    "icon": "🛡️",
+    "channels": ["instagram", "facebook", "zalo"],
+    "delay_ms": 900,
     "messages": [
-      {"template_id": "wrong_item_ms", "channel": "shopee", "overrides": {"customer_name": "Lee Mei Ling", "order_id": "241199887712"}},
-      {"template_id": "wallet_lost_sp", "channel": "shopee"},
-      {"template_id": "duplicate_charge", "channel": "facebook", "overrides": {"customer_name": "Ana Reyes", "phone": "+63 998 4412"}},
-      {"template_id": "defective_item", "channel": "generic", "overrides": {"customer_name": "John Tan"}}
+      {
+        "template_id": "risky_roi_question",
+        "channel": "instagram",
+        "overrides": { "customer_name": "Trần Khánh Linh", "phone": "0988000111", "location": "Q.2, TP.HCM" }
+      },
+      {
+        "template_id": "angry_legal_complaint",
+        "channel": "facebook",
+        "overrides": { "customer_name": "Nguyễn Hải Đăng", "phone": "0909000222", "location": "Thủ Đức" }
+      },
+      {
+        "template_id": "hot_viewing_today",
+        "channel": "zalo",
+        "overrides": { "customer_name": "Lê Thị Mai", "phone": "0911000333", "location": "Bình Thạnh" }
+      }
     ]
   },
   {
-    "id": "positive_upsell_wave",
-    "title_vi": "Sóng khách hài lòng & tái mua",
-    "description_vi": "Sau chiến dịch serum: review tốt, đặt thêm, hỏi bundle — cơ hội upsell.",
-    "crm_stage_vi": "Tiếp nhận → Auto-reply cảm ơn → Chuyển sales",
-    "ai_focus_vi": "Gợi ý combo / voucher; đánh dấu purchase intent.",
-    "icon": "💚",
+    "id": "zalo_oa_burst",
+    "title_vi": "Zalo OA — Lead dự án mới",
+    "description_vi": "Khách nhắn Zalo OA hỏi về dự án vừa ra mắt: giá, tiến độ, pháp lý, đặt chỗ sớm.",
+    "crm_stage_vi": "Zalo OA → Tiếp nhận → AI phân tích → Cảnh báo hot lead → CS follow up ngay",
+    "ai_focus_vi": "Phân tích luồng Zalo, nhận diện khách cần xem nhà gấp, tự động phản hồi lịch hẹn.",
+    "icon": "💬",
+    "channels": ["zalo"],
     "delay_ms": 500,
     "messages": [
-      {"template_id": "praise_review_id", "channel": "tiktok", "overrides": {"customer_name": "Dewi Lestari"}},
-      {"template_id": "serum_positive", "channel": "tiktok"},
-      {"template_id": "reorder_same", "channel": "facebook", "overrides": {"customer_name": "Grace Mendoza"}},
-      {"template_id": "bulk_order_id", "channel": "tiktok", "overrides": {"customer_name": "PT Kosmetik Nusantara", "phone": "+62 21 5566 7788"}}
+      {"template_id": "viewing_schedule", "channel": "zalo", "overrides": {"customer_name": "Phạm Quỳnh Anh", "phone": "0977111222", "location": "TP.Thủ Đức"}},
+      {"template_id": "apartment_price", "channel": "zalo", "overrides": {"customer_name": "Lê Hoàng Sơn", "phone": "0966222333", "location": "Q.7, TP.HCM"}},
+      {"template_id": "legal_question", "channel": "zalo", "overrides": {"customer_name": "Hoàng Thúy Hằng", "phone": "0955333444"}}
     ]
   },
   {
     "id": "single_hot_lead",
-    "title_vi": "1 tin khẩn (demo nhanh)",
-    "description_vi": "Một khách đe chargeback — dùng khi trình bày từng bước CRM + AI.",
-    "crm_stage_vi": "Tiếp nhận → Cảnh báo → Xử lý thủ công",
-    "ai_focus_vi": "Phân loại critical trong <20s; ticker đỏ trên Command Center.",
+    "title_vi": "1 Lead khẩn — Demo nhanh",
+    "description_vi": "Khách đặt cọc cần hỗ trợ ngay, cần xử lý khẩn trong 15 phút.",
+    "crm_stage_vi": "Cảnh báo critical_buyer → CS xử lý ngay → Ghi log → Update pipeline",
+    "ai_focus_vi": "Triage urgent trong <20s; cảnh báo Telegram/Lark; Trưởng phòng AI tạo brief khẩn.",
     "icon": "🎯",
+    "channels": ["generic"],
     "delay_ms": 0,
     "messages": [
-      {"template_id": "demo_hot_5", "channel": "generic", "overrides": {"customer_name": "Michael Chen", "phone": "+1 650 555 0199", "order_id": "US-CRITICAL-01"}}
+      {"template_id": "urgent_deposit", "channel": "generic", "overrides": {"customer_name": "Nguyễn Thị Kim Cúc", "phone": "0956789012", "location": "Q.Bình Thạnh"}}
     ]
   }
 ]

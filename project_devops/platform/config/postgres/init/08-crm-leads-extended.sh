@@ -1,0 +1,34 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "[initdb] CRM leads extended columns (BĐS fields, CRM profile, JSONB)"
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "crm_db" <<-EOSQL
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS transaction_type VARCHAR(32);
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS budget_range VARCHAR(128);
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS bedroom_count VARCHAR(32);
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS activities JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS deals JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(128);
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS source VARCHAR(64);
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS company VARCHAR(255);
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS website VARCHAR(512);
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS address TEXT;
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS city VARCHAR(128);
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS country VARCHAR(64);
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS description TEXT;
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_contacted_at TIMESTAMPTZ;
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS kanban_stage VARCHAR(32) NOT NULL DEFAULT 'new';
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS chat_history JSONB;
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS ai_manager_note TEXT;
+
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO crm_user;
+EOSQL
+
+echo "[initdb] CRM leads extended migration ready"

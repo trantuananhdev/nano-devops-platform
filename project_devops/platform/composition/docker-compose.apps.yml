@@ -1,7 +1,7 @@
 version: '3.8'
 
 # Nano DevOps Platform - Applications
-# Focus: Odoo, Microservices
+# Focus: Lightweight Real Estate CRM, Microservices
 
 x-logging:
   &default-logging
@@ -11,55 +11,6 @@ x-logging:
     max-file: "3"
 
 services:
-  # Application Layer - Odoo 16 (TEMPORARILY DISABLED for resource testing)
-  # odoo:
-  #   image: odoo:16.0
-  #   container_name: platform-odoo
-  #   restart: unless-stopped
-  #   environment:
-  #     - HOST=platform-postgres
-  #     - PORT=5432
-  #     - USER=odoo
-  #     - PASSWORD=devadmin
-  #     - ODOO_LOAD_DEMO=no
-  #     - ODOO_HTTP_PORT=8069
-  #     - ODOO_PROXY_MODE=true
-  #     - ODOO_MAX_CRON_THREADS=1
-  #   secrets:
-  #     - odoo_db_password
-  #   volumes:
-  #     - odoo-data:/var/lib/odoo
-  #     - odoo-addons:/mnt/extra-addons
-  #   networks:
-  #     - platform-network
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8069/web/login"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 5
-  #     start_period: 60s
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 600M
-  #       reservations:
-  #         memory: 300M
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.http.routers.odoo.rule=Host(`odoo.nano.platform`)"
-  #     - "traefik.http.routers.odoo.entrypoints=websecure"
-  #     - "traefik.http.routers.odoo.tls=true"
-  #     - "traefik.http.routers.odoo-http.rule=Host(`odoo.nano.platform`)"
-  #     - "traefik.http.routers.odoo-http.entrypoints=web"
-  #     - "traefik.http.routers.odoo-http.middlewares=redirect-to-https"
-  #     - "traefik.http.services.odoo.loadbalancer.server.port=8069"
-  #     - "prometheus.scrape=true"
-  #     - "prometheus.job=odoo"
-  #     - "prometheus.port=8069"
-  #   depends_on:
-  #     platform-postgres:
-  #       condition: service_healthy
-
   # Application Layer - health-api
   health-api:
     build:
@@ -116,7 +67,6 @@ services:
       - "traefik.docker.network=platform-network"
       - "traefik.http.routers.data-api.rule=Host(`data.nano.platform`)"
       - "traefik.http.routers.data-api.entrypoints=websecure"
-      - "traefik.http.routers.data-api.tls=true"
       - "traefik.http.services.data-api.loadbalancer.server.port=8080"
       - "traefik.http.routers.data-api-http.rule=Host(`data.nano.platform`)"
       - "traefik.http.routers.data-api-http.entrypoints=web"
@@ -154,7 +104,6 @@ services:
       - "traefik.docker.network=platform-network"
       - "traefik.http.routers.faulty.rule=Host(`faulty.nano.platform`)"
       - "traefik.http.routers.faulty.entrypoints=websecure"
-      - "traefik.http.routers.faulty.tls=true"
       - "traefik.http.services.faulty.loadbalancer.server.port=8080"
       - "traefik.http.routers.faulty-http.rule=Host(`faulty.nano.platform`)"
       - "traefik.http.routers.faulty-http.entrypoints=web"
@@ -230,7 +179,6 @@ services:
       - "traefik.docker.network=platform-network"
       - "traefik.http.routers.user-api.rule=Host(`user.nano.platform`)"
       - "traefik.http.routers.user-api.entrypoints=websecure"
-      - "traefik.http.routers.user-api.tls=true"
       - "traefik.http.services.user-api.loadbalancer.server.port=8080"
       - "traefik.http.routers.user-api-http.rule=Host(`user.nano.platform`)"
       - "traefik.http.routers.user-api-http.entrypoints=web"
@@ -240,297 +188,246 @@ services:
       - "prometheus.job=user-api"
       - "prometheus.port=8080"
 
-  # Application Layer - agentic-ai-api (TEMPORARILY DISABLED)
-  # agentic-ai-api:
-  #   build:
-  #     context: ../../apps/ai-powered-development/ai-agent
-  #     dockerfile: Dockerfile
-  #   container_name: platform-agentic-ai
-  #   restart: unless-stopped
-  #   environment:
-  #     - PORT=3000
-  #     - DATABASE_URL=postgres://agentic_ai:devadmin@platform-postgres:5432/agentic_ai_db
-  #     - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
-  #     - JWT_SECRET=${JWT_SECRET}
-  #     - ADMIN_API_KEY=${ADMIN_API_KEY}
-  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
-  #     - GEMINI_API_KEY=${GEMINI_API_KEY}
-  #     - GITHUB_TOKEN=${GITHUB_TOKEN}
-  #     - GITLAB_TOKEN=${GITLAB_TOKEN}
-  #     - GEMINI_MODEL=gemini-2.5-flash
-  #     - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
-  #     - GITHUB_SSH_KEY_FILE=/run/secrets/agentic_ai_github_ssh_key
-  #     - GIT_USER_NAME=${GIT_USER_NAME}
-  #     - GIT_USER_EMAIL=${GIT_USER_EMAIL}
-  #     - BOOTSTRAP_REPO_FULL_NAME=${BOOTSTRAP_REPO_FULL_NAME}
-  #     - BOOTSTRAP_GITHUB_TOKEN=${BOOTSTRAP_GITHUB_TOKEN}
-  #     - BOOTSTRAP_SSH_KEY=${BOOTSTRAP_SSH_KEY}
-  #   secrets:
-  #     - agentic_ai_github_ssh_key
-  #   networks:
-  #     - platform-network
-  #   depends_on:
-  #     platform-postgres:
-  #       condition: service_healthy
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 800M
-  #       reservations:
-  #         memory: 400M
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.docker.network=platform-network"
-  #     - "traefik.http.routers.agentic-ai.rule=Host(`ai.nano.platform`)"
-  #     - "traefik.http.routers.agentic-ai.entrypoints=websecure"
-  #     - "traefik.http.routers.agentic-ai.tls=true"
-  #     - "traefik.http.services.agentic-ai.loadbalancer.server.port=3000"
-  #     - "traefik.http.routers.agentic-ai-http.rule=Host(`ai.nano.platform`)"
-  #     - "traefik.http.routers.agentic-ai-http.entrypoints=web"
-  #     - "traefik.http.routers.agentic-ai-http.middlewares=redirect-to-https@file"
-  #     - "traefik.http.routers.agentic-ai-http.service=agentic-ai"
-  #     - "prometheus.scrape=true"
-  #     - "prometheus.job=agentic-ai"
-  #     - "prometheus.port=3000"
-
-  # AI-Driven CRM Pipeline — Ingestion (TEMPORARILY DISABLED)
-  # crm-ingestion-api:
-  #   build:
-  #     context: ../../apps/ai-crm-pipeline
-  #     dockerfile: crm-ingestion-api/Dockerfile
-  #   container_name: platform-crm-ingestion
-  #   restart: unless-stopped
-  #   env_file:
-  #     - ../../../.env
-  #   environment:
-  #     - PORT=8080
-  #     - REDIS_URL=redis://platform-redis:6379/0
-  #     - CRM_DATABASE_URL=postgresql://crm_user:devadmin@platform-postgres:5432/crm_db
-  #     - CRM_WEBHOOK_SECRET=${CRM_WEBHOOK_SECRET:-}
-  #     - CRM_DEMO_API_KEY=${CRM_DEMO_API_KEY:-}
-  #     - CORS_ORIGINS=https://crm-demo.nano.platform,http://localhost:5173
-  #     - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
-  #     - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
-  #     - GEMINI_API_VERSION=${GEMINI_API_VERSION:-v1beta}
-  #     - AGENTIC_AI_URL=http://platform-agentic-ai:3000
-  #   networks:
-  #     - platform-network
-  #   depends_on:
-  #     platform-redis:
-  #       condition: service_healthy
-  #     platform-postgres:
-  #       condition: service_healthy
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 140M
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.docker.network=platform-network"
-  #     - "traefik.http.routers.crm-ingest.rule=Host(`crm-ingest.nano.platform`)"
-  #     - "traefik.http.routers.crm-ingest.entrypoints=websecure"
-  #     - "traefik.http.routers.crm-ingest.tls=true"
-  #     - "traefik.http.services.crm-ingest.loadbalancer.server.port=8080"
-  #     - "traefik.http.routers.crm-ingest-http.rule=Host(`crm-ingest.nano.platform`)"
-  #     - "traefik.http.routers.crm-ingest-http.entrypoints=web"
-  #     - "traefik.http.routers.crm-ingest-http.middlewares=redirect-to-https@file"
-  #     - "traefik.http.routers.crm-ingest-http.service=crm-ingest"
-  #     - "prometheus.scrape=true"
-  #     - "prometheus.job=crm-ingestion-api"
-  #     - "prometheus.port=8080"
-
-  # AI-Driven CRM Pipeline — AI Worker (TEMPORARILY DISABLED)
-  # crm-ai-worker:
-  #   build:
-  #     context: ../../apps/ai-crm-pipeline/crm-ai-worker
-  #     dockerfile: Dockerfile
-  #   container_name: platform-crm-worker
-  #   restart: unless-stopped
-  #   env_file:
-  #     - ../../../.env
-  #   environment:
-  #     - REDIS_URL=redis://platform-redis:6379/0
-  #     - CRM_DATABASE_URL=postgresql://crm_user:devadmin@platform-postgres:5432/crm_db
-  #     - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
-  #     - GEMINI_API_KEY=${GEMINI_API_KEY}
-  #     - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
-  #     - GEMINI_API_VERSION=${GEMINI_API_VERSION:-v1beta}
-  #     - GEMINI_TEMPERATURE=${GEMINI_TEMPERATURE:-0.2}
-  #     - GEMINI_MAX_TOKENS=${GEMINI_MAX_TOKENS:-2048}
-  #     - GEMINI_TIMEOUT_MS=${GEMINI_TIMEOUT_MS:-45000}
-  #     - AGENTIC_AI_URL=http://platform-agentic-ai:3000
-  #     - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-  #     - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
-  #     - LARK_WEBHOOK_URL=${LARK_WEBHOOK_URL:-}
-  #     - ALERT_ENABLED=${ALERT_ENABLED:-true}
-  #     - AUTO_REPLY_ENABLED=${AUTO_REPLY_ENABLED:-true}
-  #     - CRM_DEMO_LLM_FALLBACK=${CRM_DEMO_LLM_FALLBACK:-true}
-  #     - CRM_WORKER_JOB_DELAY_MS=${CRM_WORKER_JOB_DELAY_MS:-1200}
-  #     - GEMINI_HTTP_RETRIES=${GEMINI_HTTP_RETRIES:-3}
-  #     - CRM_EVENTS_CHANNEL=crm:events:leads
-  #     - METRICS_PORT=9100
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 300M
-  #   networks:
-  #     - platform-network
-  #   depends_on:
-  #     platform-redis:
-  #       condition: service_healthy
-  #     platform-postgres:
-  #       condition: service_healthy
-  #     crm-ingestion-api:
-  #       condition: service_started
-  #   labels:
-  #     - "prometheus.scrape=true"
-  #     - "prometheus.job=crm-ai-worker"
-  #     - "prometheus.port=9100"
-
-  # Phase 4 — CRM Demo UI (TEMPORARILY DISABLED)
-  # crm-demo-ui:
-  #   build:
-  #     context: ../../apps/crm-demo-ui
-  #     dockerfile: Dockerfile
-  #   args:
-  #     VITE_CRM_API_BASE: ""
-  #     VITE_SSE_URL: ""
-  #   container_name: platform-crm-demo-ui
-  #   restart: unless-stopped
-  #   networks:
-  #     - platform-network
-  #   depends_on:
-  #     crm-ingestion-api:
-  #       condition: service_started
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 64M
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.docker.network=platform-network"
-  #     - "traefik.http.routers.crm-demo.rule=Host(`crm-demo.nano.platform`)"
-  #     - "traefik.http.routers.crm-demo.entrypoints=websecure"
-  #     - "traefik.http.routers.crm-demo.tls=true"
-  #     - "traefik.http.services.crm-demo.loadbalancer.server.port=80"
-  #     - "traefik.http.routers.crm-demo-http.rule=Host(`crm-demo.nano.platform`)"
-  #     - "traefik.http.routers.crm-demo-http.entrypoints=web"
-  #     - "traefik.http.routers.crm-demo-http.middlewares=redirect-to-https@file"
-  #     - "traefik.http.routers.crm-demo-http.service=crm-demo"
-
-  # AI-Powered Development - Agent Node (TEMPORARILY DISABLED)
-  # agent-node:
-  #   build:
-  #     context: ../../apps/ai-powered-development/agent-node
-  #     dockerfile: Dockerfile
-  #   container_name: platform-agent-node
-  #   restart: unless-stopped
-  #   environment:
-  #     - NODE_NAME=nano-devops-node
-  #     - BRAIN_URL=http://platform-agentic-ai:3000/v1/incidents/report
-  #     - COMMAND_PORT=8080
-  #     - MONITOR_INTERVAL=30s
-  #     - LOG_TAIL_LINES=100
-  #     - ENV=production
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock:ro
-  #   group_add:
-  #     - "102" # docker group GID trên Alpine — verify: getent group docker | cut -d: -f3
-  #   networks:
-  #     - platform-network
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 50M
-  #   depends_on:
-  #     agentic-ai-api:
-  #       condition: service_started
-
-  # Application Layer - GoClaw AI Agent Gateway
-  goclaw:
-    image: ghcr.io/nextlevelbuilder/goclaw:latest
+  # AI-Driven CRM Pipeline — Ingestion
+  crm-ingestion-api:
     build:
-      context: ../../apps/goclaw
-      dockerfile: Dockerfile
-      args:
-        ENABLE_OTEL: "false"
-        ENABLE_EMBEDUI: "true"
-        ENABLE_PYTHON: "true"
-        ENABLE_FULL_SKILLS: "false"
-        VERSION: "dev"
-    container_name: platform-goclaw
+      context: ../../apps/ai-crm-pipeline
+      dockerfile: crm-ingestion-api/Dockerfile
+    container_name: platform-crm-ingestion
     restart: unless-stopped
     env_file:
-      - path: ../../../.env
-        required: false
+      - ../../../.env
     environment:
-      - GOCLAW_HOST=0.0.0.0
-      - GOCLAW_PORT=18790
-      - GOCLAW_CONFIG=/app/data/config.json
-      - GOCLAW_GATEWAY_TOKEN=${GOCLAW_GATEWAY_TOKEN:-demo-token}
-      - GOCLAW_ENCRYPTION_KEY=${GOCLAW_ENCRYPTION_KEY:-}
-      - GOCLAW_SKILLS_DIR=/app/data/skills
-      - GOCLAW_DATABASE_URL=postgres://goclaw:devadmin@platform-postgres:5432/goclaw_db?sslmode=disable
-    volumes:
-      - goclaw-data:/app/data
-      - goclaw-workspace:/app/workspace
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    security_opt:
-      - no-new-privileges:true
-    init: true
-    cap_drop:
-      - ALL
-    cap_add:
-      - SETUID
-      - SETGID
-      - CHOWN
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=256m
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '2.0'
-          pids: 200
+      - PORT=8080
+      - REDIS_URL=redis://platform-redis:6379/0
+      - CRM_DATABASE_URL=postgresql://crm_user:devadmin@platform-postgres:5432/crm_db
+      - CRM_WEBHOOK_SECRET=${CRM_WEBHOOK_SECRET:-}
+      - CRM_DEMO_API_KEY=${CRM_DEMO_API_KEY:-}
+      - CORS_ORIGINS=https://crm-demo.nano.platform,http://localhost:5173
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - GEMINI_API_KEY_1=${GEMINI_API_KEY_1}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - GEMINI_API_VERSION=${GEMINI_API_VERSION:-v1beta}
+      - AGENTIC_AI_URL=http://platform-agentic-ai:3000
+      - CRM_SKIP_GEMINI=${CRM_SKIP_GEMINI:-true}
+      - DEMO_BURST_MAX_MESSAGES=${DEMO_BURST_MAX_MESSAGES:-3}
     networks:
       - platform-network
     depends_on:
+      platform-redis:
+        condition: service_healthy
       platform-postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 140M
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=platform-network"
-      - "traefik.http.routers.goclaw.rule=Host(`goclaw.nano.platform`)"
-      - "traefik.http.routers.goclaw.entrypoints=websecure"
-      - "traefik.http.routers.goclaw.tls=true"
-      - "traefik.http.services.goclaw.loadbalancer.server.port=18790"
-      - "traefik.http.routers.goclaw-http.rule=Host(`goclaw.nano.platform`)"
-      - "traefik.http.routers.goclaw-http.entrypoints=web"
-      - "traefik.http.routers.goclaw-http.middlewares=redirect-to-https@file"
-      - "traefik.http.routers.goclaw-http.service=goclaw"
+      - "traefik.http.routers.crm-ingest.rule=Host(`crm-ingest.nano.platform`)"
+      - "traefik.http.routers.crm-ingest.entrypoints=websecure"
+      - "traefik.http.services.crm-ingest.loadbalancer.server.port=8080"
+      - "traefik.http.routers.crm-ingest-http.rule=Host(`crm-ingest.nano.platform`)"
+      - "traefik.http.routers.crm-ingest-http.entrypoints=web"
+      - "traefik.http.routers.crm-ingest-http.middlewares=redirect-to-https@file"
+      - "traefik.http.routers.crm-ingest-http.service=crm-ingest"
+      - "prometheus.scrape=true"
+      - "prometheus.job=crm-ingestion-api"
+      - "prometheus.port=8080"
+
+  # AI-Driven CRM Pipeline — AI Worker
+  crm-ai-worker:
+    build:
+      context: ../../apps/ai-crm-pipeline/crm-ai-worker
+      dockerfile: Dockerfile
+    container_name: platform-crm-worker
+    restart: unless-stopped
+    env_file:
+      - ../../../.env
+    environment:
+      - REDIS_URL=redis://platform-redis:6379/0
+      - CRM_DATABASE_URL=postgresql://crm_user:devadmin@platform-postgres:5432/crm_db
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - GEMINI_API_KEY_1=${GEMINI_API_KEY_1}
+      - GEMINI_API_KEY_2=${GEMINI_API_KEY_2}
+      - GEMINI_API_KEY_3=${GEMINI_API_KEY_3}
+      - GEMINI_API_KEY_4=${GEMINI_API_KEY_4}
+      - GEMINI_API_KEY_5=${GEMINI_API_KEY_5}
+      - GEMINI_API_KEY_6=${GEMINI_API_KEY_6}
+      - GEMINI_API_KEY_7=${GEMINI_API_KEY_7}
+      - GEMINI_API_KEY_8=${GEMINI_API_KEY_8}
+      - GEMINI_API_KEY_9=${GEMINI_API_KEY_9}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - GEMINI_API_VERSION=${GEMINI_API_VERSION:-v1beta}
+      - GEMINI_TEMPERATURE=${GEMINI_TEMPERATURE:-0.2}
+      - GEMINI_MAX_TOKENS=${GEMINI_MAX_TOKENS:-2048}
+      - GEMINI_TIMEOUT_MS=${GEMINI_TIMEOUT_MS:-45000}
+      - AGENTIC_AI_URL=http://platform-agentic-ai:3000
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - LARK_WEBHOOK_URL=${LARK_WEBHOOK_URL:-}
+      - ALERT_ENABLED=${ALERT_ENABLED:-true}
+      - AUTO_REPLY_ENABLED=${AUTO_REPLY_ENABLED:-true}
+      - CRM_DEMO_LLM_FALLBACK=${CRM_DEMO_LLM_FALLBACK:-true}
+      - CRM_SKIP_GEMINI=${CRM_SKIP_GEMINI:-true}
+      - DEMO_BURST_MAX_MESSAGES=${DEMO_BURST_MAX_MESSAGES:-3}
+      - CRM_WORKER_JOB_DELAY_MS=${CRM_WORKER_JOB_DELAY_MS:-1200}
+      - GEMINI_HTTP_RETRIES=${GEMINI_HTTP_RETRIES:-3}
+      - CRM_EVENTS_CHANNEL=crm:events:leads
+      - METRICS_PORT=9100
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+    networks:
+      - platform-network
+    depends_on:
+      platform-redis:
+        condition: service_healthy
+      platform-postgres:
+        condition: service_healthy
+      crm-ingestion-api:
+        condition: service_started
+    labels:
+      - "prometheus.scrape=true"
+      - "prometheus.job=crm-ai-worker"
+      - "prometheus.port=9100"
+
+  # Phase 4 — CRM Demo UI
+  crm-demo-ui:
+    build:
+      context: ../../apps/crm-demo-ui
+      dockerfile: Dockerfile
+    container_name: platform-crm-demo-ui
+    restart: unless-stopped
+    networks:
+      - platform-network
+    depends_on:
+      crm-ingestion-api:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=platform-network"
+      - "traefik.http.routers.crm-demo.rule=Host(`crm-demo.nano.platform`)"
+      - "traefik.http.routers.crm-demo.entrypoints=websecure"
+      - "traefik.http.routers.crm-demo.tls=true"
+      - "traefik.http.services.crm-demo.loadbalancer.server.port=80"
+      - "traefik.http.routers.crm-demo-http.rule=Host(`crm-demo.nano.platform`)"
+      - "traefik.http.routers.crm-demo-http.entrypoints=web"
+      - "traefik.http.routers.crm-demo-http.middlewares=redirect-to-https@file"
+      - "traefik.http.routers.crm-demo-http.service=crm-demo"
+
+  # Telegram Bot for Real Estate CRM
+  telegram-bot:
+    build:
+      context: ../../apps/ai-crm-pipeline
+      dockerfile: telegram-bot/Dockerfile
+    container_name: platform-telegram-bot
+    restart: unless-stopped
+    env_file:
+      - ../../../.env
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_CRM_BOT_TOKEN}
+      - REDIS_URL=redis://platform-redis:6379/0
+      - CRM_QUEUE_KEY=crm:queue:messages
+      - GEMINI_API_KEY_1=${GEMINI_API_KEY_1}
+      - GEMINI_API_KEY_2=${GEMINI_API_KEY_2}
+      - GEMINI_API_KEY_3=${GEMINI_API_KEY_3}
+      - GEMINI_API_KEY_4=${GEMINI_API_KEY_4}
+      - GEMINI_API_KEY_5=${GEMINI_API_KEY_5}
+      - GEMINI_API_KEY_6=${GEMINI_API_KEY_6}
+      - GEMINI_API_KEY_7=${GEMINI_API_KEY_7}
+      - GEMINI_API_KEY_8=${GEMINI_API_KEY_8}
+      - GEMINI_API_KEY_9=${GEMINI_API_KEY_9}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+    networks:
+      - platform-network
+    depends_on:
+      platform-redis:
+        condition: service_healthy
+      crm-ai-worker:
+        condition: service_started
+
+  # Application Layer - GoClaw AI Agent Gateway
+  # TEMPORARILY DISABLED - app removed from project
+  # goclaw:
+  #   image: ghcr.io/nextlevelbuilder/goclaw:latest
+  #   build:
+  #     context: ../../apps/goclaw
+  #     dockerfile: Dockerfile
+  #     args:
+  #       ENABLE_OTEL: "false"
+  #       ENABLE_EMBEDUI: "true"
+  #       ENABLE_PYTHON: "true"
+  #       ENABLE_FULL_SKILLS: "false"
+  #       VERSION: "dev"
+  #   container_name: platform-goclaw
+  #   restart: unless-stopped
+  #   env_file:
+  #     - ../../../.env
+  #   environment:
+  #     - GOCLAW_HOST=0.0.0.0
+  #     - GOCLAW_PORT=18790
+  #     - GOCLAW_CONFIG=/app/data/config.json
+  #     - GOCLAW_GATEWAY_TOKEN=${GOCLAW_GATEWAY_TOKEN:-demo-token}
+  #     - GOCLAW_ENCRYPTION_KEY=${GOCLAW_ENCRYPTION_KEY:-}
+  #     - GOCLAW_SKILLS_DIR=/app/data/skills
+  #     - GOCLAW_DATABASE_URL=postgres://goclaw:devadmin@platform-postgres:5432/goclaw_db?sslmode=disable
+  #   volumes:
+  #     - goclaw-data:/app/data
+  #     - goclaw-workspace:/app/workspace
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   init: true
+  #   cap_drop:
+  #     - ALL
+  #   cap_add:
+  #     - SETUID
+  #     - SETGID
+  #     - CHOWN
+  #   tmpfs:
+  #     - /tmp:rw,noexec,nosuid,size=256m
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 1G
+  #         cpus: '2.0'
+  #         pids: 200
+  #   networks:
+  #     - platform-network
+  #   depends_on:
+  #     platform-postgres:
+  #       condition: service_healthy
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=platform-network"
+  #     - "traefik.http.routers.goclaw.rule=Host(`goclaw.nano.platform`)"
+  #     - "traefik.http.routers.goclaw.entrypoints=websecure"
+  #     - "traefik.http.routers.goclaw.tls=true"
+  #     - "traefik.http.services.goclaw.loadbalancer.server.port=18790"
+  #     - "traefik.http.routers.goclaw-http.rule=Host(`goclaw.nano.platform`)"
+  #     - "traefik.http.routers.goclaw-http.entrypoints=web"
+  #     - "traefik.http.routers.goclaw-http.middlewares=redirect-to-https@file"
+  #     - "traefik.http.routers.goclaw-http.service=goclaw"
 
 networks:
   platform-network:
     external: true
 
-volumes:
-  odoo-data:
-    driver: local
-    driver_opts: {type: none, o: bind, device: /opt/platform/data/odoo}
-  odoo-addons:
-    driver: local
-    driver_opts: {type: none, o: bind, device: /opt/platform/data/odoo-addons}
-  goclaw-data:
-    driver: local
-    driver_opts: {type: none, o: bind, device: /opt/platform/data/goclaw-data}
-  goclaw-workspace:
-    driver: local
-    driver_opts: {type: none, o: bind, device: /opt/platform/data/goclaw-workspace}
+# volumes: (none active - goclaw disabled)
 
 secrets:
-  odoo_db_password:
-    file: ../secrets/odoo_db_password.txt
   agentic_ai_jwt_secret:
     file: ../secrets/agentic_ai_jwt_secret.txt
   agentic_ai_admin_key:

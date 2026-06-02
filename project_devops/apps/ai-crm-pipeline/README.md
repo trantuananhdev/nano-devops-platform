@@ -68,6 +68,9 @@ crm-demo-ui/                       ← Frontend (FE) — tách folder sibling
 - Master plan: `ai-system/MASTER_PLAN.md` (Phase 3 ✅, Phase 4 ✅ code)
 - Lab task: `ai-system/ACTIVE_TASK.md` (4.lab validation)
 - **Gemini 2.5 Flash:** `crm-ai-worker/src/geminiProvider.py` — cùng `GEMINI_API_KEY` / `LLM_PROVIDER` trong **`.env` gốc repo** (không cần `export`; `./cli.sh up` tự nạp).
+- **Demo quota (mặc định):** `CRM_SKIP_GEMINI=true` — Agent 1–6 dùng rule-based/fallback, không đốt quota free tier. Bật lại LLM: `CRM_SKIP_GEMINI=false`.
+- **Burst:** `DEMO_BURST_MAX_MESSAGES=3` — tối đa 3 tin mỗi lần bấm kịch bản.
+- **Lỗi GET `/api/v1/leads` 500:** DB thiếu cột — chạy `project_devops/platform/ops/scripts/crm-db-migrate-leads.sh` rồi restart `platform-crm-ingestion`.
 
 ---
 

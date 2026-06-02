@@ -47,7 +47,7 @@ app.include_router(read_router)
 
 _redis: Optional[redis.Redis] = None
 
-ALLOWED_CHANNELS = frozenset({"facebook", "tiktok", "shopee", "generic"})
+ALLOWED_CHANNELS = frozenset({"facebook", "tiktok", "zalo", "instagram", "shopee", "generic"})
 
 
 class WebhookBody(BaseModel):
@@ -209,6 +209,24 @@ async def webhook_shopee(
     x_webhook_secret: Optional[str] = Header(None, alias="X-Webhook-Secret"),
 ) -> dict[str, Any]:
     return await handle_webhook("shopee", body, x_webhook_secret)
+
+
+@app.post("/webhook/zalo")
+async def webhook_zalo(
+    body: WebhookBody,
+    x_webhook_secret: Optional[str] = Header(None, alias="X-Webhook-Secret"),
+) -> dict[str, Any]:
+    """Zalo OA webhook — nhận tin nhắn từ Zalo Official Account (BDS)."""
+    return await handle_webhook("zalo", body, x_webhook_secret)
+
+
+@app.post("/webhook/instagram")
+async def webhook_instagram(
+    body: WebhookBody,
+    x_webhook_secret: Optional[str] = Header(None, alias="X-Webhook-Secret"),
+) -> dict[str, Any]:
+    """Instagram DM webhook — nhận tin nhắn Direct Message (BDS)."""
+    return await handle_webhook("instagram", body, x_webhook_secret)
 
 
 async def handle_webhook(

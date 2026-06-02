@@ -2,7 +2,101 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: "Segoe UI", system-ui, sans-serif;
+@layer base {
+  :root {
+    /* Geist / Vercel Design System — Light Mode */
+    --background:    0 0% 100%;          /* #ffffff */
+    --foreground:    0 0% 3.9%;          /* #0a0a0a */
+
+    --card:          0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+
+    --popover:       0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+
+    --primary:       0 0% 9%;            /* #171717 */
+    --primary-foreground: 0 0% 98%;
+
+    --secondary:     0 0% 96.1%;        /* #f5f5f5 */
+    --secondary-foreground: 0 0% 9%;
+
+    --muted:         0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;     /* #737373 */
+
+    --accent:        0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+
+    --destructive:   0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border:        0 0% 89.8%;        /* #e5e5e5 */
+    --input:         0 0% 89.8%;
+    --ring:          0 0% 3.9%;
+
+    /* Vercel blue accent */
+    --vercel-blue:   #0070f3;
+    --vercel-blue-light: #eff6ff;
+
+    --radius: 0.375rem;  /* 6px — Geist spec */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Geist", "Geist Sans", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* ── Geist scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #e5e5e5; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #d4d4d4; }
+
+/* ── Status pill animations ── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.live-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+
+/* ── Kanban card hover ── */
+.kanban-card {
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.kanban-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
+}
+
+/* ── Lead row hover ── */
+.lead-row {
+  transition: background 0.1s ease;
+}
+.lead-row:hover {
+  background: #fafafa;
+}
+.lead-row.selected {
+  background: #faf5ff;
+  border-left: 3px solid #7c3aed;
+}
+
+/* ── App shell ── */
+.app-shell {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 58, 237, 0.08), transparent),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 }

@@ -21,9 +21,9 @@ export default function RoiCalculator() {
   ];
 
   return (
-    <div className="space-y-3 rounded-lg border border-slate-700 bg-slate-900/60 p-3">
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">{VI.roi.title}</h2>
-      <label className="block text-xs">
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">{VI.roi.title}</h2>
+      <label className="block text-xs text-slate-600">
         {VI.roi.staff}
         <input
           type="range"
@@ -31,29 +31,29 @@ export default function RoiCalculator() {
           max={80}
           value={csStaff}
           onChange={(e) => setCsStaff(+e.target.value)}
-          className="w-full"
+          className="w-full accent-purple-600"
         />
-        <span className="text-amber-300">{csStaff} người</span>
+        <span className="font-semibold text-purple-700">{csStaff} người</span>
       </label>
-      <label className="block text-xs">
+      <label className="block text-xs text-slate-600">
         {VI.roi.salary}
         <input
           type="number"
           value={salary}
           onChange={(e) => setSalary(+e.target.value)}
-          className="mt-1 w-full rounded bg-slate-800 px-2 py-1"
+          className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1"
         />
       </label>
-      <label className="block text-xs">
+      <label className="block text-xs text-slate-600">
         {VI.roi.messages}
         <input
           type="number"
           value={messagesPerDay}
           onChange={(e) => setMessagesPerDay(+e.target.value)}
-          className="mt-1 w-full rounded bg-slate-800 px-2 py-1"
+          className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1"
         />
       </label>
-      <label className="block text-xs">
+      <label className="block text-xs text-slate-600">
         {VI.roi.autoRate} {(autoRate * 100).toFixed(0)}%
         <input
           type="range"
@@ -62,20 +62,20 @@ export default function RoiCalculator() {
           step={0.05}
           value={autoRate}
           onChange={(e) => setAutoRate(+e.target.value)}
-          className="w-full"
+          className="w-full accent-purple-600"
         />
       </label>
-      <div className="text-sm text-emerald-300">
+      <div className="text-sm font-medium text-emerald-700">
         {VI.roi.result(Math.round(result.monthlySavings), result.hoursSaved)}
       </div>
-      <p className="text-[10px] text-slate-500">{VI.roi.disclaimer}</p>
+      <p className="text-[10px] text-slate-400">{VI.roi.disclaimer}</p>
       <div className="h-28">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData}>
-            <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 10 }} />
-            <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} />
-            <Tooltip contentStyle={{ background: "#1e293b", border: "none" }} />
-            <Bar dataKey="value" fill="#f59e0b" radius={4} />
+            <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 10 }} />
+            <YAxis tick={{ fill: "#64748b", fontSize: 10 }} />
+            <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8 }} />
+            <Bar dataKey="value" fill="#7c3aed" radius={4} />
           </BarChart>
         </ResponsiveContainer>
       </div>

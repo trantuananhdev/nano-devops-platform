@@ -20,6 +20,8 @@ from auto_reply import (
     persist_auto_reply,
     should_auto_reply,
 )
+from compliance_guard import evaluate_reply
+from odoo_agent import generate_department_brief
 from config import (
     AUTO_REPLY_ENABLED,
     CRM_WORKER_JOB_DELAY_MS,
@@ -32,7 +34,7 @@ from config import (
     REDIS_URL,
 )
 from events import publish_lead_event
-from llm_gemini import extract_fields
+from llm_gemini import extract_fields, extract_from_payload
 from metrics import AUTO_REPLY_TOTAL, JOBS_PROCESSED, QUEUE_DEPTH, start_metrics_server
 
 logging.basicConfig(
@@ -68,26 +70,45 @@ def persist_lead(conn, job: dict[str, Any], extracted: dict[str, Any]) -> dict[s
     order_id = payload.get("order_id")
     shop_id = payload.get("shop_id")
     locale = payload.get("locale")
+    # BĐS-specific fields: prefer payload (already analyzed) over extracted
+    property_type = payload.get("property_type") or extracted.get("property_type")
+    location = payload.get("location") or extracted.get("location")
+    transaction_type = payload.get("transaction_type") or extracted.get("transaction_type")
+    budget_range = payload.get("budget_range") or extracted.get("budget_range")
+    bedroom_count = payload.get("bedroom_count") or extracted.get("bedroom_count")
+    chat_history = payload.get("chat_history")
+    ai_manager_note = payload.get("ai_manager_note")
+    kanban_stage = payload.get("kanban_stage", "new")
 
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO leads (
                 message_id, channel, raw_text, customer_name, phone,
-                product_interest, urgency, sentiment, intent, language, summary,
-                order_id, shop_id, locale, llm_model, processed_at
+                product_interest, property_type, location, transaction_type, budget_range, bedroom_count,
+                urgency, sentiment, intent, language, summary,
+                order_id, shop_id, locale, llm_model, processed_at,
+                kanban_stage, chat_history, ai_manager_note
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             ON CONFLICT (message_id) DO UPDATE SET
                 urgency = EXCLUDED.urgency,
                 sentiment = EXCLUDED.sentiment,
                 intent = EXCLUDED.intent,
                 summary = EXCLUDED.summary,
+                property_type = EXCLUDED.property_type,
+                location = EXCLUDED.location,
+                transaction_type = COALESCE(EXCLUDED.transaction_type, leads.transaction_type),
+                budget_range = COALESCE(EXCLUDED.budget_range, leads.budget_range),
+                bedroom_count = COALESCE(EXCLUDED.bedroom_count, leads.bedroom_count),
                 order_id = EXCLUDED.order_id,
                 shop_id = EXCLUDED.shop_id,
                 locale = EXCLUDED.locale,
-                processed_at = EXCLUDED.processed_at
+                processed_at = EXCLUDED.processed_at,
+                kanban_stage = COALESCE(EXCLUDED.kanban_stage, leads.kanban_stage),
+                chat_history = COALESCE(EXCLUDED.chat_history, leads.chat_history),
+                ai_manager_note = COALESCE(EXCLUDED.ai_manager_note, leads.ai_manager_note)
             RETURNING id::text
             """,
             (
@@ -97,6 +118,11 @@ def persist_lead(conn, job: dict[str, Any], extracted: dict[str, Any]) -> dict[s
                 extracted.get("customer_name"),
                 extracted.get("phone"),
                 extracted.get("product_interest"),
+                property_type,
+                location,
+                transaction_type,
+                budget_range,
+                bedroom_count,
                 extracted["urgency"],
                 extracted["sentiment"],
                 extracted["intent"],
@@ -107,6 +133,9 @@ def persist_lead(conn, job: dict[str, Any], extracted: dict[str, Any]) -> dict[s
                 locale,
                 GEMINI_MODEL,
                 processed_at,
+                kanban_stage,
+                json.dumps(chat_history) if chat_history else None,
+                ai_manager_note,
             ),
         )
     conn.commit()
@@ -116,11 +145,19 @@ def persist_lead(conn, job: dict[str, Any], extracted: dict[str, Any]) -> dict[s
         "channel": channel,
         "raw_text": raw_text,
         **extracted,
+        "property_type": property_type,
+        "location": location,
+        "transaction_type": transaction_type,
+        "budget_range": budget_range,
+        "bedroom_count": bedroom_count,
         "processed_at": processed_at,
         "alert_sent": False,
         "alert_type": None,
         "auto_reply_sent": False,
         "auto_reply_content": None,
+        "kanban_stage": kanban_stage,
+        "chat_history": chat_history,
+        "ai_manager_note": ai_manager_note,
     }
 
 
@@ -135,6 +172,17 @@ def update_alert_flags(conn, message_id: str, alert_type: str | None) -> None:
     conn.commit()
 
 
+def update_ai_manager_note(conn, message_id: str, note: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE leads SET ai_manager_note = %s WHERE message_id = %s
+            """,
+            (note[:8000], message_id),
+        )
+    conn.commit()
+
+
 def _processing_event(job: dict[str, Any], channel: str, raw_text: str) -> dict[str, Any]:
     return {
         "message_id": job.get("message_id", "unknown"),
@@ -143,7 +191,7 @@ def _processing_event(job: dict[str, Any], channel: str, raw_text: str) -> dict[
         "urgency": "pending",
         "sentiment": "pending",
         "intent": "processing",
-        "summary": "Gemini đang phân tích tin nhắn…",
+        "summary": "AI đang phân tích tin nhắn…",
         "alert_sent": False,
         "auto_reply_sent": False,
     }
@@ -157,19 +205,59 @@ async def process_job(r: redis.Redis, job_raw: str) -> None:
     payload = job.get("payload") or {}
     raw_text = payload.get("raw_text", "")
     channel = job.get("channel", "generic")
+    payload_auto_reply = (payload.get("auto_reply_content") or "").strip()
 
     publish_lead_event(_processing_event(job, channel, raw_text), "lead_processing")
 
     conn = psycopg2.connect(DATABASE_URL)
     try:
         log_stage(conn, message_id, "llm", "ok", "start")
-        extracted = await asyncio.to_thread(extract_fields, raw_text, channel, payload)
+        if payload.get("_pre_analyzed"):
+            extracted = extract_from_payload(payload)
+            log_stage(conn, message_id, "llm", "ok", "telegram_agent5_pre_analyzed")
+        else:
+            extracted = await asyncio.to_thread(extract_fields, raw_text, channel, payload)
         if payload.get("customer_name"):
             extracted["customer_name"] = payload["customer_name"]
         if payload.get("phone"):
             extracted["phone"] = payload["phone"]
         lead = persist_lead(conn, job, extracted)
         log_stage(conn, message_id, "persist", "ok", "")
+
+        # Compliance Guard (Agent 6): attach risk flags/disclaimer into manager note.
+        try:
+            decision = evaluate_reply(
+                raw_text=lead.get("raw_text") or "",
+                draft_reply=payload_auto_reply or "",
+                extracted=lead,
+            )
+            flags = decision.get("risk_flags") or []
+            disclaimer = decision.get("disclaimer")
+            if flags or disclaimer:
+                extra_lines: list[str] = []
+                if flags:
+                    extra_lines.append("Compliance flags: " + ", ".join(str(f) for f in flags))
+                if disclaimer:
+                    extra_lines.append("Disclaimer: " + str(disclaimer))
+                # If brief exists later, we will append again there; keep note lightweight here.
+                existing = (lead.get("ai_manager_note") or "").strip()
+                lead["ai_manager_note"] = (existing + ("\n\n" if existing else "") + "\n".join(extra_lines)).strip()
+                update_ai_manager_note(conn, message_id, lead["ai_manager_note"])
+                log_stage(conn, message_id, "compliance", "ok", "attached_to_note")
+        except Exception as c_exc:
+            logger.warning("Compliance guard failed %s: %s", message_id, c_exc)
+            log_stage(conn, message_id, "compliance", "error", str(c_exc))
+
+        # Agent 3: AI Dept Head (Trưởng phòng CRM) — tạo brief vận hành BĐS cho manager.
+        try:
+            brief = await asyncio.to_thread(generate_department_brief, lead)
+            if brief:
+                update_ai_manager_note(conn, message_id, brief)
+                lead["ai_manager_note"] = brief
+                log_stage(conn, message_id, "ai_manager_note", "ok", "agent3_crm_dept_head")
+        except Exception as note_exc:
+            logger.warning("CRM Dept Head brief failed %s: %s", message_id, note_exc)
+            log_stage(conn, message_id, "ai_manager_note", "error", str(note_exc))
 
         alert_type = await maybe_send_alert(r, lead)
         if alert_type:
@@ -180,7 +268,19 @@ async def process_job(r: redis.Redis, job_raw: str) -> None:
         else:
             log_stage(conn, message_id, "alert", "ok", "skipped")
 
-        if AUTO_REPLY_ENABLED and should_auto_reply(extracted):
+        # Telegram bot may already have replied; still persist that reply for UI.
+        if channel == "telegram" and payload_auto_reply:
+            try:
+                at = persist_auto_reply(conn, message_id, payload_auto_reply)
+                lead["auto_reply_sent"] = True
+                lead["auto_reply_content"] = payload_auto_reply
+                lead["auto_reply_at"] = at
+                log_stage(conn, message_id, "auto_reply", "ok", "telegram_payload")
+            except Exception as ar_exc:
+                logger.warning("Persist telegram auto-reply failed %s: %s", message_id, ar_exc)
+
+        skip_reply = payload.get("_telegram_replied") or channel == "telegram"
+        if AUTO_REPLY_ENABLED and not skip_reply and should_auto_reply(extracted):
             try:
                 reply = await asyncio.to_thread(
                     generate_reply, raw_text, extracted, channel

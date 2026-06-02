@@ -1,4 +1,4 @@
-"""Demo message templates — shared with crm-demo-simulator/templates.json."""
+"""Demo message templates BDS — các mẫu tin nhắn khách hàng bất động sản trên đa kênh."""
 
 from __future__ import annotations
 
@@ -62,16 +62,22 @@ def build_webhook_body(
         "channel": channel,
         "locale": template.get("locale"),
         "demo_category": template.get("category"),
+        "property_type": template.get("property_type") or overrides.get("property_type"),
+        "location": overrides.get("location") or template.get("location"),
         "sender_id": overrides.get("sender_id") or f"demo_{channel}_{uuid.uuid4().hex[:6]}",
         "customer_name": overrides.get("customer_name") or template.get("demo_customer_name"),
         "phone": overrides.get("phone") or template.get("demo_phone"),
-    }
+        }
     if channel == "shopee":
         body["order_id"] = overrides.get("order_id") or f"24{random.randint(100000000, 999999999)}"
-        body["shop_id"] = overrides.get("shop_id") or "tnt_official"
+        body["shop_id"] = overrides.get("shop_id") or "bds_official"
     if channel == "tiktok" and template.get("shop_id"):
         body["shop_id"] = template["shop_id"]
     if channel == "facebook":
-        body["page_id"] = overrides.get("page_id") or "page_tnt_demo"
+        body["page_id"] = overrides.get("page_id") or "page_bds_demo"
+    if channel == "zalo":
+        body["page_id"] = overrides.get("page_id") or "oa_bds_demo"
+    if channel == "instagram":
+        body["page_id"] = overrides.get("page_id") or "ig_bds_demo"
     body.update({k: v for k, v in overrides.items() if k not in body})
     return body

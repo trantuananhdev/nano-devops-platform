@@ -1,4 +1,4 @@
-"""Alert dispatch per docs/ALERT_RULES.md."""
+"""Alert dispatch — BĐS-specific alert rules (hot lead, legal escalation, high budget)."""
 
 from __future__ import annotations
 
@@ -22,33 +22,83 @@ logger = logging.getLogger(__name__)
 
 
 def evaluate_alert_type(lead: dict[str, Any]) -> Optional[str]:
+    """
+    Xác định loại cảnh báo BĐS.
+    Priority order: critical_buyer > high_budget > legal_escalation > hot_lead > negative_sentiment
+    """
     intent = lead.get("intent")
     urgency = lead.get("urgency")
     sentiment = lead.get("sentiment")
+    budget_range = lead.get("budget_range")
+    transaction_type = lead.get("transaction_type")
 
-    if intent == "cancel_order":
-        return "cancel_intent"
+    # Critical buyer: muốn mua/xem gấp ngay hôm nay
+    if urgency == "critical" and intent in ("purchase", "schedule_viewing"):
+        return "critical_buyer"
+
+    # High budget lead: có ngân sách cao và đang tìm kiếm tích cực
+    if budget_range and urgency in ("high", "critical") and transaction_type in ("buy", "invest"):
+        return "high_budget_lead"
+
+    # Legal escalation: hỏi pháp lý phức tạp với urgency cao — cần chuyên viên pháp lý
+    if intent == "legal_inquiry" and urgency in ("high", "critical"):
+        return "legal_escalation"
+
+    # Hot lead chung: urgency cao, bất kể intent
     if urgency in ("high", "critical"):
         return "hot_lead"
+
+    # Negative sentiment cần can thiệp sớm
     if sentiment == "negative":
         return "negative_sentiment"
-    if intent == "complaint" and sentiment == "negative":
-        return "complaint_escalation"
+
     return None
 
 
+def _format_property_line(lead: dict[str, Any]) -> str:
+    parts = []
+    if lead.get("property_type"):
+        labels = {"apartment": "Căn hộ", "house": "Nhà/Biệt thự", "land": "Đất nền", "commercial": "Shophouse/TMDV"}
+        parts.append(labels.get(lead["property_type"], lead["property_type"]))
+    if lead.get("location"):
+        parts.append(f"tại {lead['location']}")
+    if lead.get("budget_range"):
+        parts.append(f"— Ngân sách: {lead['budget_range']}")
+    if lead.get("bedroom_count"):
+        parts.append(f"({lead['bedroom_count']})")
+    return " ".join(parts) if parts else "Chưa xác định"
+
+
 def format_message(alert_type: str, lead: dict[str, Any]) -> str:
-    prefix = "⚠️ CANCEL RISK — " if alert_type == "cancel_intent" else ""
+    alert_labels = {
+        "critical_buyer": "🔴 CRITICAL BUYER — Khách muốn mua/xem GẤP",
+        "high_budget_lead": "💰 HIGH BUDGET — Khách ngân sách cao",
+        "legal_escalation": "⚖️ PHÁP LÝ — Cần chuyên viên pháp lý",
+        "hot_lead": "🔥 HOT LEAD — Ưu tiên cao",
+        "negative_sentiment": "⚠️ NEGATIVE — Cần can thiệp ngay",
+    }
+    label = alert_labels.get(alert_type, f"🚨 CRM Alert — {alert_type}")
+
+    transaction_label = {
+        "buy": "Mua", "rent": "Thuê", "invest": "Đầu tư",
+    }.get(lead.get("transaction_type", ""), "")
+
+    intent_label = {
+        "purchase": "Mua BĐS", "schedule_viewing": "Đặt lịch xem nhà",
+        "price_inquiry": "Hỏi giá", "legal_inquiry": "Hỏi pháp lý",
+        "inquiry": "Tư vấn chung", "complaint": "Phàn nàn", "other": "Khác",
+    }.get(lead.get("intent", ""), lead.get("intent", ""))
+
     return (
-        f"{prefix}🚨 CRM Alert — {alert_type}\n"
-        f"Channel: {lead.get('channel')}\n"
-        f"Urgency: {lead.get('urgency')} | Sentiment: {lead.get('sentiment')}\n"
-        f"Intent: {lead.get('intent')}\n"
-        f"Customer: {lead.get('customer_name')} | Phone: {lead.get('phone')}\n"
-        f"Product: {lead.get('product_interest')}\n"
-        f"Summary: {lead.get('summary')}\n"
-        f"Message ID: {lead.get('message_id')}\n"
-        f"Time: {lead.get('processed_at')}"
+        f"{label}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 Khách: {lead.get('customer_name') or 'Ẩn danh'} | 📱 {lead.get('phone') or 'Chưa có SĐT'}\n"
+        f"📢 Kênh: {lead.get('channel')} | 🎯 Ý định: {intent_label}{' | ' + transaction_label if transaction_label else ''}\n"
+        f"🏠 BĐS: {_format_property_line(lead)}\n"
+        f"📊 Urgency: {lead.get('urgency')} | Cảm xúc: {lead.get('sentiment')}\n"
+        f"📝 Tóm tắt: {lead.get('summary') or lead.get('raw_text', '')[:200]}\n"
+        f"🆔 Message ID: {lead.get('message_id')}\n"
+        f"⏰ {lead.get('processed_at')}"
     )
 
 
