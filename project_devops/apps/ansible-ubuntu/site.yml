@@ -1,0 +1,29 @@
+---
+# =============================================================================
+# site.yml — Acer Ubuntu Full Bootstrap (run once)
+# =============================================================================
+# Orchestrates system hardening + Docker + observability + EcoIT base stack.
+#
+# Usage:
+#   Dry-run:  ansible-playbook -i inventory/hosts.ini site.yml --check --diff
+#   Deploy:   ansible-playbook -i inventory/hosts.ini site.yml
+#   Tags:     ansible-playbook -i inventory/hosts.ini site.yml --tags docker
+# =============================================================================
+
+- name: "Acer Ubuntu — Full System Bootstrap"
+  hosts: acer
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: bootstrap
+      tags: [bootstrap, ufw, ssh]
+
+    - role: zram
+      tags: [zram, sysctl, swap]
+
+    - role: docker
+      tags: [docker]
+
+    - role: observability
+      tags: [observability, portainer, cadvisor]

@@ -1,0 +1,38 @@
+# /etc/sysctl.d/90-ai-host.conf
+# Managed by Ansible — do not edit manually.
+# Applied by role: zram | Tuned for AI / high-concurrency workloads.
+
+# ---------------------------------------------------------------------------
+# Memory management
+# ---------------------------------------------------------------------------
+
+# Aggressively page idle memory into ZRAM, freeing physical RAM for
+# active AI inference and vector-search workloads.
+vm.swappiness = {{ sysctl_settings['vm.swappiness'] }}
+
+# Balance inode/dentry cache reclaim against mapped memory reclaim.
+vm.vfs_cache_pressure = {{ sysctl_settings['vm.vfs_cache_pressure'] }}
+
+# Allow virtual-memory overcommit — mandatory for PyTorch / ML runtimes
+# that pre-reserve large VA regions far in excess of physical pages needed.
+vm.overcommit_memory = {{ sysctl_settings['vm.overcommit_memory'] }}
+
+# ---------------------------------------------------------------------------
+# File system
+# ---------------------------------------------------------------------------
+
+# System-wide open-file-descriptor cap.
+# AI agents open many concurrent sockets + file handles; 1M is comfortable.
+fs.file-max = {{ sysctl_settings['fs.file-max'] }}
+
+# ---------------------------------------------------------------------------
+# Network
+# ---------------------------------------------------------------------------
+
+# Large TCP listen backlog — critical for services handling many simultaneous
+# inbound connections (Qdrant REST, MinIO S3, Redis, embedding API).
+net.core.somaxconn = {{ sysctl_settings['net.core.somaxconn'] }}
+
+# Receive / send socket buffer sizes [min · default · max] in bytes.
+net.ipv4.tcp_rmem = {{ sysctl_settings['net.ipv4.tcp_rmem'] }}
+net.ipv4.tcp_wmem = {{ sysctl_settings['net.ipv4.tcp_wmem'] }}

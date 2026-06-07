@@ -1,0 +1,51 @@
+---
+# roles/bootstrap/tasks/main.yml
+# Base system hardening: package baseline + UFW firewall
+
+- name: "[Bootstrap] Update apt cache"
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: "[Bootstrap] Install essential packages"
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - gnupg
+      - lsb-release
+      - apt-transport-https
+      - python3-pip
+      - htop
+      - jq
+      - unzip
+    state: present
+
+- name: "[Bootstrap] Install UFW"
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: "[Bootstrap] Reset UFW to defaults (idempotent)"
+  ansible.builtin.command: ufw --force reset
+  changed_when: false
+
+- name: "[Bootstrap] Set UFW default incoming policy to deny"
+  ansible.builtin.command: ufw default deny incoming
+  changed_when: false
+
+- name: "[Bootstrap] Set UFW default outgoing policy to allow"
+  ansible.builtin.command: ufw default allow outgoing
+  changed_when: false
+
+- name: "[Bootstrap] Allow configured ports"
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port | string }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ ufw_rules }}"
+
+- name: "[Bootstrap] Enable UFW"
+  community.general.ufw:
+    state: enabled

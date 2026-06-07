@@ -1,0 +1,13 @@
+# /etc/default/zramswap
+# Managed by Ansible — do not edit manually.
+# Applied by role: zram
+
+# Compression algorithm. lz4 gives the best throughput-to-ratio balance
+# for swap workloads; zstd yields slightly better compression at the cost
+# of higher CPU cycles.
+ALGO={{ zram_algorithm }}
+
+# Fixed size in MiB.  Pinning to an absolute value keeps behaviour
+# predictable regardless of how much physical RAM is installed.
+# {{ zram_size_mb }} MiB ≈ {{ (zram_size_mb / 1024) | round(1) }} GB virtual budget.
+SIZE={{ zram_size_mb }}

@@ -1,0 +1,8 @@
+---
+# roles/ai_stack/handlers/main.yml
+
+- name: Restart ai stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ ai_stack_dir }}"
+    state: present
+    recreate: always

@@ -1,0 +1,78 @@
+---
+# =============================================================================
+# verify-ssh.yml — Confirm prod_key access & print host info
+# =============================================================================
+# Run AFTER bootstrap-ssh.yml has completed.
+# Connects using prod_key (no password), then prints a full host summary.
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.ini verify-ssh.yml
+# =============================================================================
+
+- name: "Verify SSH key access & host diagnostics"
+  hosts: acer
+  become: false      # verification runs as the deploy user, no sudo needed
+  gather_facts: true
+
+  tasks:
+    - name: "[Verify] Confirm connected user matches deploy user"
+      ansible.builtin.command: whoami
+      register: _whoami
+      changed_when: false
+
+    - name: "[Verify] Get user groups and UID/GID"
+      ansible.builtin.command: id
+      register: _id
+      changed_when: false
+
+    - name: "[Verify] Check sudo access (passwordless)"
+      ansible.builtin.command: sudo -n true
+      register: _sudo_check
+      changed_when: false
+      failed_when: _sudo_check.rc != 0
+
+    - name: "[Verify] Confirm authorized_keys contains prod_key"
+      ansible.builtin.command: >
+        grep -c "trantuananhdev" /home/{{ ssh_deploy_user }}/.ssh/authorized_keys
+      register: _key_check
+      changed_when: false
+      failed_when: _key_check.rc != 0
+
+    - name: "[Verify] Check sshd password auth is disabled"
+      ansible.builtin.command: >
+        grep "^PasswordAuthentication no" /etc/ssh/sshd_config
+      register: _sshd_check
+      changed_when: false
+      become: true
+      failed_when: _sshd_check.rc != 0
+
+    - name: "[Verify] Collect system info"
+      ansible.builtin.command: "{{ item.cmd }}"
+      register: _sysinfo
+      loop:
+        - { label: "Hostname",  cmd: "hostname -f" }
+        - { label: "OS",        cmd: "lsb_release -ds" }
+        - { label: "Kernel",    cmd: "uname -r" }
+        - { label: "Uptime",    cmd: "uptime -p" }
+        - { label: "Memory",    cmd: "free -h --si" }
+        - { label: "Disk",      cmd: "df -h /" }
+      changed_when: false
+      loop_control:
+        label: "{{ item.label }}"
+
+    - name: "[Verify] Print host diagnostic report"
+      ansible.builtin.debug:
+        msg: |
+          ══════════════════════════════════════════════════
+          ✅  SSH Verification — {{ ansible_host }}
+          ══════════════════════════════════════════════════
+          Connected user : {{ _whoami.stdout }}
+          Identity (id)  : {{ _id.stdout }}
+          Sudo           : {{ 'PASS — passwordless sudo confirmed' if _sudo_check.rc == 0 else 'FAIL' }}
+          prod_key found : {{ 'YES (' + _key_check.stdout + ' match)' if _key_check.rc == 0 else 'NO — re-run bootstrap-ssh.yml' }}
+          Password auth  : {{ 'DISABLED ✓' if _sshd_check.rc == 0 else 'still enabled — check sshd_config' }}
+          ──────────────────────────────────────────────────
+          {% for item in _sysinfo.results %}
+          {{ '%-14s' | format(item.item.label + ':') }} {{ item.stdout }}
+          {% endfor %}
+          ══════════════════════════════════════════════════

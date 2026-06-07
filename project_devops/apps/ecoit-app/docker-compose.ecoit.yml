@@ -1,0 +1,112 @@
+# =============================================================================
+# docker-compose.ecoit.yml — Local Dev (Windows → Alpine VM)
+# =============================================================================
+# Usage:
+#   docker compose -f docker-compose.ecoit.yml up --build
+#   docker compose -f docker-compose.ecoit.yml down -v
+#
+# Access:
+#   Backend:  http://localhost:8000/docs
+#   Frontend: http://localhost:3000
+# =============================================================================
+
+version: '3.9'
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "5m"
+    max-file: "2"
+
+services:
+
+  ecoit-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: ecoit-backend-dev
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - APP_ENV=development
+      - DATABASE_URL=postgresql+asyncpg://ecoit_user:devpassword@ecoit-postgres:5432/ecoit_db
+      - REDIS_URL=redis://ecoit-redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app                      # Hot reload in dev
+    depends_on:
+      ecoit-postgres:
+        condition: service_healthy
+      ecoit-redis:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    logging: *default-logging
+    networks:
+      - ecoit-dev
+
+  ecoit-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: ecoit-frontend-dev
+    restart: unless-stopped
+    environment:
+      - NGINX_PORT=3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - ecoit-backend
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    logging: *default-logging
+    networks:
+      - ecoit-dev
+
+  ecoit-postgres:
+    image: postgres:16-alpine
+    container_name: ecoit-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ecoit_db
+      POSTGRES_USER: ecoit_user
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"                         # Expose for local DB client
+    volumes:
+      - ecoit-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ecoit_user -d ecoit_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *default-logging
+    networks:
+      - ecoit-dev
+
+  ecoit-redis:
+    image: redis:7.2-alpine
+    container_name: ecoit-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"                         # Expose for local Redis client
+    volumes:
+      - ecoit-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging: *default-logging
+    networks:
+      - ecoit-dev
+
+volumes:
+  ecoit-postgres-data:
+  ecoit-redis-data:
+
+networks:
+  ecoit-dev:
+    driver: bridge

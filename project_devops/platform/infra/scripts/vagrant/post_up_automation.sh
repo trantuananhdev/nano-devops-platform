@@ -1,5 +1,6 @@
 #!/bin/sh
-# Runs on VM after main_setup (background). No manual steps on host except optional UAC.
+# post_up_automation.sh — EcoIT Platform readiness check
+# Runs on VM after main_setup (background, non-blocking).
 set -eu
 
 LOG=/var/log/nano-post-up.log
@@ -8,11 +9,14 @@ VM_IP_FILE=/opt/platform/vm-service-ip
 
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$LOG"; }
 
-log "=== Nano post-up automation ==="
+log "=== Nano DevOps — EcoIT Platform post-up ==="
 
 VM_IP="127.0.0.1"
 [ -f "$VM_IP_FILE" ] && VM_IP=$(cat "$VM_IP_FILE")
 
+# ----------------------------------------------------------------
+# Find compose dir
+# ----------------------------------------------------------------
 COMPOSE_DIR=""
 for p in \
   /opt/platform/src/nano-project-devops/project_devops/platform/composition \
@@ -38,11 +42,13 @@ done
 
 compose() {
   if [ -n "$ENV_FILE" ]; then
-    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_DIR/docker-compose.yml" \
+    docker compose --env-file "$ENV_FILE" \
+      -f "$COMPOSE_DIR/docker-compose.yml" \
       -f "$COMPOSE_DIR/docker-compose.observability.yml" \
       -f "$COMPOSE_DIR/docker-compose.apps.yml" "$@"
   else
-    docker compose -f "$COMPOSE_DIR/docker-compose.yml" \
+    docker compose \
+      -f "$COMPOSE_DIR/docker-compose.yml" \
       -f "$COMPOSE_DIR/docker-compose.observability.yml" \
       -f "$COMPOSE_DIR/docker-compose.apps.yml" "$@"
   fi
@@ -50,7 +56,7 @@ compose() {
 
 wait_container_healthy() {
   name="$1"
-  max="${2:-90}"
+  max="${2:-60}"
   n=0
   while [ "$n" -lt "$max" ]; do
     st=$(docker inspect -f '{{.State.Health.Status}}' "$name" 2>/dev/null || echo "none")
@@ -72,67 +78,45 @@ wait_container_healthy() {
   return 1
 }
 
-log "Waiting for core containers..."
-wait_container_healthy platform-postgres 60 || true
-wait_container_healthy platform-redis 40 || true
-sleep 15
+# ----------------------------------------------------------------
+# Wait for core platform containers
+# ----------------------------------------------------------------
+log "Waiting for core containers (Postgres, Redis, Traefik)..."
+wait_container_healthy platform-postgres 30 || true
+wait_container_healthy platform-redis 20 || true
+sleep 5
 
-log "CRM DB migration (leads extended + traffic_summaries)..."
-docker exec platform-postgres psql -U postgres -d crm_db -v ON_ERROR_STOP=0 <<-EOSQL 2>>"$LOG" || true
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS transaction_type VARCHAR(32);
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS budget_range VARCHAR(128);
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS bedroom_count VARCHAR(32);
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS email VARCHAR(255);
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes JSONB NOT NULL DEFAULT '[]'::jsonb;
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS activities JSONB NOT NULL DEFAULT '[]'::jsonb;
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS deals JSONB NOT NULL DEFAULT '[]'::jsonb;
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(128);
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS source VARCHAR(64);
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS company VARCHAR(255);
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS website VARCHAR(512);
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS address TEXT;
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS city VARCHAR(128);
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS country VARCHAR(64);
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS description TEXT;
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_contacted_at TIMESTAMPTZ;
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS kanban_stage VARCHAR(32) NOT NULL DEFAULT 'new';
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS chat_history JSONB;
-  ALTER TABLE leads ADD COLUMN IF NOT EXISTS ai_manager_note TEXT;
-  CREATE TABLE IF NOT EXISTS traffic_summaries (
-    scenario_id VARCHAR(64) PRIMARY KEY,
-    title_vi VARCHAR(255) NOT NULL DEFAULT '',
-    summary_vi TEXT NOT NULL DEFAULT '',
-    hot_leads INT NOT NULL DEFAULT 0,
-    channels_json JSONB NOT NULL DEFAULT '{}',
-    recommendations_json JSONB NOT NULL DEFAULT '[]',
-    lead_count INT NOT NULL DEFAULT 0,
-    raw_json JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-  );
-  GRANT ALL PRIVILEGES ON TABLE traffic_summaries TO crm_user;
-EOSQL
+# ----------------------------------------------------------------
+# Verify Acer Ubuntu reachability
+# ----------------------------------------------------------------
+ACER_IP=""
+[ -n "$ENV_FILE" ] && ACER_IP=$(grep "^ACER_HOST=" "$ENV_FILE" 2>/dev/null | cut -d= -f2 | tr -d '"' || true)
 
-log "Waiting for Odoo..."
-wait_container_healthy platform-odoo 120 || true
-
-log "Installing Odoo module crm_real_estate (first run may take several minutes)..."
-if docker ps --format '{{.Names}}' | grep -qx platform-odoo; then
-  docker exec platform-odoo odoo -d odoo -i crm_real_estate --stop-after-init --without-demo=all >>"$LOG" 2>&1 \
-    || log "WARN: Odoo module install returned non-zero (may already be installed)"
-  docker start platform-odoo 2>/dev/null || compose up -d odoo 2>>"$LOG" || true
-  wait_container_healthy platform-odoo 90 || true
+if [ -n "$ACER_IP" ]; then
+  log "Checking Acer Ubuntu connectivity ($ACER_IP)..."
+  if ping -c 2 -W 3 "$ACER_IP" > /dev/null 2>&1; then
+    log "✅ Acer Ubuntu reachable at $ACER_IP"
+    log "   Next: vagrant ssh → cd /opt/platform/src/nano-project-devops"
+    log "         ./cli.sh ansible-bootstrap   # First time only"
+    log "         ./cli.sh ansible-deploy      # Deploy EcoIT app"
+  else
+    log "⚠️  Acer $ACER_IP not reachable — ensure both machines on same WiFi/LAN"
+  fi
+else
+  log "WARN: ACER_HOST not set in .env"
 fi
 
-log "Waiting for CRM ingestion..."
-wait_container_healthy platform-crm-ingestion 60 || true
-
+# ----------------------------------------------------------------
+# Write ready file
+# ----------------------------------------------------------------
 {
   echo "ready_at=$(date -Iseconds)"
   echo "vm_ip=$VM_IP"
-  echo "crm=https://crm-demo.nano.platform"
-  echo "odoo=https://odoo.nano.platform"
+  echo "grafana=https://grafana.nano.platform"
+  echo "prometheus=https://prometheus.nano.platform"
+  echo "acer_host=${ACER_IP:-not_set}"
+  echo "mode=ecoit_trial"
 } > "$READY"
 
 log "=== Platform ready ($VM_IP) ==="
+log "    EcoIT docs: ai-system/AI_BOOT.md | ai-system/ECOIT_TASK.md"

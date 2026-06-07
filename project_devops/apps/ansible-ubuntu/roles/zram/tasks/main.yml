@@ -1,0 +1,91 @@
+---
+# roles/zram/tasks/main.yml
+# ZRAM swap + SSD swap OOM safety-net
+
+# ----------------------------------------------------------------------------
+# Section 1 — Kernel sysctl tuning
+# ----------------------------------------------------------------------------
+- name: "[Sysctl] Deploy AI-optimised kernel parameter file"
+  ansible.builtin.template:
+    src: sysctl-ai-host.conf.j2
+    dest: /etc/sysctl.d/90-ai-host.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload sysctl
+
+- name: "[Sysctl] Apply settings immediately (idempotent)"
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value | string }}"
+    sysctl_set: true
+    state: present
+    reload: true
+  loop: "{{ sysctl_settings | dict2items }}"
+
+# ----------------------------------------------------------------------------
+# Section 2 — ZRAM
+# ----------------------------------------------------------------------------
+- name: "[ZRAM] Install zram-tools"
+  ansible.builtin.apt:
+    name: zram-tools
+    state: present
+    update_cache: false   # cache already warmed by bootstrap role
+
+- name: "[ZRAM] Configure /etc/default/zramswap"
+  ansible.builtin.template:
+    src: zramswap.j2
+    dest: /etc/default/zramswap
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart zramswap
+
+- name: "[ZRAM] Ensure zramswap service is enabled and started"
+  ansible.builtin.systemd:
+    name: zramswap
+    enabled: true
+    state: started
+
+# ----------------------------------------------------------------------------
+# Section 3 — SSD Swap (OOM safety net, lower priority than ZRAM)
+# ----------------------------------------------------------------------------
+- name: "[Swap] Check whether swap file already exists"
+  ansible.builtin.stat:
+    path: "{{ swap_file_path }}"
+  register: _swap_stat
+
+- name: "[Swap] Allocate swap file ({{ swap_file_size_mb }} MB)"
+  ansible.builtin.command: >
+    dd if=/dev/zero of={{ swap_file_path }} bs=1M count={{ swap_file_size_mb }}
+  when: not _swap_stat.stat.exists
+  register: _swap_create
+  changed_when: _swap_create.rc == 0
+
+- name: "[Swap] Restrict permissions (root only)"
+  ansible.builtin.file:
+    path: "{{ swap_file_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: not _swap_stat.stat.exists
+
+- name: "[Swap] Format as swap"
+  ansible.builtin.command: mkswap {{ swap_file_path }}
+  when: not _swap_stat.stat.exists
+  changed_when: true
+
+- name: "[Swap] Activate swap (priority={{ swap_priority }})"
+  ansible.builtin.command: >
+    swapon -p {{ swap_priority }} {{ swap_file_path }}
+  when: not _swap_stat.stat.exists
+  failed_when: false    # harmless if already active
+  changed_when: true
+
+- name: "[Swap] Persist swap in /etc/fstab"
+  ansible.builtin.mount:
+    path: none
+    src: "{{ swap_file_path }}"
+    fstype: swap
+    opts: "sw,pri={{ swap_priority }}"
+    state: present

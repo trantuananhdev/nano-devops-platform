@@ -1,0 +1,55 @@
+---
+# roles/ai_stack/tasks/main.yml
+# Deploy AI data-layer services via Docker Compose
+
+- name: "[AI Stack] Create stack directory structure"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  loop:
+    - "{{ ai_stack_dir }}"
+    - "{{ qdrant_data_dir }}"
+    - "{{ minio_data_dir }}"
+
+- name: "[AI Stack] Deploy docker-compose.yml from template"
+  ansible.builtin.template:
+    src: docker-compose.ai.yml.j2
+    dest: "{{ ai_stack_dir }}/docker-compose.yml"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  notify: Restart ai stack
+
+- name: "[AI Stack] Pull all service images"
+  community.docker.docker_compose_v2_pull:
+    project_src: "{{ ai_stack_dir }}"
+  register: _pull_result
+  changed_when: _pull_result.changed
+
+- name: "[AI Stack] Bring stack up (detached)"
+  community.docker.docker_compose_v2:
+    project_src: "{{ ai_stack_dir }}"
+    state: present
+    remove_orphans: true
+
+- name: "[AI Stack] Wait for Qdrant to accept connections"
+  ansible.builtin.uri:
+    url: "http://localhost:6333/readyz"
+    status_code: 200
+    timeout: 10
+  register: _qdrant_ready
+  retries: 12
+  delay: 5
+  until: _qdrant_ready.status == 200
+
+- name: "[AI Stack] Print running containers"
+  ansible.builtin.command: docker ps --format "table {% raw %}{{.Names}}\t{{.Status}}\t{{.Ports}}{% endraw %}"
+  changed_when: false
+  register: _container_list
+
+- name: "[AI Stack] Container status"
+  ansible.builtin.debug:
+    var: _container_list.stdout_lines

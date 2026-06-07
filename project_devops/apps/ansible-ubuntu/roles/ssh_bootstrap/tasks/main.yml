@@ -1,0 +1,101 @@
+---
+# roles/ssh_bootstrap/tasks/main.yml
+# =============================================================================
+# One-time SSH key injection — run ONCE with password auth, then never again.
+#
+# Precondition  : User '{{ ssh_deploy_user }}' already exists on the host.
+# What this does:
+#   1. Ensures ~/.ssh/authorized_keys is set up with prod_key.pub.
+#   2. Ensures the user has passwordless sudo.
+#   3. Hardens sshd_config (disable password auth, disable root login).
+#   4. Validates & restarts sshd.
+#
+# How to run:
+#   ansible-playbook -i inventory/hosts.ini bootstrap-ssh.yml \
+#     --ask-pass --ask-become-pass
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# 1. Ensure sudo rights (idempotent — safe to run on an existing user)
+# ---------------------------------------------------------------------------
+- name: "[SSH Bootstrap] Grant passwordless sudo to '{{ ssh_deploy_user }}'"
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ ssh_deploy_user }}"
+    owner: root
+    group: root
+    mode: "0440"
+    content: "{{ ssh_deploy_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    validate: "visudo -cf %s"
+
+# ---------------------------------------------------------------------------
+# 2. Set up ~/.ssh and inject prod_key.pub
+# ---------------------------------------------------------------------------
+- name: "[SSH Bootstrap] Ensure ~/.ssh directory exists"
+  ansible.builtin.file:
+    path: "/home/{{ ssh_deploy_user }}/.ssh"
+    state: directory
+    owner: "{{ ssh_deploy_user }}"
+    group: "{{ ssh_deploy_user }}"
+    mode: "0700"
+
+- name: "[SSH Bootstrap] Inject prod_key.pub into authorized_keys"
+  ansible.posix.authorized_key:
+    user: "{{ ssh_deploy_user }}"
+    state: present
+    key: "{{ ssh_public_key }}"
+    exclusive: false    # preserve any other pre-existing keys
+
+# ---------------------------------------------------------------------------
+# 3. Harden sshd_config
+# ---------------------------------------------------------------------------
+- name: "[SSH Bootstrap] Disable password authentication"
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication no"
+    state: present
+    backup: true
+  notify: Restart sshd
+
+- name: "[SSH Bootstrap] Disable root login via SSH"
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin"
+    line: "PermitRootLogin no"
+    state: present
+  notify: Restart sshd
+
+- name: "[SSH Bootstrap] Reduce LoginGraceTime (brute-force window)"
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?LoginGraceTime"
+    line: "LoginGraceTime 30"
+    state: present
+  notify: Restart sshd
+
+- name: "[SSH Bootstrap] Enforce publickey-only authentication"
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?AuthenticationMethods"
+    line: "AuthenticationMethods publickey"
+    state: present
+  notify: Restart sshd
+
+# ---------------------------------------------------------------------------
+# 4. Validate config syntax before sshd restarts (safety guard)
+# ---------------------------------------------------------------------------
+- name: "[SSH Bootstrap] Validate sshd_config syntax"
+  ansible.builtin.command: sshd -t
+  changed_when: false
+  register: _sshd_test
+  failed_when: _sshd_test.rc != 0
+
+- name: "[SSH Bootstrap] Summary"
+  ansible.builtin.debug:
+    msg: |
+      ✅  SSH bootstrap complete.
+          Host     : {{ inventory_hostname }} ({{ ansible_host }})
+          User     : {{ ssh_deploy_user }}
+          Auth     : publickey only (password auth disabled)
+          Key      : {{ ssh_public_key[:60] }}...
+          Next step: run verify-ssh.yml to confirm key access works.

@@ -1,0 +1,148 @@
+---
+# =============================================================================
+# teardown.yml — Wipe the AI stack from the Acer host
+# =============================================================================
+# Stops and removes all Docker containers, volumes, and data directories
+# provisioned by site.yml. The host OS, Docker Engine, UFW, and ZRAM are
+# left intact — only the AI workload layer is removed.
+#
+# After teardown, run site.yml to get a clean install:
+#   make deploy
+#
+# Usage:
+#   make teardown
+#   # or directly:
+#   ansible-playbook -i inventory/hosts.ini teardown.yml
+#
+# To also wipe Docker Engine itself (full clean slate):
+#   ansible-playbook -i inventory/hosts.ini teardown.yml -e "wipe_docker=true"
+# =============================================================================
+
+- name: "Acer AI Host — Teardown AI Stack"
+  hosts: acer
+  become: true
+  gather_facts: false
+
+  vars:
+    wipe_docker: false    # set true only for full nuclear reset
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Stop & remove Docker Compose stack
+    # -------------------------------------------------------------------------
+    - name: "[Teardown] Check if stack directory exists"
+      ansible.builtin.stat:
+        path: "{{ ai_stack_dir }}"
+      register: _stack_dir
+
+    - name: "[Teardown] Bring down Docker Compose stack (with volumes)"
+      community.docker.docker_compose_v2:
+        project_src: "{{ ai_stack_dir }}"
+        state: absent
+        remove_volumes: true
+        remove_orphans: true
+      when: _stack_dir.stat.exists
+      ignore_errors: true   # tolerate if compose file is missing
+
+    # -------------------------------------------------------------------------
+    # 2. Remove Portainer & cAdvisor containers
+    # -------------------------------------------------------------------------
+    - name: "[Teardown] Stop and remove Portainer"
+      community.docker.docker_container:
+        name: portainer
+        state: absent
+        force_kill: true
+      ignore_errors: true
+
+    - name: "[Teardown] Stop and remove cAdvisor"
+      community.docker.docker_container:
+        name: cadvisor
+        state: absent
+        force_kill: true
+      ignore_errors: true
+
+    - name: "[Teardown] Remove Portainer data volume"
+      community.docker.docker_volume:
+        name: portainer_data
+        state: absent
+      ignore_errors: true
+
+    # -------------------------------------------------------------------------
+    # 3. Prune dangling images and build cache (reclaim disk space)
+    # -------------------------------------------------------------------------
+    - name: "[Teardown] Prune unused Docker images"
+      ansible.builtin.command: docker image prune -f
+      changed_when: true
+      ignore_errors: true
+
+    - name: "[Teardown] Prune build cache"
+      ansible.builtin.command: docker builder prune -f
+      changed_when: true
+      ignore_errors: true
+
+    # -------------------------------------------------------------------------
+    # 4. Wipe data directories (Qdrant collections, MinIO buckets)
+    # -------------------------------------------------------------------------
+    - name: "[Teardown] Remove Qdrant data directory"
+      ansible.builtin.file:
+        path: "{{ qdrant_data_dir }}"
+        state: absent
+
+    - name: "[Teardown] Remove MinIO data directory"
+      ansible.builtin.file:
+        path: "{{ minio_data_dir }}"
+        state: absent
+
+    - name: "[Teardown] Remove stack directory"
+      ansible.builtin.file:
+        path: "{{ ai_stack_dir }}"
+        state: absent
+
+    # -------------------------------------------------------------------------
+    # 5. Optional: uninstall Docker Engine (nuclear reset)
+    # -------------------------------------------------------------------------
+    - name: "[Teardown] (Nuclear) Stop Docker daemon"
+      ansible.builtin.systemd:
+        name: docker
+        state: stopped
+        enabled: false
+      when: wipe_docker | bool
+      ignore_errors: true
+
+    - name: "[Teardown] (Nuclear) Uninstall Docker packages"
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: absent
+        purge: true
+      when: wipe_docker | bool
+
+    - name: "[Teardown] (Nuclear) Remove Docker data root"
+      ansible.builtin.file:
+        path: "{{ docker_data_root }}"
+        state: absent
+      when: wipe_docker | bool
+
+    - name: "[Teardown] (Nuclear) Remove Docker apt repo"
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/docker.list
+        state: absent
+      when: wipe_docker | bool
+
+    # -------------------------------------------------------------------------
+    # 6. Summary
+    # -------------------------------------------------------------------------
+    - name: "[Teardown] Done"
+      ansible.builtin.debug:
+        msg: |
+          ✅  Teardown complete.
+              Removed : AI stack containers, volumes, data directories
+              Kept    : Docker Engine, UFW, ZRAM, sysctl tuning, SSH config
+              {% if wipe_docker | bool %}
+              ⚠️   Docker Engine also removed (wipe_docker=true).
+              {% endif %}
+              Next    : run 'make deploy' to reinstall from scratch.

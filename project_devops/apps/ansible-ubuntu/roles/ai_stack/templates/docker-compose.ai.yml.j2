@@ -1,0 +1,152 @@
+# =============================================================================
+# docker-compose.ai.yml — AI Data Layer Stack
+# Managed by Ansible (role: ai_stack). Do NOT edit manually on the host.
+# Source of truth: group_vars/acer.yml
+#
+# RAM Budget (ZRAM 6.5 GB virtual):
+#   Qdrant  ~400 MB  · Redis  ~128 MB  · MinIO  ~256 MB
+#   bge-m3  ~570 MB  (optional, enabled via embedding_enabled=true)
+#   headroom ~1 GB
+# =============================================================================
+
+version: "3.9"
+
+networks:
+  ai-net:
+    driver: bridge
+
+volumes:
+  qdrant_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: {{ qdrant_data_dir }}
+      o: bind
+  minio_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: {{ minio_data_dir }}
+      o: bind
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Qdrant — Primary vector store
+  # REST: :6333  |  gRPC: :6334
+  # ---------------------------------------------------------------------------
+  qdrant:
+    image: {{ qdrant_image }}
+    container_name: qdrant
+    restart: unless-stopped
+    networks: [ai-net]
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: "6333"
+      QDRANT__SERVICE__GRPC_PORT: "6334"
+      # Keep HNSW graph on disk to preserve RAM for other services.
+      QDRANT__STORAGE__ON_DISK_PAYLOAD: "true"
+    deploy:
+      resources:
+        limits:
+          memory: {{ qdrant_mem_limit }}
+        reservations:
+          memory: {{ qdrant_mem_reservation }}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:6333/readyz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Redis — In-memory cache
+  # ---------------------------------------------------------------------------
+  redis:
+    image: {{ redis_image }}
+    container_name: redis
+    restart: unless-stopped
+    networks: [ai-net]
+    ports:
+      - "127.0.0.1:6379:6379"   # bind to loopback only; UFW guards external
+    command: >
+      redis-server
+      --maxmemory {{ redis_mem_reservation }}
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+    deploy:
+      resources:
+        limits:
+          memory: {{ redis_mem_limit }}
+        reservations:
+          memory: {{ redis_mem_reservation }}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # MinIO — S3-compatible object storage
+  # S3 API: :9000  |  Console: :9001
+  # ---------------------------------------------------------------------------
+  minio:
+    image: {{ minio_image }}
+    container_name: minio
+    restart: unless-stopped
+    networks: [ai-net]
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: "{{ minio_root_user }}"
+      MINIO_ROOT_PASSWORD: "{{ minio_root_password }}"
+    command: server /data --console-address ":9001"
+    deploy:
+      resources:
+        limits:
+          memory: {{ minio_mem_limit }}
+        reservations:
+          memory: {{ minio_mem_reservation }}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+{% if embedding_enabled %}
+  # ---------------------------------------------------------------------------
+  # bge-m3 Embedding — Offline embedder (deploy only when data is confidential)
+  # API: :8080/embed
+  # ---------------------------------------------------------------------------
+  embedder:
+    image: {{ embedding_image }}
+    container_name: embedder
+    restart: unless-stopped
+    networks: [ai-net]
+    ports:
+      - "127.0.0.1:8080:80"
+    environment:
+      MODEL_ID: "{{ embedding_model }}"
+      MAX_CONCURRENT_REQUESTS: "16"
+      MAX_BATCH_TOKENS: "4096"
+    deploy:
+      resources:
+        limits:
+          memory: {{ embedding_mem_limit }}
+        reservations:
+          memory: {{ embedding_mem_reservation }}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:80/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+{% endif %}

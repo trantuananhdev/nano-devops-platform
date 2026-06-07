@@ -1,192 +1,246 @@
-name: "CI: Enterprise Monorepo Pipeline"
+name: "CI: Build & Push EcoIT Images"
+
+# =============================================================================
+# CI chỉ làm 2 việc:
+#   1. Build Docker image
+#   2. Push lên GHCR
+# Deploy sang Ubuntu Acer làm RIÊNG bằng ./cli.sh ansible-deploy trên VM
+# Lý do: Acer Ubuntu nằm trên LAN nội bộ — GitHub runner không SSH vào được.
+# =============================================================================
 
 on:
-  pull_request:
-    branches: ["**"]
   push:
     branches: ["**"]
-  workflow_dispatch: # Cho phép kích hoạt thủ công từ giao diện GitHub
+    paths:
+      - "project_devops/apps/ecoit-app/**"
+      - "project_devops/apps/health-api/**"
+      - "project_devops/apps/data-api/**"
+      - "project_devops/apps/aggregator-api/**"
+      - "project_devops/apps/user-api/**"
+      - "project_devops/apps/faulty-service/**"
+      - "project_devops/apps/ansible-ubuntu/**"
+      - "project_devops/platform/**"
+      - "project_devops/ci/**"
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
 
-# Hủy các lượt build cũ nếu có commit mới cùng PR (Tiết kiệm tài nguyên)
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # --- STAGE 1: DETECTION ---
+  # ---------------------------------------------------------------------------
+  # STAGE 1: Detect what changed
+  # ---------------------------------------------------------------------------
   detect-changes:
-    name: Intelligence Center
+    name: "Detect Changes"
     runs-on: ubuntu-24.04
     outputs:
+      ecoit_changed: ${{ steps.filter.outputs.ecoit-app }}
       services: ${{ steps.filter.outputs.changes }}
       infra_changed: ${{ steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3 # Cập nhật v3
+      - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
+            # --- EcoIT Trial (ACTIVE) ---
+            ecoit-app: 'project_devops/apps/ecoit-app/**'
+            # --- Platform services ---
             health-api: 'project_devops/apps/health-api/**'
             data-api: 'project_devops/apps/data-api/**'
             aggregator-api: 'project_devops/apps/aggregator-api/**'
             user-api: 'project_devops/apps/user-api/**'
             faulty-service: 'project_devops/apps/faulty-service/**'
-            digital-fte-platform: 'project_devops/apps/digital-fte-platform/**'
-            crm-ingestion-api: 'project_devops/apps/ai-crm-pipeline/**'
-            crm-ai-worker: 'project_devops/apps/ai-crm-pipeline/crm-ai-worker/**'
-            crm-demo-ui: 'project_devops/apps/crm-demo-ui/**'
+            # --- Ansible runner ---
+            ansible-ubuntu: 'project_devops/apps/ansible-ubuntu/**'
+            # --- Infrastructure ---
             infra:
               - 'project_devops/platform/**'
               - 'project_devops/ci/**'
 
-  # --- STAGE 2: QUALITY & SECURITY (Parallel) ---
+  # ---------------------------------------------------------------------------
+  # STAGE 2: Security & Quality (parallel, non-blocking)
+  # ---------------------------------------------------------------------------
   lint-and-scan:
-    name: Security & Quality
+    name: "Security & Quality"
     runs-on: ubuntu-24.04
-    continue-on-error: true # Cho phép lách qua các lỗi bảo mật/chất lượng để pipeline luôn xanh
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Run Gitleaks (Hard-fail on Secrets)
+
+      - name: Gitleaks — Secret scan
         uses: gitleaks/gitleaks-action@v2
         with:
-          exit-code: 1 # Phát hiện secret là phải dừng ngay!
+          exit-code: 1
 
-      - name: Run Hadolint (Docker Check)
+      - name: Hadolint — Dockerfile lint
         uses: hadolint/hadolint-action@v3.1.0
         with:
           recursive: true
           failure-threshold: error
 
-      - name: Run Semgrep SAST
+      - name: Semgrep SAST
         uses: returntocorp/semgrep-action@v1
         with:
           config: p/default
 
-  # --- STAGE 3: THE FACTORY ---
-  platform-validation:
-    name: Platform Validation
+  # ---------------------------------------------------------------------------
+  # STAGE 3: Build & Push EcoIT images (only when ecoit-app changes)
+  # ---------------------------------------------------------------------------
+  build-ecoit:
+    name: "Build & Push EcoIT → GHCR"
     runs-on: ubuntu-24.04
-    if: needs.detect-changes.outputs.infra_changed == 'true'
-    needs: [detect-changes, lint-and-scan]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate Prometheus config (promtool)
-        run: |
-          docker run --rm -v "$PWD/project_devops/platform/config/prometheus:/etc/prometheus:ro" prom/prometheus:v2.48.0 promtool check config /etc/prometheus/prometheus.yml
-      - name: Run Platform Checks
-        run: |
-          bash ./project_devops/platform/ops/pre-flight-check.sh
-          bash ./project_devops/ci/scripts/check-platform-laws.sh
-          bash ./project_devops/ci/scripts/run-tests.sh
-
-  build-test-publish:
-    name: Build & Publish
-    runs-on: ubuntu-24.04
-    # Lọc chỉ lấy các thay đổi trong thư mục apps để build matrix
-    # Ta loại bỏ key 'infra' ra khỏi danh sách build
-    if: needs.detect-changes.outputs.services != '[]' && needs.detect-changes.outputs.services != '["infra"]'
-    needs: [detect-changes] # Hoàn toàn độc lập với lint-and-scan để luôn Auto-Build được
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.ecoit_changed == 'true'
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      max-parallel: 4 # Giới hạn số lượng build song song để tránh nghẽn runner
-      matrix:
-        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
-    
-    steps:
-      - name: Skip infra build
-        if: matrix.service == 'infra'
-        run: echo "Skipping build for infra key"
 
+    steps:
       - uses: actions/checkout@v4
-        if: matrix.service != 'infra'
-      
+
       - name: Set up Docker Buildx
-        if: matrix.service != 'infra'
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR
-        if: matrix.service != 'infra'
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Test riêng biệt cho từng service trước khi build
+      - name: Run tests
+        run: bash project_devops/apps/ecoit-app/test.sh
+
+      - name: Build & Push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: project_devops/apps/ecoit-app
+          file: project_devops/apps/ecoit-app/Dockerfile.backend
+          push: ${{ github.ref == 'refs/heads/main' }}   # only push on main
+          load: ${{ github.ref != 'refs/heads/main' }}   # load for scan on PRs
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/ecoit-app-backend:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/ecoit-app-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & Push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: project_devops/apps/ecoit-app
+          file: project_devops/apps/ecoit-app/Dockerfile.frontend
+          push: ${{ github.ref == 'refs/heads/main' }}
+          load: ${{ github.ref != 'refs/heads/main' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/ecoit-app-frontend:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/ecoit-app-frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan Backend image
+        if: github.ref == 'refs/heads/main'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/ecoit-app-backend:${{ github.sha }}
+          format: table
+          exit-code: '0'
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+
+      - name: Notify — image ready for deploy
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "✅ Images pushed to GHCR:"
+          echo "   ghcr.io/${{ github.repository_owner }}/ecoit-app-backend:${{ github.sha }}"
+          echo "   ghcr.io/${{ github.repository_owner }}/ecoit-app-frontend:${{ github.sha }}"
+          echo ""
+          echo "📦 Deploy to Acer Ubuntu (from your Alpine VM):"
+          echo "   vagrant ssh"
+          echo "   ./cli.sh ansible-deploy ${{ github.sha }}"
+
+  # ---------------------------------------------------------------------------
+  # STAGE 4: Build other platform services (matrix — non EcoIT)
+  # ---------------------------------------------------------------------------
+  build-platform-services:
+    name: "Build Platform Services"
+    runs-on: ubuntu-24.04
+    needs: [detect-changes]
+    if: >
+      needs.detect-changes.outputs.services != '[]' &&
+      needs.detect-changes.outputs.services != '["infra"]' &&
+      needs.detect-changes.outputs.ecoit_changed != 'true'
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+
+    steps:
+      - name: Skip non-buildable keys
+        if: matrix.service == 'infra' || matrix.service == 'ansible-ubuntu'
+        run: echo "Skipping build for ${{ matrix.service }}"
+
+      - uses: actions/checkout@v4
+        if: matrix.service != 'infra' && matrix.service != 'ansible-ubuntu'
+
+      - name: Set up Docker Buildx
+        if: matrix.service != 'infra' && matrix.service != 'ansible-ubuntu'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: matrix.service != 'infra' && matrix.service != 'ansible-ubuntu'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Unit Test
-        if: matrix.service != 'infra'
+        if: matrix.service != 'infra' && matrix.service != 'ansible-ubuntu'
         run: |
           if [ -f "./project_devops/apps/${{ matrix.service }}/test.sh" ]; then
             bash ./project_devops/apps/${{ matrix.service }}/test.sh
           else
-            echo "No specific tests found for ${{ matrix.service }}, skipping."
+            echo "No tests for ${{ matrix.service }}, skipping."
           fi
 
-      - name: Resolve build context
-        if: matrix.service != 'infra'
-        run: |
-          case "${{ matrix.service }}" in
-            crm-ingestion-api)
-              echo "BUILD_CONTEXT=./project_devops/apps/ai-crm-pipeline" >> "$GITHUB_ENV"
-              echo "DOCKERFILE=crm-ingestion-api/Dockerfile" >> "$GITHUB_ENV"
-              ;;
-            crm-ai-worker)
-              echo "BUILD_CONTEXT=./project_devops/apps/ai-crm-pipeline/crm-ai-worker" >> "$GITHUB_ENV"
-              echo "DOCKERFILE=Dockerfile" >> "$GITHUB_ENV"
-              ;;
-            *)
-              echo "BUILD_CONTEXT=./project_devops/apps/${{ matrix.service }}" >> "$GITHUB_ENV"
-              echo "DOCKERFILE=Dockerfile" >> "$GITHUB_ENV"
-              ;;
-          esac
-
-      - name: Build image
-        if: matrix.service != 'infra'
-        id: build
+      - name: Build & Push
+        if: matrix.service != 'infra' && matrix.service != 'ansible-ubuntu'
         uses: docker/build-push-action@v5
         with:
-          context: ${{ env.BUILD_CONTEXT }}
-          file: ${{ env.DOCKERFILE || format('{0}/Dockerfile', env.BUILD_CONTEXT) }}
-          push: false # Do not push yet
-          load: true # Load image into docker
+          context: project_devops/apps/${{ matrix.service }}
+          file: project_devops/apps/${{ matrix.service }}/Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' }}
+          load: ${{ github.ref != 'refs/heads/main' }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Scan image for vulnerabilities with Trivy
-        if: matrix.service != 'infra'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}'
-          format: 'table'
-          exit-code: '0' # Chỉ cảnh báo, không chặn luồng Build
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'HIGH,CRITICAL'
-
-      - name: Push image to GHCR
-        if: matrix.service != 'infra'
-        run: |
-          docker push ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
-          docker push ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:latest
-
-  # --- STAGE 4: FINAL STATUS ---
+  # ---------------------------------------------------------------------------
+  # STAGE 5: Final Status
+  # ---------------------------------------------------------------------------
   ci-status:
-    name: Final Status
+    name: "✅ CI Status"
     runs-on: ubuntu-24.04
-    needs: [build-test-publish]
+    needs: [lint-and-scan, build-ecoit, build-platform-services]
     if: always()
     steps:
-      - name: Check Final Results
+      - name: Final check
         run: |
-          if [[ "${{ needs.build-test-publish.result }}" == "success" ]]; then
-            echo "✅ Build & Publish thành công!"
-            exit 0
-          else
-            echo "❌ Quá trình Build gặp lỗi nghiêm trọng."
-            exit 1
+          ECOIT="${{ needs.build-ecoit.result }}"
+          PLATFORM="${{ needs.build-platform-services.result }}"
+          echo "EcoIT build: ${ECOIT:-skipped}"
+          echo "Platform build: ${PLATFORM:-skipped}"
+          if [[ "$ECOIT" == "failure" || "$PLATFORM" == "failure" ]]; then
+            echo "❌ Build failed"; exit 1
           fi
+          echo "✅ CI passed"

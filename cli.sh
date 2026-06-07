@@ -46,10 +46,13 @@ print_usage() {
     echo "  smoke-obs           Run Grafana + Prometheus HTTPS smoke tests."
     echo "  smoke-https         Probe all public app HTTPS endpoints."
     echo ""
-    echo "AI Platform Commands:"
-    echo "  ai-up               Start Agentic-AI services."
-    echo "  ai-logs             Follow logs for the Agentic-AI service."
-    echo "  ai-migrate          Run database migrations for the Agentic-AI service."
+    echo "EcoIT Trial Commands (→ Acer Ubuntu):"
+    echo "  ansible-bootstrap   Bootstrap Acer Ubuntu (first time: Docker, zram, UFW)."
+    echo "  ansible-deploy      Deploy EcoIT app to Acer Ubuntu."
+    echo "  ansible-ping        Check SSH connectivity to Acer Ubuntu."
+    echo "  ecoit-up            Start EcoIT app locally (dev mode)."
+    echo "  ecoit-down          Stop local EcoIT dev stack."
+    echo "  ecoit-logs          Follow EcoIT app logs (local dev)."
 }
 
 # --- Command Implementation ---
@@ -139,25 +142,53 @@ cmd_redeploy() {
     echo "Done. Check logs: $0 logs ${SERVICE:-}"
 }
 
-# --- AI Platform Specific Commands ---
-cmd_ai_up() {
-    echo "Starting Agentic-AI services..."
-    # shellcheck disable=SC2086
-    $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES up -d agentic-ai-api
+# ----- EcoIT / Ansible Commands -----
+
+ANSIBLE_DIR="project_devops/apps/ansible-ubuntu"
+ECOIT_APP_COMPOSE="project_devops/apps/ecoit-app/docker-compose.ecoit.yml"
+
+cmd_ansible_runner() {
+    local PLAYBOOK="$1"; shift
+    # Run ansible-runner container (profile: ops)
+    $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES \
+        run --rm ansible-runner \
+        ansible-playbook -i inventory/hosts.ini "$PLAYBOOK" "$@"
 }
 
-cmd_ai_logs() {
-    echo "Following logs for Agentic-AI service..."
-    # shellcheck disable=SC2086
-    $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES logs -f agentic-ai-api
+cmd_ansible_bootstrap() {
+    echo "[ECOIT] Bootstrapping Acer Ubuntu (one-time setup)..."
+    cmd_ansible_runner site.yml
 }
 
-cmd_ai_migrate() {
-    echo "Running database migrations for Agentic-AI..."
-    # AI Platform migrations via node-pg-migrate or similar if needed
-    # But for now, let's assume it's part of the standard flow
-    # shellcheck disable=SC2086
-    $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES exec agentic-ai-api npm run migrate || echo "Migration command failed or not configured in package.json."
+cmd_ansible_deploy() {
+    local IMAGE_TAG="${1:-latest}"
+    echo "[ECOIT] Deploying EcoIT app to Acer Ubuntu (tag: ${IMAGE_TAG})..."
+    echo "[ECOIT] Pull image từ GHCR → Ansible compose up → health check"
+    $COMPOSE $COMPOSE_ENV_FILE $COMPOSE_FILES \
+        run --rm ansible-runner \
+        ansible-playbook -i /tmp/inventory.ini deploy-ecoit.yml \
+        -e "ecoit_image_tag=${IMAGE_TAG}"
+}
+
+cmd_ansible_ping() {
+    echo "[ECOIT] Pinging Acer Ubuntu..."
+    cmd_ansible_runner verify-ssh.yml
+}
+
+cmd_ecoit_up() {
+    echo "[ECOIT] Starting local EcoIT dev stack..."
+    $COMPOSE --env-file .env -f "$ECOIT_APP_COMPOSE" up -d --build
+    echo "  Backend:  http://localhost:8000/docs"
+    echo "  Frontend: http://localhost:3000"
+}
+
+cmd_ecoit_down() {
+    echo "[ECOIT] Stopping local EcoIT dev stack..."
+    $COMPOSE --env-file .env -f "$ECOIT_APP_COMPOSE" down
+}
+
+cmd_ecoit_logs() {
+    $COMPOSE --env-file .env -f "$ECOIT_APP_COMPOSE" logs -f "${2:-}"
 }
 
 # --- Main Dispatcher ---
@@ -202,14 +233,23 @@ case "$COMMAND" in
     smoke-https)
         cmd_smoke_https
         ;;
-    ai-up)
-        cmd_ai_up
+    ansible-bootstrap)
+        cmd_ansible_bootstrap
         ;;
-    ai-logs)
-        cmd_ai_logs
+    ansible-deploy)
+        cmd_ansible_deploy "${2:-}"
         ;;
-    ai-migrate)
-        cmd_ai_migrate
+    ansible-ping)
+        cmd_ansible_ping
+        ;;
+    ecoit-up)
+        cmd_ecoit_up
+        ;;
+    ecoit-down)
+        cmd_ecoit_down
+        ;;
+    ecoit-logs)
+        cmd_ecoit_logs "${2:-}"
         ;;
     *)
         echo "Error: Unknown command '$COMMAND'"

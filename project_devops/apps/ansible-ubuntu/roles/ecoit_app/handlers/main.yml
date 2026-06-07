@@ -1,0 +1,11 @@
+---
+# =============================================================================
+# roles/ecoit_app/handlers/main.yml
+# =============================================================================
+
+- name: "restart ecoit"
+  community.docker.docker_compose_v2:
+    project_src: "{{ ecoit_app_dir }}"
+    state: restarted
+  become_user: "{{ ssh_deploy_user }}"
+  listen: "restart ecoit"

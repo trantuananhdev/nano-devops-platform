@@ -1,0 +1,37 @@
+name: "CD: Deploy EcoIT — DISABLED (LAN server)"
+
+# =============================================================================
+# ⚠️  FILE NÀY KHÔNG DÙNG NỮA
+#
+# Lý do: Acer Ubuntu (192.168.100.x) nằm trên LAN nội bộ.
+# GitHub Actions cloud runner không thể SSH vào LAN → CD phải chạy local.
+#
+# Thay bằng:
+#   vagrant ssh → ./cli.sh ansible-deploy [image-tag]
+#   hoặc: project_devops/apps/ansible-ubuntu/deploy.sh [image-tag]
+#
+# CI workflow (ci.yml) vẫn build & push image lên GHCR bình thường.
+# Sau khi CI xong, copy git SHA từ GitHub → chạy lệnh deploy trên VM.
+# =============================================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      note:
+        description: "Xem ai-system/AI_BOOT.md — deploy via cli.sh ansible-deploy"
+        required: false
+
+jobs:
+  notice:
+    name: "Deploy is local-only"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Notice
+        run: |
+          echo "⚠️  CD pipeline không chạy trên GitHub Actions."
+          echo "   Acer Ubuntu nằm trên LAN — deploy từ Alpine VM:"
+          echo ""
+          echo "   vagrant ssh"
+          echo "   ./cli.sh ansible-deploy [git-sha]"
+          echo ""
+          echo "   Xem CI workflow để lấy image SHA vừa build."

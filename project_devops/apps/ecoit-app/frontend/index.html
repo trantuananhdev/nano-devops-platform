@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EcoIT — Hello World</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #fff;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.07);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 48px 56px;
+      max-width: 560px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+    }
+
+    .badge {
+      display: inline-block;
+      background: linear-gradient(90deg, #6c63ff, #48cfad);
+      border-radius: 999px;
+      padding: 4px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: linear-gradient(90deg, #a18cd1, #fbc2eb);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: rgba(255,255,255,0.55);
+      font-size: 0.95rem;
+      margin-bottom: 36px;
+    }
+
+    .status-box {
+      background: rgba(0,0,0,0.25);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 28px;
+      text-align: left;
+    }
+
+    .status-box h3 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 12px;
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.88rem;
+    }
+
+    .status-row:last-child { border-bottom: none; }
+
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #48cfad;
+      display: inline-block;
+      margin-right: 8px;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    #api-response {
+      background: rgba(72, 207, 173, 0.1);
+      border: 1px solid rgba(72, 207, 173, 0.3);
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.82rem;
+      color: #48cfad;
+      text-align: left;
+      white-space: pre-wrap;
+      word-break: break-all;
+      min-height: 60px;
+    }
+
+    .label { color: rgba(255,255,255,0.5); font-size: 0.75rem; margin-bottom: 8px; }
+
+    button {
+      margin-top: 24px;
+      background: linear-gradient(90deg, #6c63ff, #48cfad);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 32px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    button:hover { opacity: 0.85; transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">EcoIT Trial ✦ Nano DevOps</div>
+    <h1>Hello World! 🚀</h1>
+    <p class="subtitle">Full stack đang chạy trên Acer Ubuntu Server</p>
+
+    <div class="status-box">
+      <h3>Stack Status</h3>
+      <div class="status-row">
+        <span><span class="dot"></span>Frontend (nginx)</span>
+        <span style="color:#48cfad">✅ Running</span>
+      </div>
+      <div class="status-row">
+        <span><span class="dot"></span>Backend (FastAPI)</span>
+        <span id="be-status" style="color:#fbc2eb">⏳ Checking...</span>
+      </div>
+      <div class="status-row">
+        <span><span class="dot"></span>Platform</span>
+        <span style="color:#48cfad">Nano DevOps</span>
+      </div>
+    </div>
+
+    <div class="label">Backend API Response:</div>
+    <div id="api-response">Đang gọi /api/v1/hello-world/hello...</div>
+
+    <button onclick="callApi()">🔄 Gọi lại API</button>
+  </div>
+
+  <script>
+    const API_BASE = window.location.hostname === 'localhost'
+      ? 'http://localhost:8000'
+      : `http://${window.location.hostname}:8000`;
+
+    async function callApi() {
+      const el = document.getElementById('api-response');
+      const status = document.getElementById('be-status');
+      el.textContent = 'Calling API...';
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/hello-world/hello`);
+        const data = await res.json();
+        el.textContent = JSON.stringify(data, null, 2);
+        status.textContent = '✅ Connected';
+        status.style.color = '#48cfad';
+      } catch (e) {
+        el.textContent = `❌ Error: ${e.message}\n\nBackend URL: ${API_BASE}`;
+        status.textContent = '❌ Unreachable';
+        status.style.color = '#ff6b6b';
+      }
+    }
+
+    // Auto-call on load
+    callApi();
+  </script>
+</body>
+</html>

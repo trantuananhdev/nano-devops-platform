@@ -188,174 +188,174 @@ services:
       - "prometheus.job=user-api"
       - "prometheus.port=8080"
 
-  # AI-Driven CRM Pipeline — Ingestion
-  crm-ingestion-api:
-    build:
-      context: ../../apps/ai-crm-pipeline
-      dockerfile: crm-ingestion-api/Dockerfile
-    container_name: platform-crm-ingestion
-    restart: unless-stopped
-    env_file:
-      - ../../../.env
-    environment:
-      - PORT=8080
-      - REDIS_URL=redis://platform-redis:6379/0
-      - CRM_DATABASE_URL=postgresql://crm_user:devadmin@platform-postgres:5432/crm_db
-      - CRM_WEBHOOK_SECRET=${CRM_WEBHOOK_SECRET:-}
-      - CRM_DEMO_API_KEY=${CRM_DEMO_API_KEY:-}
-      - CORS_ORIGINS=https://crm-demo.nano.platform,http://localhost:5173
-      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
-      - GEMINI_API_KEY_1=${GEMINI_API_KEY_1}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
-      - GEMINI_API_VERSION=${GEMINI_API_VERSION:-v1beta}
-      - AGENTIC_AI_URL=http://platform-agentic-ai:3000
-      - CRM_SKIP_GEMINI=${CRM_SKIP_GEMINI:-true}
-      - DEMO_BURST_MAX_MESSAGES=${DEMO_BURST_MAX_MESSAGES:-3}
-    networks:
-      - platform-network
-    depends_on:
-      platform-redis:
-        condition: service_healthy
-      platform-postgres:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          memory: 140M
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=platform-network"
-      - "traefik.http.routers.crm-ingest.rule=Host(`crm-ingest.nano.platform`)"
-      - "traefik.http.routers.crm-ingest.entrypoints=websecure"
-      - "traefik.http.services.crm-ingest.loadbalancer.server.port=8080"
-      - "traefik.http.routers.crm-ingest-http.rule=Host(`crm-ingest.nano.platform`)"
-      - "traefik.http.routers.crm-ingest-http.entrypoints=web"
-      - "traefik.http.routers.crm-ingest-http.middlewares=redirect-to-https@file"
-      - "traefik.http.routers.crm-ingest-http.service=crm-ingest"
-      - "prometheus.scrape=true"
-      - "prometheus.job=crm-ingestion-api"
-      - "prometheus.port=8080"
+  # AI-Driven CRM Pipeline — Ingestion (DISABLED)
+  # crm-ingestion-api:
+  #   build:
+  #     context: ../../apps/ai-crm-pipeline
+  #     dockerfile: crm-ingestion-api/Dockerfile
+  #   container_name: platform-crm-ingestion
+  #   restart: unless-stopped
+  #   env_file:
+  #     - ../../../.env
+  #   environment:
+  #     - PORT=8080
+  #     - REDIS_URL=redis://platform-redis:6379/0
+  #     - CRM_DATABASE_URL=postgresql://crm_user:devadmin@platform-postgres:5432/crm_db
+  #     - CRM_WEBHOOK_SECRET=${CRM_WEBHOOK_SECRET:-}
+  #     - CRM_DEMO_API_KEY=${CRM_DEMO_API_KEY:-}
+  #     - CORS_ORIGINS=https://crm-demo.nano.platform,http://localhost:5173
+  #     - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+  #     - GEMINI_API_KEY_1=${GEMINI_API_KEY_1}
+  #     - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+  #     - GEMINI_API_VERSION=${GEMINI_API_VERSION:-v1beta}
+  #     - AGENTIC_AI_URL=http://platform-agentic-ai:3000
+  #     - CRM_SKIP_GEMINI=${CRM_SKIP_GEMINI:-true}
+  #     - DEMO_BURST_MAX_MESSAGES=${DEMO_BURST_MAX_MESSAGES:-3}
+  #   networks:
+  #     - platform-network
+  #   depends_on:
+  #     platform-redis:
+  #       condition: service_healthy
+  #     platform-postgres:
+  #       condition: service_healthy
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 140M
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=platform-network"
+  #     - "traefik.http.routers.crm-ingest.rule=Host(`crm-ingest.nano.platform`)"
+  #     - "traefik.http.routers.crm-ingest.entrypoints=websecure"
+  #     - "traefik.http.services.crm-ingest.loadbalancer.server.port=8080"
+  #     - "traefik.http.routers.crm-ingest-http.rule=Host(`crm-ingest.nano.platform`)"
+  #     - "traefik.http.routers.crm-ingest-http.entrypoints=web"
+  #     - "traefik.http.routers.crm-ingest-http.middlewares=redirect-to-https@file"
+  #     - "traefik.http.routers.crm-ingest-http.service=crm-ingest"
+  #     - "prometheus.scrape=true"
+  #     - "prometheus.job=crm-ingestion-api"
+  #     - "prometheus.port=8080"
 
-  # AI-Driven CRM Pipeline — AI Worker
-  crm-ai-worker:
-    build:
-      context: ../../apps/ai-crm-pipeline/crm-ai-worker
-      dockerfile: Dockerfile
-    container_name: platform-crm-worker
-    restart: unless-stopped
-    env_file:
-      - ../../../.env
-    environment:
-      - REDIS_URL=redis://platform-redis:6379/0
-      - CRM_DATABASE_URL=postgresql://crm_user:devadmin@platform-postgres:5432/crm_db
-      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
-      - GEMINI_API_KEY_1=${GEMINI_API_KEY_1}
-      - GEMINI_API_KEY_2=${GEMINI_API_KEY_2}
-      - GEMINI_API_KEY_3=${GEMINI_API_KEY_3}
-      - GEMINI_API_KEY_4=${GEMINI_API_KEY_4}
-      - GEMINI_API_KEY_5=${GEMINI_API_KEY_5}
-      - GEMINI_API_KEY_6=${GEMINI_API_KEY_6}
-      - GEMINI_API_KEY_7=${GEMINI_API_KEY_7}
-      - GEMINI_API_KEY_8=${GEMINI_API_KEY_8}
-      - GEMINI_API_KEY_9=${GEMINI_API_KEY_9}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
-      - GEMINI_API_VERSION=${GEMINI_API_VERSION:-v1beta}
-      - GEMINI_TEMPERATURE=${GEMINI_TEMPERATURE:-0.2}
-      - GEMINI_MAX_TOKENS=${GEMINI_MAX_TOKENS:-2048}
-      - GEMINI_TIMEOUT_MS=${GEMINI_TIMEOUT_MS:-45000}
-      - AGENTIC_AI_URL=http://platform-agentic-ai:3000
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
-      - LARK_WEBHOOK_URL=${LARK_WEBHOOK_URL:-}
-      - ALERT_ENABLED=${ALERT_ENABLED:-true}
-      - AUTO_REPLY_ENABLED=${AUTO_REPLY_ENABLED:-true}
-      - CRM_DEMO_LLM_FALLBACK=${CRM_DEMO_LLM_FALLBACK:-true}
-      - CRM_SKIP_GEMINI=${CRM_SKIP_GEMINI:-true}
-      - DEMO_BURST_MAX_MESSAGES=${DEMO_BURST_MAX_MESSAGES:-3}
-      - CRM_WORKER_JOB_DELAY_MS=${CRM_WORKER_JOB_DELAY_MS:-1200}
-      - GEMINI_HTTP_RETRIES=${GEMINI_HTTP_RETRIES:-3}
-      - CRM_EVENTS_CHANNEL=crm:events:leads
-      - METRICS_PORT=9100
-    deploy:
-      resources:
-        limits:
-          memory: 300M
-    networks:
-      - platform-network
-    depends_on:
-      platform-redis:
-        condition: service_healthy
-      platform-postgres:
-        condition: service_healthy
-      crm-ingestion-api:
-        condition: service_started
-    labels:
-      - "prometheus.scrape=true"
-      - "prometheus.job=crm-ai-worker"
-      - "prometheus.port=9100"
+  # AI-Driven CRM Pipeline — AI Worker (DISABLED)
+  # crm-ai-worker:
+  #   build:
+  #     context: ../../apps/ai-crm-pipeline/crm-ai-worker
+  #     dockerfile: Dockerfile
+  #   container_name: platform-crm-worker
+  #   restart: unless-stopped
+  #   env_file:
+  #     - ../../../.env
+  #   environment:
+  #     - REDIS_URL=redis://platform-redis:6379/0
+  #     - CRM_DATABASE_URL=postgresql://crm_user:devadmin@platform-postgres:5432/crm_db
+  #     - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+  #     - GEMINI_API_KEY_1=${GEMINI_API_KEY_1}
+  #     - GEMINI_API_KEY_2=${GEMINI_API_KEY_2}
+  #     - GEMINI_API_KEY_3=${GEMINI_API_KEY_3}
+  #     - GEMINI_API_KEY_4=${GEMINI_API_KEY_4}
+  #     - GEMINI_API_KEY_5=${GEMINI_API_KEY_5}
+  #     - GEMINI_API_KEY_6=${GEMINI_API_KEY_6}
+  #     - GEMINI_API_KEY_7=${GEMINI_API_KEY_7}
+  #     - GEMINI_API_KEY_8=${GEMINI_API_KEY_8}
+  #     - GEMINI_API_KEY_9=${GEMINI_API_KEY_9}
+  #     - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+  #     - GEMINI_API_VERSION=${GEMINI_API_VERSION:-v1beta}
+  #     - GEMINI_TEMPERATURE=${GEMINI_TEMPERATURE:-0.2}
+  #     - GEMINI_MAX_TOKENS=${GEMINI_MAX_TOKENS:-2048}
+  #     - GEMINI_TIMEOUT_MS=${GEMINI_TIMEOUT_MS:-45000}
+  #     - AGENTIC_AI_URL=http://platform-agentic-ai:3000
+  #     - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+  #     - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+  #     - LARK_WEBHOOK_URL=${LARK_WEBHOOK_URL:-}
+  #     - ALERT_ENABLED=${ALERT_ENABLED:-true}
+  #     - AUTO_REPLY_ENABLED=${AUTO_REPLY_ENABLED:-true}
+  #     - CRM_DEMO_LLM_FALLBACK=${CRM_DEMO_LLM_FALLBACK:-true}
+  #     - CRM_SKIP_GEMINI=${CRM_SKIP_GEMINI:-true}
+  #     - DEMO_BURST_MAX_MESSAGES=${DEMO_BURST_MAX_MESSAGES:-3}
+  #     - CRM_WORKER_JOB_DELAY_MS=${CRM_WORKER_JOB_DELAY_MS:-1200}
+  #     - GEMINI_HTTP_RETRIES=${GEMINI_HTTP_RETRIES:-3}
+  #     - CRM_EVENTS_CHANNEL=crm:events:leads
+  #     - METRICS_PORT=9100
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 300M
+  #   networks:
+  #     - platform-network
+  #   depends_on:
+  #     platform-redis:
+  #       condition: service_healthy
+  #     platform-postgres:
+  #       condition: service_healthy
+  #     crm-ingestion-api:
+  #       condition: service_started
+  #   labels:
+  #     - "prometheus.scrape=true"
+  #     - "prometheus.job=crm-ai-worker"
+  #     - "prometheus.port=9100"
 
-  # Phase 4 — CRM Demo UI
-  crm-demo-ui:
-    build:
-      context: ../../apps/crm-demo-ui
-      dockerfile: Dockerfile
-    container_name: platform-crm-demo-ui
-    restart: unless-stopped
-    networks:
-      - platform-network
-    depends_on:
-      crm-ingestion-api:
-        condition: service_started
-    deploy:
-      resources:
-        limits:
-          memory: 64M
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=platform-network"
-      - "traefik.http.routers.crm-demo.rule=Host(`crm-demo.nano.platform`)"
-      - "traefik.http.routers.crm-demo.entrypoints=websecure"
-      - "traefik.http.routers.crm-demo.tls=true"
-      - "traefik.http.services.crm-demo.loadbalancer.server.port=80"
-      - "traefik.http.routers.crm-demo-http.rule=Host(`crm-demo.nano.platform`)"
-      - "traefik.http.routers.crm-demo-http.entrypoints=web"
-      - "traefik.http.routers.crm-demo-http.middlewares=redirect-to-https@file"
-      - "traefik.http.routers.crm-demo-http.service=crm-demo"
+  # Phase 4 — CRM Demo UI (DISABLED)
+  # crm-demo-ui:
+  #   build:
+  #     context: ../../apps/crm-demo-ui
+  #     dockerfile: Dockerfile
+  #   container_name: platform-crm-demo-ui
+  #   restart: unless-stopped
+  #   networks:
+  #     - platform-network
+  #   depends_on:
+  #     crm-ingestion-api:
+  #       condition: service_started
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 64M
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.docker.network=platform-network"
+  #     - "traefik.http.routers.crm-demo.rule=Host(`crm-demo.nano.platform`)"
+  #     - "traefik.http.routers.crm-demo.entrypoints=websecure"
+  #     - "traefik.http.routers.crm-demo.tls=true"
+  #     - "traefik.http.services.crm-demo.loadbalancer.server.port=80"
+  #     - "traefik.http.routers.crm-demo-http.rule=Host(`crm-demo.nano.platform`)"
+  #     - "traefik.http.routers.crm-demo-http.entrypoints=web"
+  #     - "traefik.http.routers.crm-demo-http.middlewares=redirect-to-https@file"
+  #     - "traefik.http.routers.crm-demo-http.service=crm-demo"
 
-  # Telegram Bot for Real Estate CRM
-  telegram-bot:
-    build:
-      context: ../../apps/ai-crm-pipeline
-      dockerfile: telegram-bot/Dockerfile
-    container_name: platform-telegram-bot
-    restart: unless-stopped
-    env_file:
-      - ../../../.env
-    environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_CRM_BOT_TOKEN}
-      - REDIS_URL=redis://platform-redis:6379/0
-      - CRM_QUEUE_KEY=crm:queue:messages
-      - GEMINI_API_KEY_1=${GEMINI_API_KEY_1}
-      - GEMINI_API_KEY_2=${GEMINI_API_KEY_2}
-      - GEMINI_API_KEY_3=${GEMINI_API_KEY_3}
-      - GEMINI_API_KEY_4=${GEMINI_API_KEY_4}
-      - GEMINI_API_KEY_5=${GEMINI_API_KEY_5}
-      - GEMINI_API_KEY_6=${GEMINI_API_KEY_6}
-      - GEMINI_API_KEY_7=${GEMINI_API_KEY_7}
-      - GEMINI_API_KEY_8=${GEMINI_API_KEY_8}
-      - GEMINI_API_KEY_9=${GEMINI_API_KEY_9}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
-    deploy:
-      resources:
-        limits:
-          memory: 200M
-    networks:
-      - platform-network
-    depends_on:
-      platform-redis:
-        condition: service_healthy
-      crm-ai-worker:
-        condition: service_started
+  # Telegram Bot for Real Estate CRM (DISABLED)
+  # telegram-bot:
+  #   build:
+  #     context: ../../apps/ai-crm-pipeline
+  #     dockerfile: telegram-bot/Dockerfile
+  #   container_name: platform-telegram-bot
+  #   restart: unless-stopped
+  #   env_file:
+  #     - ../../../.env
+  #   environment:
+  #     - TELEGRAM_BOT_TOKEN=${TELEGRAM_CRM_BOT_TOKEN}
+  #     - REDIS_URL=redis://platform-redis:6379/0
+  #     - CRM_QUEUE_KEY=crm:queue:messages
+  #     - GEMINI_API_KEY_1=${GEMINI_API_KEY_1}
+  #     - GEMINI_API_KEY_2=${GEMINI_API_KEY_2}
+  #     - GEMINI_API_KEY_3=${GEMINI_API_KEY_3}
+  #     - GEMINI_API_KEY_4=${GEMINI_API_KEY_4}
+  #     - GEMINI_API_KEY_5=${GEMINI_API_KEY_5}
+  #     - GEMINI_API_KEY_6=${GEMINI_API_KEY_6}
+  #     - GEMINI_API_KEY_7=${GEMINI_API_KEY_7}
+  #     - GEMINI_API_KEY_8=${GEMINI_API_KEY_8}
+  #     - GEMINI_API_KEY_9=${GEMINI_API_KEY_9}
+  #     - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 200M
+  #   networks:
+  #     - platform-network
+  #   depends_on:
+  #     platform-redis:
+  #       condition: service_healthy
+  #     crm-ai-worker:
+  #       condition: service_started
 
   # Application Layer - GoClaw AI Agent Gateway
   # TEMPORARILY DISABLED - app removed from project
@@ -421,6 +421,44 @@ services:
   #     - "traefik.http.routers.goclaw-http.middlewares=redirect-to-https@file"
   #     - "traefik.http.routers.goclaw-http.service=goclaw"
 
+  # ---------------------------------------------------------------------------
+  # Ops tooling — Ansible Runner (Acer AI Host provisioner)
+  # ---------------------------------------------------------------------------
+  # This service is NOT started with the default stack.
+  # It only runs on-demand via `docker compose run`.
+  #
+  # Usage:
+  #   docker compose -f docker-compose.apps.yml run --rm ansible-runner site.yml
+  #   docker compose -f docker-compose.apps.yml run --rm ansible-runner verify-ssh.yml
+  #   docker compose -f docker-compose.apps.yml run --rm ansible-runner bootstrap-ssh.yml \
+  #     --ask-pass --ask-become-pass
+  # ---------------------------------------------------------------------------
+  ansible-runner:
+    build:
+      context: ../../apps/ansible-ubuntu
+      dockerfile: Dockerfile
+    container_name: platform-ansible-runner
+    restart: "no"
+    profiles:
+      - ops                            # excluded from default `docker compose up`
+    working_dir: /ansible
+    environment:
+      ANSIBLE_HOST_KEY_CHECKING: "False"
+      ANSIBLE_FORCE_COLOR: "1"
+      ACER_HOST: "${ACER_HOST}"
+      ACER_USER: "${ACER_USER}"
+      ACER_SSH_PORT: "${ACER_SSH_PORT}"
+    secrets:
+      - prod_key                       # SSH private key — mounted at /run/secrets/prod_key
+    networks:
+      - platform-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    logging: *default-logging
+
 networks:
   platform-network:
     external: true
@@ -439,4 +477,6 @@ secrets:
   agentic_ai_webhook_secret:
     file: ../secrets/agentic_ai_webhook_secret.txt
   agentic_ai_github_ssh_key:
+    file: ../../../.ssh/prod_key
+  prod_key:
     file: ../../../.ssh/prod_key

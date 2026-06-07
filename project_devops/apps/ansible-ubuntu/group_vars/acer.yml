@@ -1,0 +1,90 @@
+---
+# =============================================================================
+# group_vars/acer.yml — Single source of truth for Acer Ubuntu
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# SSH Bootstrap
+# ---------------------------------------------------------------------------
+ssh_deploy_user: tutinhhao
+
+# Public key content — read directly from the project .ssh directory.
+ssh_public_key: "{{ lookup('file', playbook_dir + '/../../.ssh/prod_key.pub') }}"
+
+# ---------------------------------------------------------------------------
+# ZRAM — maximize RAM for 4GB physical
+# ---------------------------------------------------------------------------
+zram_algorithm: lz4
+zram_size_mb: 6656           # 6.5 GB virtual budget (2:1 compression)
+
+# ---------------------------------------------------------------------------
+# SSD Swap (OOM safety net — lower priority than ZRAM)
+# ---------------------------------------------------------------------------
+swap_file_path: /swapfile
+swap_file_size_mb: 4096
+swap_priority: 10
+
+# ---------------------------------------------------------------------------
+# Kernel tuning
+# ---------------------------------------------------------------------------
+sysctl_settings:
+  vm.swappiness: 100
+  vm.vfs_cache_pressure: 50
+  fs.file-max: 1048576
+  net.core.somaxconn: 65535
+  net.ipv4.tcp_rmem: "4096 87380 16777216"
+  net.ipv4.tcp_wmem: "4096 65536 16777216"
+  vm.overcommit_memory: 1
+
+# ---------------------------------------------------------------------------
+# UFW firewall — EcoIT focused ports
+# ---------------------------------------------------------------------------
+ufw_rules:
+  - { port: 22,   proto: tcp, comment: "SSH" }
+  - { port: 80,   proto: tcp, comment: "HTTP" }
+  - { port: 443,  proto: tcp, comment: "HTTPS" }
+  - { port: 8000, proto: tcp, comment: "EcoIT App BE" }
+  - { port: 3000, proto: tcp, comment: "EcoIT App FE" }
+  - { port: 5432, proto: tcp, comment: "PostgreSQL (LAN only)" }
+  - { port: 6379, proto: tcp, comment: "Redis (LAN only)" }
+  - { port: 9090, proto: tcp, comment: "cAdvisor metrics" }
+  - { port: 9443, proto: tcp, comment: "Portainer HTTPS" }
+  # Uncomment as needed for specific EcoIT task:
+  # - { port: 9000, proto: tcp, comment: "MinIO S3 API" }
+  # - { port: 6333, proto: tcp, comment: "Qdrant REST" }
+
+# ---------------------------------------------------------------------------
+# Docker
+# ---------------------------------------------------------------------------
+docker_data_root: /var/lib/docker
+
+# ---------------------------------------------------------------------------
+# EcoIT App — deploy config
+# ---------------------------------------------------------------------------
+ecoit_app_dir: /opt/ecoit-app
+ecoit_image_tag: "latest"                             # overridden by CD pipeline with git sha
+ecoit_registry: "ghcr.io"
+ecoit_repo_owner: "trantuananhdev"                    # GitHub org/user
+ecoit_app_name: "ecoit-app"
+ecoit_deploy_port: 8000
+ecoit_frontend_port: 3000
+ecoit_env: "production"
+
+# Database (on Acer, managed by Docker)
+ecoit_postgres_db: "ecoit_db"
+ecoit_postgres_user: "ecoit_user"
+ecoit_postgres_password: "{{ lookup('env', 'ECOIT_POSTGRES_PASSWORD') | default('changeme_ecoit_db', true) }}"
+
+# Redis
+ecoit_redis_url: "redis://localhost:6379/0"
+
+# ---------------------------------------------------------------------------
+# Observability
+# ---------------------------------------------------------------------------
+portainer_image: portainer/portainer-ce:2.20.3
+cadvisor_image:  gcr.io/cadvisor/cadvisor:v0.49.1
+
+# AI Stack (optional — enable per task)
+# Uncomment when EcoIT task requires local AI inference
+# ollama_enabled: false
+# qdrant_enabled: false

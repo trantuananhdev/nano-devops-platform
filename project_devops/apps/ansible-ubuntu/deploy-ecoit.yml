@@ -1,0 +1,26 @@
+---
+# =============================================================================
+# deploy-ecoit.yml — Deploy EcoIT App to Acer Ubuntu Server
+# =============================================================================
+# Run this every time there is new code to deploy.
+#
+# Usage:
+#   Deploy:    ansible-playbook -i inventory/hosts.ini deploy-ecoit.yml
+#   Dry-run:   ansible-playbook -i inventory/hosts.ini deploy-ecoit.yml --check
+#   With vars: ansible-playbook -i inventory/hosts.ini deploy-ecoit.yml \
+#                -e "ecoit_image_tag=abc1234 ecoit_deploy_port=8000"
+#
+# Pre-requisites:
+#   - site.yml has been run at least once (Docker installed)
+#   - GHCR image built by CI workflow (.github/workflows/ci.yml)
+#   - ACER_HOST, ACER_USER set in .env or passed as extra vars
+# =============================================================================
+
+- name: "Acer Ubuntu — Deploy EcoIT Application"
+  hosts: acer
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: ecoit_app
+      tags: [ecoit, deploy, app]

@@ -1,0 +1,34 @@
+---
+# =============================================================================
+# bootstrap-ssh.yml — Step 0: One-time SSH key injection
+# =============================================================================
+# Run this ONCE on a fresh Ubuntu 22.04 machine using password auth.
+# After this playbook succeeds, all subsequent runs use prod_key automatically.
+#
+# Prerequisites on the Acer host:
+#   - Ubuntu 22.04 installed, network reachable
+#   - User 'ubuntu' (or root) with a known password
+#   - sshd running and accepting password auth (default on fresh install)
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.ini bootstrap-ssh.yml \
+#     --ask-pass --ask-become-pass
+#
+# Flags explained:
+#   --ask-pass          : Ansible prompts for SSH password (used this ONE time)
+#   --ask-become-pass   : Ansible prompts for sudo password
+# =============================================================================
+
+- name: "Step 0 | One-time SSH key injection & sshd hardening"
+  hosts: acer
+  become: true
+  gather_facts: true
+
+  # Override the key-based connection for this one playbook only.
+  # We connect with password here, so we must NOT use the key file.
+  vars:
+    ansible_ssh_private_key_file: ""
+
+  roles:
+    - role: ssh_bootstrap
+      tags: [ssh_bootstrap]

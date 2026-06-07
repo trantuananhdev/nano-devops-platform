@@ -1,0 +1,49 @@
+---
+# roles/observability/tasks/main.yml
+# Deploy Portainer CE + cAdvisor
+
+- name: "[Observability] Create Portainer data volume"
+  community.docker.docker_volume:
+    name: portainer_data
+    state: present
+
+- name: "[Observability] Deploy Portainer CE"
+  community.docker.docker_container:
+    name: portainer
+    image: "{{ portainer_image }}"
+    restart_policy: unless-stopped
+    ports:
+      - "9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    state: started
+    pull: missing
+
+- name: "[Observability] Deploy cAdvisor"
+  community.docker.docker_container:
+    name: cadvisor
+    image: "{{ cadvisor_image }}"
+    restart_policy: unless-stopped
+    ports:
+      - "9090:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    state: started
+    pull: missing
+
+- name: "[Observability] Wait for Portainer to be reachable"
+  ansible.builtin.uri:
+    url: "https://localhost:9443/api/system/status"
+    validate_certs: false
+    status_code: 200
+    timeout: 10
+  register: _portainer_ready
+  retries: 10
+  delay: 5
+  until: _portainer_ready.status == 200
