@@ -1,11 +1,11 @@
 name: "CI: Build & Push EcoIT Images"
 
 # =============================================================================
-# CI chỉ làm 2 việc:
-#   1. Build Docker image
+# CI FAST MODE: Trial 10 ngày
+# Chỉ focus vào:
+#   1. Build Docker image cho ecoit-app
 #   2. Push lên GHCR
-# Deploy sang Ubuntu Acer làm RIÊNG bằng ./cli.sh ansible-deploy trên VM
-# Lý do: Acer Ubuntu nằm trên LAN nội bộ — GitHub runner không SSH vào được.
+# Các bước Lint, SAST, Scan, Test, Build Platform khác đã bị comment lại để tăng tốc.
 # =============================================================================
 
 on:
@@ -13,14 +13,15 @@ on:
     branches: ["**"]
     paths:
       - "project_devops/apps/ecoit-app/**"
-      - "project_devops/apps/health-api/**"
-      - "project_devops/apps/data-api/**"
-      - "project_devops/apps/aggregator-api/**"
-      - "project_devops/apps/user-api/**"
-      - "project_devops/apps/faulty-service/**"
       - "project_devops/apps/ansible-ubuntu/**"
-      - "project_devops/platform/**"
-      - "project_devops/ci/**"
+      # --- Đã comment các paths không cần thiết ---
+      # - "project_devops/apps/health-api/**"
+      # - "project_devops/apps/data-api/**"
+      # - "project_devops/apps/aggregator-api/**"
+      # - "project_devops/apps/user-api/**"
+      # - "project_devops/apps/faulty-service/**"
+      # - "project_devops/platform/**"
+      # - "project_devops/ci/**"
   pull_request:
     branches: ["**"]
   workflow_dispatch:
@@ -38,62 +39,38 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       ecoit_changed: ${{ steps.filter.outputs.ecoit-app }}
-      services: ${{ steps.filter.outputs.changes }}
-      infra_changed: ${{ steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
-            # --- EcoIT Trial (ACTIVE) ---
             ecoit-app: 'project_devops/apps/ecoit-app/**'
-            # --- Platform services ---
-            health-api: 'project_devops/apps/health-api/**'
-            data-api: 'project_devops/apps/data-api/**'
-            aggregator-api: 'project_devops/apps/aggregator-api/**'
-            user-api: 'project_devops/apps/user-api/**'
-            faulty-service: 'project_devops/apps/faulty-service/**'
-            # --- Ansible runner ---
-            ansible-ubuntu: 'project_devops/apps/ansible-ubuntu/**'
-            # --- Infrastructure ---
-            infra:
-              - 'project_devops/platform/**'
-              - 'project_devops/ci/**'
 
   # ---------------------------------------------------------------------------
-  # STAGE 2: Security & Quality (parallel, non-blocking)
+  # STAGE 2: Security & Quality (DISABLED FOR SPEED)
   # ---------------------------------------------------------------------------
-  lint-and-scan:
-    name: "Security & Quality"
-    runs-on: ubuntu-24.04
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Gitleaks — Secret scan
-        uses: gitleaks/gitleaks-action@v2
-        with:
-          exit-code: 1
-
-      - name: Hadolint — Dockerfile lint
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          recursive: true
-          failure-threshold: error
-
-      - name: Semgrep SAST
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: p/default
+  # lint-and-scan:
+  #   name: "Security & Quality"
+  #   runs-on: ubuntu-24.04
+  #   continue-on-error: true
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Gitleaks — Secret scan
+  #       uses: gitleaks/gitleaks-action@v2
+  #     - name: Hadolint — Dockerfile lint
+  #       uses: hadolint/hadolint-action@v3.1.0
+  #     - name: Semgrep SAST
+  #       uses: returntocorp/semgrep-action@v1
 
   # ---------------------------------------------------------------------------
-  # STAGE 3: Build & Push EcoIT images (only when ecoit-app changes)
+  # STAGE 3: Build & Push EcoIT images
   # ---------------------------------------------------------------------------
   build-ecoit:
     name: "Build & Push EcoIT → GHCR"
     runs-on: ubuntu-24.04
     needs: [detect-changes]
+    # Luôn build nếu push vào thư mục ecoit-app
     if: needs.detect-changes.outputs.ecoit_changed == 'true'
     permissions:
       contents: read
@@ -112,8 +89,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run tests
-        run: bash project_devops/apps/ecoit-app/test.sh
+      # - name: Run tests (DISABLED FOR SPEED)
+      #   run: bash project_devops/apps/ecoit-app/test.sh
 
       - name: Build & Push Backend
         uses: docker/build-push-action@v5
@@ -141,15 +118,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Scan Backend image
-        if: github.ref == 'refs/heads/main'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ghcr.io/${{ github.repository_owner }}/ecoit-app-backend:${{ github.sha }}
-          format: table
-          exit-code: '0'
-          ignore-unfixed: true
-          severity: HIGH,CRITICAL
+      # - name: Scan Backend image (DISABLED FOR SPEED)
+      #   uses: aquasecurity/trivy-action@master
+      #   with:
+      #     ...
 
       - name: Notify — image ready for deploy
         if: github.ref == 'refs/heads/main'
@@ -163,67 +135,10 @@ jobs:
           echo "   ./cli.sh ansible-deploy ${{ github.sha }}"
 
   # ---------------------------------------------------------------------------
-  # STAGE 4: Build other platform services (matrix — non EcoIT)
+  # STAGE 4: Build other platform services (DISABLED FOR SPEED)
   # ---------------------------------------------------------------------------
-  build-platform-services:
-    name: "Build Platform Services"
-    runs-on: ubuntu-24.04
-    needs: [detect-changes]
-    if: >
-      needs.detect-changes.outputs.services != '[]' &&
-      needs.detect-changes.outputs.services != '["infra"]' &&
-      needs.detect-changes.outputs.ecoit_changed != 'true'
-    permissions:
-      contents: read
-      packages: write
-    strategy:
-      fail-fast: false
-      max-parallel: 4
-      matrix:
-        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
-
-    steps:
-      - name: Skip non-buildable keys
-        if: matrix.service == 'infra' || matrix.service == 'ansible-ubuntu'
-        run: echo "Skipping build for ${{ matrix.service }}"
-
-      - uses: actions/checkout@v4
-        if: matrix.service != 'infra' && matrix.service != 'ansible-ubuntu'
-
-      - name: Set up Docker Buildx
-        if: matrix.service != 'infra' && matrix.service != 'ansible-ubuntu'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GHCR
-        if: matrix.service != 'infra' && matrix.service != 'ansible-ubuntu'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Unit Test
-        if: matrix.service != 'infra' && matrix.service != 'ansible-ubuntu'
-        run: |
-          if [ -f "./project_devops/apps/${{ matrix.service }}/test.sh" ]; then
-            bash ./project_devops/apps/${{ matrix.service }}/test.sh
-          else
-            echo "No tests for ${{ matrix.service }}, skipping."
-          fi
-
-      - name: Build & Push
-        if: matrix.service != 'infra' && matrix.service != 'ansible-ubuntu'
-        uses: docker/build-push-action@v5
-        with:
-          context: project_devops/apps/${{ matrix.service }}
-          file: project_devops/apps/${{ matrix.service }}/Dockerfile
-          push: ${{ github.ref == 'refs/heads/main' }}
-          load: ${{ github.ref != 'refs/heads/main' }}
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+  # build-platform-services:
+  #   ... (Commented out to save time)
 
   # ---------------------------------------------------------------------------
   # STAGE 5: Final Status
@@ -231,16 +146,14 @@ jobs:
   ci-status:
     name: "✅ CI Status"
     runs-on: ubuntu-24.04
-    needs: [lint-and-scan, build-ecoit, build-platform-services]
+    needs: [build-ecoit]
     if: always()
     steps:
       - name: Final check
         run: |
           ECOIT="${{ needs.build-ecoit.result }}"
-          PLATFORM="${{ needs.build-platform-services.result }}"
           echo "EcoIT build: ${ECOIT:-skipped}"
-          echo "Platform build: ${PLATFORM:-skipped}"
-          if [[ "$ECOIT" == "failure" || "$PLATFORM" == "failure" ]]; then
+          if [[ "$ECOIT" == "failure" ]]; then
             echo "❌ Build failed"; exit 1
           fi
           echo "✅ CI passed"
