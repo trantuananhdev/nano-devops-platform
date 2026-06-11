@@ -1,0 +1,396 @@
+{
+  "dashboard": {
+    "title": "HDTV AI — Appraisal Workflow Trace",
+    "uid": "hdtv-workflow-v1",
+    "tags": ["hdtv", "workflow", "appraisal", "tools"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {"from": "now-3h", "to": "now"},
+    "timepicker": {},
+    "panels": [
+
+      {
+        "id": 1,
+        "type": "row",
+        "title": "Appraisal Status Overview",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+        "collapsed": false
+      },
+      {
+        "id": 2,
+        "type": "stat",
+        "title": "Total Appraisals",
+        "description": "All appraisals ever submitted",
+        "gridPos": {"h": 4, "w": 3, "x": 0, "y": 1},
+        "targets": [{"expr": "hdtv_appraisals_total or vector(0)", "refId": "A", "legendFormat": "Total"}],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "blue"}]}
+          }
+        }
+      },
+      {
+        "id": 3,
+        "type": "stat",
+        "title": "Appraisals Completed",
+        "gridPos": {"h": 4, "w": 3, "x": 3, "y": 1},
+        "targets": [{"expr": "hdtv_appraisals_total{status=\"completed\"} or vector(0)", "refId": "A"}],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}]}
+          }
+        }
+      },
+      {
+        "id": 4,
+        "type": "stat",
+        "title": "Appraisals Timed Out",
+        "gridPos": {"h": 4, "w": 3, "x": 6, "y": 1},
+        "targets": [{"expr": "hdtv_appraisal_timeouts_total or vector(0)", "refId": "A"}],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}, {"value": 1, "color": "orange"}, {"value": 5, "color": "red"}]}
+          }
+        }
+      },
+      {
+        "id": 5,
+        "type": "stat",
+        "title": "Plans Revised",
+        "description": "Agent plans that required at least one revision",
+        "gridPos": {"h": 4, "w": 3, "x": 9, "y": 1},
+        "targets": [{"expr": "hdtv_agent_plan_revisions_total or vector(0)", "refId": "A"}],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}, {"value": 5, "color": "orange"}, {"value": 20, "color": "red"}]}
+          }
+        }
+      },
+      {
+        "id": 6,
+        "type": "stat",
+        "title": "Critic Rejections",
+        "description": "Drafts rejected by the critic module",
+        "gridPos": {"h": 4, "w": 3, "x": 12, "y": 1},
+        "targets": [{"expr": "hdtv_agent_critic_rejections_total or vector(0)", "refId": "A"}],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}, {"value": 3, "color": "orange"}, {"value": 10, "color": "red"}]}
+          }
+        }
+      },
+      {
+        "id": 7,
+        "type": "stat",
+        "title": "LLM Circuit Breaker",
+        "description": "Circuit breaker trips (OPEN state activations)",
+        "gridPos": {"h": 4, "w": 3, "x": 15, "y": 1},
+        "targets": [{"expr": "sum(hdtv_llm_circuit_trips_total) or vector(0)", "refId": "A"}],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}, {"value": 1, "color": "orange"}, {"value": 3, "color": "red"}]}
+          }
+        }
+      },
+      {
+        "id": 8,
+        "type": "stat",
+        "title": "HITL Clarifications",
+        "description": "Human-in-the-loop pauses triggered",
+        "gridPos": {"h": 4, "w": 3, "x": 18, "y": 1},
+        "targets": [{"expr": "hdtv_hitl_clarifications_total or vector(0)", "refId": "A"}],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "blue"}]}
+          }
+        }
+      },
+      {
+        "id": 9,
+        "type": "stat",
+        "title": "MCP Calls",
+        "description": "Total MCP tool calls from external agents",
+        "gridPos": {"h": 4, "w": 3, "x": 21, "y": 1},
+        "targets": [{"expr": "sum(hdtv_mcp_calls_total) or vector(0)", "refId": "A"}],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "blue"}]}
+          }
+        }
+      },
+
+      {
+        "id": 10,
+        "type": "row",
+        "title": "LLM Calls per Role (Local vs Gemini)",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5},
+        "collapsed": false
+      },
+      {
+        "id": 11,
+        "type": "timeseries",
+        "title": "LLM Call Rate by Role — Local (Gemma)",
+        "description": "Calls/s per agent role routed to Ubuntu llama-server",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_llm_calls_total{backend=\"local\", status=\"ok\"}[5m])) by (role)",
+            "refId": "A",
+            "legendFormat": "{{role}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "reqps", "color": {"mode": "palette-classic"}}
+        },
+        "options": {
+          "tooltip": {"mode": "multi"},
+          "legend": {"displayMode": "table", "placement": "bottom"}
+        }
+      },
+      {
+        "id": 12,
+        "type": "timeseries",
+        "title": "LLM Call Rate by Role — Gemini Flash",
+        "description": "Calls/s per agent role routed to Gemini Flash API",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_llm_calls_total{backend=\"gemini\", status=\"ok\"}[5m])) by (role)",
+            "refId": "A",
+            "legendFormat": "{{role}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "reqps", "color": {"mode": "palette-classic"}}
+        },
+        "options": {
+          "tooltip": {"mode": "multi"},
+          "legend": {"displayMode": "table", "placement": "bottom"}
+        }
+      },
+
+      {
+        "id": 13,
+        "type": "row",
+        "title": "Tool Execution Duration Distribution",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14},
+        "collapsed": false
+      },
+      {
+        "id": 14,
+        "type": "heatmap",
+        "title": "Tool Execution Duration Heatmap (all tools)",
+        "description": "Distribution of tool execution times in seconds",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 15},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_tool_duration_seconds_bucket[5m])) by (le)",
+            "refId": "A",
+            "legendFormat": "{{le}}"
+          }
+        ],
+        "fieldConfig": {"defaults": {"unit": "s"}},
+        "options": {
+          "calculate": false,
+          "cellGap": 2,
+          "color": {"mode": "scheme", "scheme": "Oranges", "fill": "dark-orange"}
+        }
+      },
+      {
+        "id": 15,
+        "type": "timeseries",
+        "title": "Tool P95 Latency by Tool Name",
+        "description": "P95 execution time per tool over last 5 min window",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 15},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(hdtv_tool_duration_seconds_bucket[5m])) by (le, tool_name))",
+            "refId": "A",
+            "legendFormat": "P95 {{tool_name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "s", "color": {"mode": "palette-classic"}}
+        }
+      },
+
+      {
+        "id": 16,
+        "type": "row",
+        "title": "Appraisal Workflow Throughput",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 23},
+        "collapsed": false
+      },
+      {
+        "id": 17,
+        "type": "timeseries",
+        "title": "Appraisal Start/Complete Rate",
+        "description": "Appraisals started vs completed per minute",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "rate(hdtv_appraisals_total{status=\"started\"}[5m]) * 60",
+            "refId": "A",
+            "legendFormat": "Started/min"
+          },
+          {
+            "expr": "rate(hdtv_appraisals_total{status=\"completed\"}[5m]) * 60",
+            "refId": "B",
+            "legendFormat": "Completed/min"
+          },
+          {
+            "expr": "rate(hdtv_appraisal_timeouts_total[5m]) * 60",
+            "refId": "C",
+            "legendFormat": "Timed out/min"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "short", "color": {"mode": "palette-classic"}}
+        },
+        "options": {
+          "tooltip": {"mode": "multi"},
+          "legend": {"displayMode": "list"}
+        }
+      },
+      {
+        "id": 18,
+        "type": "piechart",
+        "title": "Tool Call Share by Tool Name",
+        "description": "Which tools are called most often in appraisals",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "sum(hdtv_tool_calls_total) by (tool_name)",
+            "refId": "A",
+            "legendFormat": "{{tool_name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"color": {"mode": "palette-classic"}}
+        },
+        "options": {
+          "pieType": "donut",
+          "legend": {"displayMode": "table", "placement": "right"}
+        }
+      },
+
+      {
+        "id": 19,
+        "type": "row",
+        "title": "Audit Log Feed — Recent Tool Calls",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 32},
+        "collapsed": false
+      },
+      {
+        "id": 20,
+        "type": "timeseries",
+        "title": "Tool Calls Rate (success vs error)",
+        "description": "Rate of tool calls split by success/error status",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 33},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_tool_calls_total{status=\"ok\"}[2m])) by (tool_name)",
+            "refId": "A",
+            "legendFormat": "OK: {{tool_name}}"
+          },
+          {
+            "expr": "sum(rate(hdtv_tool_calls_total{status=\"error\"}[2m])) by (tool_name)",
+            "refId": "B",
+            "legendFormat": "ERR: {{tool_name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "reqps", "color": {"mode": "palette-classic"}}
+        }
+      },
+      {
+        "id": 21,
+        "type": "timeseries",
+        "title": "Tool Retries & Timeouts",
+        "description": "T-30: Retry and timeout events from execution harness",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 33},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_tool_retries_total[5m])) by (tool_name)",
+            "refId": "A",
+            "legendFormat": "Retries: {{tool_name}}"
+          },
+          {
+            "expr": "sum(rate(hdtv_tool_timeouts_total[5m])) by (tool_name)",
+            "refId": "B",
+            "legendFormat": "Timeouts: {{tool_name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "reqps", "color": {"mode": "palette-classic"}}
+        }
+      },
+
+      {
+        "id": 22,
+        "type": "row",
+        "title": "Circuit Breaker & LLM Node Status",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 41},
+        "collapsed": false
+      },
+      {
+        "id": 23,
+        "type": "timeseries",
+        "title": "Circuit Breaker Trips by Backend",
+        "description": "Cumulative circuit breaker OPEN events per LLM backend",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 42},
+        "targets": [
+          {
+            "expr": "sum(increase(hdtv_llm_circuit_trips_total[5m])) by (backend)",
+            "refId": "A",
+            "legendFormat": "{{backend}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "short", "color": {"mode": "palette-classic"}}
+        }
+      },
+      {
+        "id": 24,
+        "type": "timeseries",
+        "title": "LLM Node (Ubuntu) — CPU & Memory",
+        "description": "T-31/T-32: node-exporter metrics from Ubuntu LLM node. Requires llm-node Prometheus scrape job.",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 42},
+        "targets": [
+          {
+            "expr": "100 - (avg(rate(node_cpu_seconds_total{job=\"llm-node\",mode=\"idle\"}[5m])) * 100)",
+            "refId": "A",
+            "legendFormat": "CPU Usage %"
+          },
+          {
+            "expr": "(node_memory_MemTotal_bytes{job=\"llm-node\"} - node_memory_MemAvailable_bytes{job=\"llm-node\"}) / node_memory_MemTotal_bytes{job=\"llm-node\"} * 100",
+            "refId": "B",
+            "legendFormat": "Memory Usage %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "percent", "max": 100, "color": {"mode": "palette-classic"}},
+          "overrides": [
+            {"matcher": {"id": "byName", "options": "CPU Usage %"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]},
+            {"matcher": {"id": "byName", "options": "Memory Usage %"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}]}
+          ]
+        }
+      }
+
+    ]
+  },
+  "folderId": 0,
+  "folderUid": "hdtv-ai-platform",
+  "message": "T-34: HDTV Workflow Observability Dashboard",
+  "overwrite": true
+}

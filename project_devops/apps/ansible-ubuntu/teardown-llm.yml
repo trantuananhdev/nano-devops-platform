@@ -1,0 +1,116 @@
+---
+# =============================================================================
+# teardown-llm.yml — Wipe the LLM stack from the Ubuntu node
+# =============================================================================
+# T-55: Kết nối tutinhhao → become root cho destructive operations.
+# Stops and removes all Docker containers, volumes, and data directories
+# provisioned by deploy-llm.yml. The host OS, Docker Engine, SSH config are
+# left intact — only the LLM workload layer is removed.
+#
+# After teardown, run deploy-llm.yml to get a clean install:
+#   ./cli.sh ansible-teardown-llm
+#   ./cli.sh ansible-deploy-llm
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.ini teardown-llm.yml
+#
+# To also wipe Docker Engine itself (full nuclear reset):
+#   ansible-playbook -i inventory/hosts.ini teardown-llm.yml -e "wipe_docker=true"
+# =============================================================================
+
+- name: "Ubuntu LLM Node — Teardown LLM Stack"
+  hosts: acer
+  become: true       # tutinhhao → sudo cho docker prune, rm system dirs
+  gather_facts: false
+
+  vars:
+    llm_app_dir: /opt/llm-node
+    wipe_docker: false    # set true only for full nuclear reset
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Stop & remove Docker Compose stack
+    # -------------------------------------------------------------------------
+    - name: "[LLM Teardown] Check if LLM stack directory exists"
+      ansible.builtin.stat:
+        path: "{{ llm_app_dir }}"
+      register: _llm_stack_dir
+
+    - name: "[LLM Teardown] Bring down Docker Compose stack (with volumes)"
+      community.docker.docker_compose_v2:
+        project_src: "{{ llm_app_dir }}"
+        state: absent
+        remove_volumes: true
+        remove_orphans: true
+      when: _llm_stack_dir.stat.exists
+      ignore_errors: true   # tolerate if compose file is missing
+
+    # -------------------------------------------------------------------------
+    # 2. Prune dangling images and build cache (reclaim disk space)
+    # -------------------------------------------------------------------------
+    - name: "[LLM Teardown] Prune unused Docker images"
+      ansible.builtin.command: docker image prune -f
+      changed_when: true
+      ignore_errors: true
+
+    - name: "[LLM Teardown] Prune build cache"
+      ansible.builtin.command: docker builder prune -f
+      changed_when: true
+      ignore_errors: true
+
+    # -------------------------------------------------------------------------
+    # 3. Wipe data directories
+    # -------------------------------------------------------------------------
+    - name: "[LLM Teardown] Remove LLM stack directory"
+      ansible.builtin.file:
+        path: "{{ llm_app_dir }}"
+        state: absent
+
+    # -------------------------------------------------------------------------
+    # 4. Optional: uninstall Docker Engine (nuclear reset)
+    # -------------------------------------------------------------------------
+    - name: "[LLM Teardown] (Nuclear) Stop Docker daemon"
+      ansible.builtin.systemd:
+        name: docker
+        state: stopped
+        enabled: false
+      when: wipe_docker | bool
+      ignore_errors: true
+
+    - name: "[LLM Teardown] (Nuclear) Uninstall Docker packages"
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: absent
+        purge: true
+      when: wipe_docker | bool
+
+    - name: "[LLM Teardown] (Nuclear) Remove Docker data root"
+      ansible.builtin.file:
+        path: /var/lib/docker
+        state: absent
+      when: wipe_docker | bool
+
+    - name: "[LLM Teardown] (Nuclear) Remove Docker apt repo"
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/docker.list
+        state: absent
+      when: wipe_docker | bool
+
+    # -------------------------------------------------------------------------
+    # 5. Summary
+    # -------------------------------------------------------------------------
+    - name: "[LLM Teardown] Done"
+      ansible.builtin.debug:
+        msg: |
+          ✅  LLM Teardown complete.
+              Removed : LLM stack containers, volumes, data directories
+              Kept    : Docker Engine, SSH config, base OS
+              {% if wipe_docker | bool %}
+              ⚠️   Docker Engine also removed (wipe_docker=true).
+              {% endif %}
+              Next    : run './cli.sh ansible-deploy-llm' to reinstall from scratch.

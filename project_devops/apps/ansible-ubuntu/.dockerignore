@@ -1,12 +1,17 @@
-# Ansible artefacts — never commit these
+# Ansible artefacts
 *.retry
 .ansible/
 __pycache__/
 
-# .ssh/ is INCLUDED in build context intentionally:
-#   - prod_key is baked into image as FALLBACK
-#   - Docker secret /run/secrets/prod_key takes PRIORITY at runtime
-#   - prod_key is NOT committed to git (covered by root .gitignore)
+# SSH keys:
+#   prod_deployer     → EXCLUDED (private key — never bake into image)
+#                       provided at runtime via Docker secret /run/secrets/prod_deployer
+#   prod_deployer.pub → INCLUDED (public key — safe, needed for reference)
+.ssh/prod_deployer
+
+# Legacy key names (kept for safety in case old files exist)
+.ssh/prod_key
+.ssh/prod_key.pub
 
 # Local override inventory
 inventory/hosts.local.ini

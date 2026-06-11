@@ -1,51 +1,110 @@
 ---
 # =============================================================================
-# verify-ssh.yml — Confirm prod_key access & print host info
+# verify-ssh.yml — Xác nhận dual-user SSH access (root + tutinhhao)
 # =============================================================================
-# Run AFTER bootstrap-ssh.yml has completed.
-# Connects using prod_key (no password), then prints a full host summary.
+# T-55: Kiểm tra kết nối SSH cho CẢ 2 user qua prod_deployer key.
+# Kết nối mặc định: tutinhhao (từ group_vars).
+# Sau đó test sudo → root, docker group, sshd config.
 #
 # Usage:
-#   ansible-playbook -i inventory/hosts.ini verify-ssh.yml
+#   ./cli.sh ansible-ping
 # =============================================================================
 
-- name: "Verify SSH key access & host diagnostics"
+- name: "Verify dual-user SSH access & host diagnostics"
   hosts: acer
-  become: false      # verification runs as the deploy user, no sudo needed
+  become: false            # Bắt đầu KHÔNG sudo để verify tutinhhao trước
   gather_facts: true
+  vars:
+    ansible_become: false
 
   tasks:
-    - name: "[Verify] Confirm connected user matches deploy user"
+    # ─────────────────────────────────────────────────────────────────────────
+    # 1. Verify tutinhhao SSH access (kết nối mặc định)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: "[Verify] Confirm connected as tutinhhao"
       ansible.builtin.command: whoami
       register: _whoami
       changed_when: false
 
-    - name: "[Verify] Get user groups and UID/GID"
-      ansible.builtin.command: id
-      register: _id
-      changed_when: false
+    - name: "[Verify] Assert connected user is tutinhhao"
+      ansible.builtin.assert:
+        that: _whoami.stdout == 'tutinhhao'
+        fail_msg: "Kết nối không phải tutinhhao — got '{{ _whoami.stdout }}'. Kiểm tra group_vars/acer.yml"
+        success_msg: "✅ SSH tutinhhao OK"
 
-    - name: "[Verify] Check sudo access (passwordless)"
-      ansible.builtin.command: sudo -n true
-      register: _sudo_check
-      changed_when: false
-      failed_when: _sudo_check.rc != 0
-
-    - name: "[Verify] Confirm authorized_keys contains prod_key"
-      ansible.builtin.command: >
-        grep -c "trantuananhdev" /home/{{ ssh_deploy_user }}/.ssh/authorized_keys
-      register: _key_check
-      changed_when: false
-      failed_when: _key_check.rc != 0
-
-    - name: "[Verify] Check sshd password auth is disabled"
-      ansible.builtin.command: >
-        grep "^PasswordAuthentication no" /etc/ssh/sshd_config
-      register: _sshd_check
-      changed_when: false
+    # ─────────────────────────────────────────────────────────────────────────
+    # 2. Verify sudo → root access
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: "[Verify] Test sudo escalation to root"
+      ansible.builtin.command: whoami
       become: true
-      failed_when: _sshd_check.rc != 0
+      register: _sudo_whoami
+      changed_when: false
+      vars:
+        ansible_become: true
 
+    - name: "[Verify] Assert sudo whoami is root"
+      ansible.builtin.assert:
+        that: _sudo_whoami.stdout == 'root'
+        fail_msg: "❌ sudo thất bại — cần thêm tutinhhao vào sudoers (NOPASSWD)"
+        success_msg: "✅ Sudo → root OK"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 3. Verify tutinhhao user properties
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: "[Verify] Get tutinhhao groups"
+      ansible.builtin.command: id tutinhhao
+      register: _user_id
+      changed_when: false
+
+    - name: "[Verify] Check tutinhhao in docker group"
+      ansible.builtin.set_fact:
+        _in_docker: "{{ 'docker' in _user_id.stdout }}"
+
+    - name: "[Verify] Check tutinhhao authorized_keys"
+      ansible.builtin.stat:
+        path: /home/tutinhhao/.ssh/authorized_keys
+      register: _user_authkeys
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 4. Verify root authorized_keys (qua sudo)
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: "[Verify] Check root authorized_keys count"
+      ansible.builtin.shell: >
+        test -f /root/.ssh/authorized_keys && wc -l < /root/.ssh/authorized_keys
+      become: true
+      register: _root_key_check
+      changed_when: false
+      failed_when: _root_key_check.rc != 0
+      vars:
+        ansible_become: true
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 5. Check sshd config
+    # ─────────────────────────────────────────────────────────────────────────
+    - name: "[Verify] Check sshd PermitRootLogin"
+      ansible.builtin.command: >
+        grep -E "^PermitRootLogin" /etc/ssh/sshd_config
+      become: true
+      register: _sshd_root
+      changed_when: false
+      failed_when: false   # informational
+      vars:
+        ansible_become: true
+
+    - name: "[Verify] Check sshd PasswordAuthentication"
+      ansible.builtin.command: >
+        grep -E "^PasswordAuthentication" /etc/ssh/sshd_config
+      become: true
+      register: _sshd_password
+      changed_when: false
+      failed_when: false   # informational
+      vars:
+        ansible_become: true
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 6. System info
+    # ─────────────────────────────────────────────────────────────────────────
     - name: "[Verify] Collect system info"
       ansible.builtin.command: "{{ item.cmd }}"
       register: _sysinfo
@@ -56,23 +115,32 @@
         - { label: "Uptime",    cmd: "uptime -p" }
         - { label: "Memory",    cmd: "free -h --si" }
         - { label: "Disk",      cmd: "df -h /" }
+        - { label: "Docker",    cmd: "docker --version" }
       changed_when: false
       loop_control:
         label: "{{ item.label }}"
+      ignore_errors: true
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # 7. Final report
+    # ─────────────────────────────────────────────────────────────────────────
     - name: "[Verify] Print host diagnostic report"
       ansible.builtin.debug:
         msg: |
           ══════════════════════════════════════════════════
           ✅  SSH Verification — {{ ansible_host }}
           ══════════════════════════════════════════════════
-          Connected user : {{ _whoami.stdout }}
-          Identity (id)  : {{ _id.stdout }}
-          Sudo           : {{ 'PASS — passwordless sudo confirmed' if _sudo_check.rc == 0 else 'FAIL' }}
-          prod_key found : {{ 'YES (' + _key_check.stdout + ' match)' if _key_check.rc == 0 else 'NO — re-run bootstrap-ssh.yml' }}
-          Password auth  : {{ 'DISABLED ✓' if _sshd_check.rc == 0 else 'still enabled — check sshd_config' }}
+          Connected user : {{ _whoami.stdout }}  (tutinhhao)
+          Sudo → root    : {{ _sudo_whoami.stdout }}  ✅
+          ──────────────────────────────────────────────────
+          tutinhhao keys : {{ _user_authkeys.stat.exists | ternary('✅ có', '❌ CHƯA CÓ') }}
+          Root keys      : {{ _root_key_check.stdout | trim }} key(s) in authorized_keys
+          Docker group   : {{ _in_docker | ternary('✅ CÓ', '⚠️  CHƯA — chạy ansible-bootstrap') }}
+          ──────────────────────────────────────────────────
+          PermitRootLogin     : {{ _sshd_root.stdout | default('(chưa set)') }}
+          PasswordAuthentication: {{ _sshd_password.stdout | default('(chưa set)') }}
           ──────────────────────────────────────────────────
           {% for item in _sysinfo.results %}
-          {{ '%-14s' | format(item.item.label + ':') }} {{ item.stdout }}
+          {{ '%-14s' | format(item.item.label + ':') }} {{ item.stdout | default('N/A') }}
           {% endfor %}
           ══════════════════════════════════════════════════

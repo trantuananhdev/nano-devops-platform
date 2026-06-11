@@ -119,4 +119,4 @@ fi
 } > "$READY"
 
 log "=== Platform ready ($VM_IP) ==="
-log "    EcoIT docs: ai-system/AI_BOOT.md | ai-system/ECOIT_TASK.md"
+log "    HDTV docs: ai-system/AI_BOOT.md | ai-system/HDTV_TASK.md"

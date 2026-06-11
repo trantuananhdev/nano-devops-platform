@@ -20,7 +20,7 @@
 
 - name: "Acer AI Host — Teardown AI Stack"
   hosts: acer
-  become: true
+  become: true       # tutinhhao → sudo lên root để xóa/dừng tài nguyên hệ thống
   gather_facts: false
 
   vars:

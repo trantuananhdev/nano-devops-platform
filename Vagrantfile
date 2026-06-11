@@ -20,6 +20,17 @@ unless File.file?(env_path)
   end
 end
 
+validate_env_script = File.join(
+  repo_root, "project_devops", "platform", "infra", "scripts", "validate_env.sh"
+)
+if File.file?(validate_env_script)
+  puts "[Vagrant] Validating .env (validate_env.sh)..."
+  validate_ok = system("bash", validate_env_script)
+  abort "[Vagrant] ENV validation failed — fix .env (see .env.example) and retry" unless validate_ok
+else
+  puts "[Vagrant] WARN: validate_env.sh not found — skipping pre-flight"
+end
+
 # ---------------------------------------------------------------------------
 # Platform domains (Alpine VM internal + host /etc/hosts)
 # EcoIT app deployed to Acer Ubuntu — not added here
@@ -28,6 +39,7 @@ PLATFORM_DOMAINS = %w[
   grafana.nano.platform prometheus.nano.platform
   aggregator.nano.platform
   data.nano.platform health.nano.platform user.nano.platform
+  hdtv.nano.platform
 ].freeze
 
 # ---------------------------------------------------------------------------
@@ -149,31 +161,37 @@ EOF
       file.destination = "/tmp/.env_copy"
     end
 
+    config.vm.provision "file", run: "always" do |file|
+      file.source      = "cli.sh"
+      file.destination = "/tmp/cli_copy"
+    end
+
     config.vm.provision "shell", run: "always", inline: <<-SHELL
       set -eux
       DEST="/opt/platform/src/nano-project-devops"
       mkdir -p $DEST
-      rm -rf $DEST/project_devops $DEST/.env
+      rm -rf $DEST/project_devops $DEST/.env $DEST/cli.sh
       mv /tmp/project_devops_copy $DEST/project_devops
       mv /tmp/.env_copy $DEST/.env
+      mv /tmp/cli_copy $DEST/cli.sh
+      chmod +x $DEST/cli.sh
 
       # SSH keys: move to DEST/.ssh + fix permissions
       if [ -d /tmp/.ssh_copy ]; then
         rm -rf $DEST/.ssh
         mv /tmp/.ssh_copy $DEST/.ssh
         chmod 700 $DEST/.ssh
-        [ -f $DEST/.ssh/prod_key ] && chmod 600 $DEST/.ssh/prod_key
-        [ -f $DEST/.ssh/prod_key.pub ] && chmod 644 $DEST/.ssh/prod_key.pub
+        [ -f $DEST/.ssh/prod_deployer ] && chmod 600 $DEST/.ssh/prod_deployer
+        [ -f $DEST/.ssh/prod_deployer.pub ] && chmod 644 $DEST/.ssh/prod_deployer.pub
 
-        # Sync .ssh into ansible-ubuntu build context (for image bake fallback)
+        # Sync prod_deployer into ansible-ubuntu build context (image bake fallback)
         ANSIBLE_DIR="$DEST/project_devops/apps/ansible-ubuntu"
         if [ -d "$ANSIBLE_DIR" ]; then
           mkdir -p "$ANSIBLE_DIR/.ssh"
-          cp -f $DEST/.ssh/prod_key "$ANSIBLE_DIR/.ssh/prod_key" 2>/dev/null || true
-          cp -f $DEST/.ssh/prod_key.pub "$ANSIBLE_DIR/.ssh/prod_key.pub" 2>/dev/null || true
+          # Only copy pub key into image — private key goes via Docker secret
+          cp -f $DEST/.ssh/prod_deployer.pub "$ANSIBLE_DIR/.ssh/prod_deployer.pub" 2>/dev/null || true
           chmod 700 "$ANSIBLE_DIR/.ssh"
-          chmod 600 "$ANSIBLE_DIR/.ssh/prod_key" 2>/dev/null || true
-          echo "[BOOTSTRAP] SSH key synced to ansible build context"
+          echo "[BOOTSTRAP] SSH pub key synced to ansible build context"
         fi
       fi
 
@@ -181,8 +199,7 @@ EOF
       find $DEST/project_devops -type f -name "*.sh" -print0 | xargs -0 dos2unix
       if id deploy > /dev/null 2>&1; then chown -R deploy:platform_group $DEST; chmod -R 775 $DEST; fi
       # Re-fix key perms after chown (must be strict)
-      [ -f $DEST/.ssh/prod_key ] && chmod 600 $DEST/.ssh/prod_key || true
-      [ -f $DEST/project_devops/apps/ansible-ubuntu/.ssh/prod_key ] && chmod 600 $DEST/project_devops/apps/ansible-ubuntu/.ssh/prod_key || true
+      [ -f $DEST/.ssh/prod_deployer ] && chmod 600 $DEST/.ssh/prod_deployer || true
       echo "[BOOTSTRAP] PROD-LIKE copy OK"
     SHELL
   else
@@ -213,24 +230,13 @@ EOF
   end
 
   # ---------------------------------------------------------------------------
-  # EcoIT readiness check — verify Acer ping (background, non-blocking)
+  # Auto-run HDTV full deployment (idempotent)
   # ---------------------------------------------------------------------------
   config.vm.provision "shell", run: "always", inline: <<-SHELL
     set -e
-    rm -f /opt/platform/.platform-ready
-    # Verify ansible-runner can be built (non-blocking)
-    echo "[ECOIT] Platform ready. Run ansible-runner to provision Acer Ubuntu."
-    echo "[ECOIT] See: /opt/platform/src/nano-project-devops/project_devops/apps/ansible-ubuntu/"
-
-    # Non-blocking Acer ping check
-    ACER_IP=$(grep ACER_HOST /opt/platform/src/nano-project-devops/.env 2>/dev/null | cut -d= -f2 | tr -d '"\r ')
-    if [ -n "$ACER_IP" ]; then
-      if ping -c 1 -W 2 "$ACER_IP" > /dev/null 2>&1; then
-        echo "[NET] ✅ Acer reachable at $ACER_IP"
-      else
-        echo "[NET] ⚠️  Acer $ACER_IP not reachable — check WiFi/LAN connection"
-      fi
-    fi
+    echo "[HDTV] Starting auto-deployment (idempotent)..."
+    chmod +x /tmp/infra/scripts/vagrant/hdtv_auto_deploy.sh
+    /tmp/infra/scripts/vagrant/hdtv_auto_deploy.sh
   SHELL
 
   config.vm.provision "shell", run: "always", inline: <<-SHELL
@@ -274,13 +280,26 @@ Dev workstation (Alpine VM):
   Grafana:    https://grafana.nano.platform
   Prometheus: https://prometheus.nano.platform
 
-EcoIT Deploy → Acer Ubuntu:
+HDTV AI Platform:
+  FE:  http://<VM_IP>:3080  (https://hdtv.nano.platform)
+  API: http://<VM_IP>:8000/docs
+
+Ubuntu LLM Node (Ansible từ Alpine VM):
   vagrant ssh
   cd /opt/platform/src/nano-project-devops
-  ./cli.sh ansible-bootstrap   # First time only
-  ./cli.sh ansible-deploy      # Deploy EcoIT app
 
-Docs: ai-system/AI_BOOT.md | ai-system/ECOIT_TASK.md
+  # Lần đầu — sau khi bạn inject prod_deployer.pub vào Ubuntu (✅ đã done):
+  ./cli.sh ansible-test-users # Test SSH access cho cả 2 user root & tutinhhao
+  ./cli.sh ansible-ping       # Verify SSH tutinhhao + sudo root
+  ./cli.sh ansible-bootstrap  # Setup Docker, zram, UFW, sudoers, SSH hardening
+  ./cli.sh ansible-deploy-llm # Deploy Gemma 4 llama-server
+
+  # Idempotent (chạy lại bất cứ lúc nào):
+  ./cli.sh hdtv-up
+  ./cli.sh hdtv-migrate
+  ./cli.sh hdtv-seed
+
+Docs: ai-system/AI_BOOT.md | ai-system/HDTV_TASK.md
 ==================================================
 
 MSG

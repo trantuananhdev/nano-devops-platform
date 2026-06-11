@@ -1,1 +1,0 @@
-# EcoIT App — Backend

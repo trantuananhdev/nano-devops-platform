@@ -1,0 +1,14 @@
+---
+description: HDTV AI prototype frontend conventions
+globs: project_devops/apps/hdtv-ai-prototype/**
+alwaysApply: false
+---
+
+# HDTV Frontend Rules
+
+- Vue 3 Composition API with `<script setup>`
+- Pinia for state; Axios for REST; `services/ws.js` for WebSocket
+- WebSocket: exponential backoff auto-reconnect; on reconnect fetch latest state via REST
+- Do NOT alter CSS variables or `.glass-panel` designs
+- Replace inline `ref()` mock data with Pinia store populated from API
+- Priority views: SplitViewWorkspace, DossierListView, SystemAdminView, AlertsView

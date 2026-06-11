@@ -1,0 +1,107 @@
+---
+# =============================================================================
+# roles/hdtv_app/tasks/main.yml
+# =============================================================================
+# Deploy HDTV AI Platform stack lên Acer Ubuntu (nếu cần chạy trực tiếp trên Acer).
+# Thông thường HDTV chạy trên Alpine VM — file này để dự phòng / production mode.
+#
+# Usage (qua site.yml hoặc deploy playbook):
+#   ansible-playbook -i inventory/hosts.ini site.yml --tags hdtv
+# =============================================================================
+
+- name: "HDTV | Create app directory"
+  ansible.builtin.file:
+    path: "{{ hdtv_app_dir | default('/opt/hdtv-app') }}"
+    state: directory
+    owner: "{{ ssh_deploy_user }}"
+    group: "{{ ssh_deploy_user }}"
+    mode: "0755"
+
+- name: "HDTV | Create data directories"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ssh_deploy_user }}"
+    group: "{{ ssh_deploy_user }}"
+    mode: "0755"
+  loop:
+    - "{{ hdtv_app_dir | default('/opt/hdtv-app') }}/data/postgres"
+    - "{{ hdtv_app_dir | default('/opt/hdtv-app') }}/data/chroma"
+    - "{{ hdtv_app_dir | default('/opt/hdtv-app') }}/data/minio"
+    - "{{ hdtv_app_dir | default('/opt/hdtv-app') }}/data/meili"
+    - "{{ hdtv_app_dir | default('/opt/hdtv-app') }}/rag-docs"
+    - "{{ hdtv_app_dir | default('/opt/hdtv-app') }}/backups"
+    - "{{ hdtv_app_dir | default('/opt/hdtv-app') }}/logs"
+
+- name: "HDTV | Template .env file"
+  ansible.builtin.template:
+    src: ".env.hdtv.j2"
+    dest: "{{ hdtv_app_dir | default('/opt/hdtv-app') }}/.env"
+    owner: "{{ ssh_deploy_user }}"
+    group: "{{ ssh_deploy_user }}"
+    mode: "0600"
+  no_log: true
+  when: hdtv_template_env | default(false)
+
+- name: "HDTV | Copy docker-compose file"
+  ansible.builtin.copy:
+    src: "../../../../apps/hdtv-ai-platform/docker-compose.hdtv.yml"
+    dest: "{{ hdtv_app_dir | default('/opt/hdtv-app') }}/docker-compose.yml"
+    owner: "{{ ssh_deploy_user }}"
+    group: "{{ ssh_deploy_user }}"
+    mode: "0644"
+
+- name: "HDTV | Login to GHCR"
+  community.docker.docker_login:
+    registry_url: "ghcr.io"
+    username: "{{ lookup('env', 'GITHUB_REPOSITORY_OWNER') | default('trantuananhdev') }}"
+    password: "{{ lookup('env', 'GITHUB_TOKEN') }}"
+  no_log: true
+  ignore_errors: true
+
+- name: "HDTV | Pull latest images"
+  community.docker.docker_compose_v2:
+    project_src: "{{ hdtv_app_dir | default('/opt/hdtv-app') }}"
+    pull: always
+    state: present
+  become_user: "{{ ssh_deploy_user }}"
+  ignore_errors: true
+
+- name: "HDTV | Deploy with docker compose up"
+  community.docker.docker_compose_v2:
+    project_src: "{{ hdtv_app_dir | default('/opt/hdtv-app') }}"
+    state: present
+    remove_orphans: true
+    recreate: auto
+  become_user: "{{ ssh_deploy_user }}"
+  register: hdtv_compose_result
+
+- name: "HDTV | Wait for API health"
+  ansible.builtin.uri:
+    url: "http://localhost:8000/api/v1/health"
+    status_code: 200
+    timeout: 5
+  register: hdtv_health_check
+  retries: 12
+  delay: 5
+  until: hdtv_health_check.status == 200
+  ignore_errors: true
+
+- name: "HDTV | Health check result"
+  ansible.builtin.debug:
+    msg: >
+      {% if hdtv_health_check.status is defined and hdtv_health_check.status == 200 %}
+      ✅ HDTV API healthy at http://{{ ansible_host }}:8000/api/v1/health
+      {% else %}
+      ⚠️  Health check failed — check logs: docker compose -f {{ hdtv_app_dir | default('/opt/hdtv-app') }}/docker-compose.yml logs hdtv-api
+      {% endif %}
+
+- name: "HDTV | Show running containers"
+  ansible.builtin.command:
+    cmd: "docker compose -f {{ hdtv_app_dir | default('/opt/hdtv-app') }}/docker-compose.yml ps"
+  register: hdtv_compose_ps
+  changed_when: false
+
+- name: "HDTV | Print container status"
+  ansible.builtin.debug:
+    var: hdtv_compose_ps.stdout_lines

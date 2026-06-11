@@ -1,34 +1,42 @@
 ---
 # =============================================================================
-# bootstrap-ssh.yml — Step 0: One-time SSH key injection
+# bootstrap-ssh.yml — DEPRECATED (T-51 → T-55)
 # =============================================================================
-# Run this ONCE on a fresh Ubuntu 22.04 machine using password auth.
-# After this playbook succeeds, all subsequent runs use prod_key automatically.
+# Playbook này đã bị thay thế bởi manual one-time server setup.
 #
-# Prerequisites on the Acer host:
-#   - Ubuntu 22.04 installed, network reachable
-#   - User 'ubuntu' (or root) with a known password
-#   - sshd running and accepting password auth (default on fresh install)
+# T-55 Dual-user workflow:
+#   Admin inject prod_deployer.pub vào CẢ 2 user trên Ubuntu (1 lần):
 #
-# Usage:
-#   ansible-playbook -i inventory/hosts.ini bootstrap-ssh.yml \
-#     --ask-pass --ask-become-pass
+#     # Cho root:
+#     echo "<prod_deployer.pub>" >> /root/.ssh/authorized_keys
 #
-# Flags explained:
-#   --ask-pass          : Ansible prompts for SSH password (used this ONE time)
-#   --ask-become-pass   : Ansible prompts for sudo password
+#     # Cho tutinhhao:
+#     mkdir -p /home/tutinhhao/.ssh
+#     echo "<prod_deployer.pub>" >> /home/tutinhhao/.ssh/authorized_keys
+#     chown -R tutinhhao:tutinhhao /home/tutinhhao/.ssh
+#     chmod 700 /home/tutinhhao/.ssh
+#     chmod 600 /home/tutinhhao/.ssh/authorized_keys
+#
+#   Sau đó Ansible kết nối qua:
+#     ansible_user: tutinhhao (từ group_vars/acer.yml)
+#     ansible_become: true (sudo → root khi cần)
+#     ansible_ssh_private_key_file: prod_deployer
+#
+# Verify: ./cli.sh ansible-ping (verify-ssh.yml)
+# Test cả 2 user: ./cli.sh ansible-test-users (test-dual-users.yml)
+#
+# File này giữ lại cho reference — KHÔNG chạy trong production.
 # =============================================================================
 
-- name: "Step 0 | One-time SSH key injection & sshd hardening"
-  hosts: acer
-  become: true
-  gather_facts: true
-
-  # Override the key-based connection for this one playbook only.
-  # We connect with password here, so we must NOT use the key file.
-  vars:
-    ansible_ssh_private_key_file: ""
-
-  roles:
-    - role: ssh_bootstrap
-      tags: [ssh_bootstrap]
+- name: "bootstrap-ssh.yml DEPRECATED — see comments above"
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Print deprecation notice
+      ansible.builtin.debug:
+        msg: |
+          ⚠️  bootstrap-ssh.yml is deprecated (T-51 → T-55).
+          Manual server setup replaces this playbook.
+          See file header for the exact commands to run on Ubuntu server.
+          Then verify with: ./cli.sh ansible-ping
+          Test both users: ./cli.sh ansible-test-users

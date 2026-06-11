@@ -1,27 +1,16 @@
-name: "CI: Build & Push EcoIT Images"
+name: "CI: Build & Push HDTV Images"
 
 # =============================================================================
-# CI FAST MODE: Trial 10 ngày
-# Chỉ focus vào:
-#   1. Build Docker image cho ecoit-app
-#   2. Push lên GHCR
-# Các bước Lint, SAST, Scan, Test, Build Platform khác đã bị comment lại để tăng tốc.
+# CI FAST MODE: Trial 10 ngày — HDTV AI Platform
 # =============================================================================
 
 on:
   push:
     branches: ["**"]
     paths:
-      - "project_devops/apps/ecoit-app/**"
+      - "project_devops/apps/hdtv-ai-platform/**"
+      - "project_devops/apps/hdtv-ai-prototype/**"
       - "project_devops/apps/ansible-ubuntu/**"
-      # --- Đã comment các paths không cần thiết ---
-      # - "project_devops/apps/health-api/**"
-      # - "project_devops/apps/data-api/**"
-      # - "project_devops/apps/aggregator-api/**"
-      # - "project_devops/apps/user-api/**"
-      # - "project_devops/apps/faulty-service/**"
-      # - "project_devops/platform/**"
-      # - "project_devops/ci/**"
   pull_request:
     branches: ["**"]
   workflow_dispatch:
@@ -31,47 +20,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # STAGE 1: Detect what changed
-  # ---------------------------------------------------------------------------
   detect-changes:
     name: "Detect Changes"
     runs-on: ubuntu-24.04
     outputs:
-      ecoit_changed: ${{ steps.filter.outputs.ecoit-app }}
+      hdtv_platform: ${{ steps.filter.outputs.hdtv-platform }}
+      hdtv_prototype: ${{ steps.filter.outputs.hdtv-prototype }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
-            ecoit-app: 'project_devops/apps/ecoit-app/**'
+            hdtv-platform: 'project_devops/apps/hdtv-ai-platform/**'
+            hdtv-prototype: 'project_devops/apps/hdtv-ai-prototype/**'
 
-  # ---------------------------------------------------------------------------
-  # STAGE 2: Security & Quality (DISABLED FOR SPEED)
-  # ---------------------------------------------------------------------------
-  # lint-and-scan:
-  #   name: "Security & Quality"
-  #   runs-on: ubuntu-24.04
-  #   continue-on-error: true
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Gitleaks — Secret scan
-  #       uses: gitleaks/gitleaks-action@v2
-  #     - name: Hadolint — Dockerfile lint
-  #       uses: hadolint/hadolint-action@v3.1.0
-  #     - name: Semgrep SAST
-  #       uses: returntocorp/semgrep-action@v1
-
-  # ---------------------------------------------------------------------------
-  # STAGE 3: Build & Push EcoIT images
-  # ---------------------------------------------------------------------------
-  build-ecoit:
-    name: "Build & Push EcoIT → GHCR"
+  build-hdtv:
+    name: "Build & Push HDTV → GHCR"
     runs-on: ubuntu-24.04
     needs: [detect-changes]
-    # Luôn build nếu push vào thư mục ecoit-app
-    if: needs.detect-changes.outputs.ecoit_changed == 'true'
+    if: |
+      needs.detect-changes.outputs.hdtv_platform == 'true' ||
+      needs.detect-changes.outputs.hdtv_prototype == 'true' ||
+      github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       packages: write
@@ -89,71 +60,64 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # - name: Run tests (DISABLED FOR SPEED)
-      #   run: bash project_devops/apps/ecoit-app/test.sh
-
-      - name: Build & Push Backend
+      - name: Build & Push API
         uses: docker/build-push-action@v5
         with:
-          context: project_devops/apps/ecoit-app
-          file: project_devops/apps/ecoit-app/Dockerfile.backend
-          push: ${{ github.ref == 'refs/heads/main' }}   # only push on main
-          load: ${{ github.ref != 'refs/heads/main' }}   # load for scan on PRs
+          context: project_devops/apps/hdtv-ai-platform
+          file: project_devops/apps/hdtv-ai-platform/Dockerfile.api
+          push: ${{ github.ref == 'refs/heads/main' }}
+          load: ${{ github.ref != 'refs/heads/main' }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/ecoit-app-backend:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/ecoit-app-backend:latest
+            ghcr.io/${{ github.repository_owner }}/hdtv-ai-api:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/hdtv-ai-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & Push Worker
+        uses: docker/build-push-action@v5
+        with:
+          context: project_devops/apps/hdtv-ai-platform
+          file: project_devops/apps/hdtv-ai-platform/Dockerfile.worker
+          push: ${{ github.ref == 'refs/heads/main' }}
+          load: ${{ github.ref != 'refs/heads/main' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/hdtv-ai-worker:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/hdtv-ai-worker:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Build & Push Frontend
         uses: docker/build-push-action@v5
         with:
-          context: project_devops/apps/ecoit-app
-          file: project_devops/apps/ecoit-app/Dockerfile.frontend
+          context: project_devops/apps/hdtv-ai-prototype
+          file: project_devops/apps/hdtv-ai-prototype/Dockerfile
           push: ${{ github.ref == 'refs/heads/main' }}
           load: ${{ github.ref != 'refs/heads/main' }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/ecoit-app-frontend:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/ecoit-app-frontend:latest
+            ghcr.io/${{ github.repository_owner }}/hdtv-ai-frontend:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/hdtv-ai-frontend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # - name: Scan Backend image (DISABLED FOR SPEED)
-      #   uses: aquasecurity/trivy-action@master
-      #   with:
-      #     ...
-
-      - name: Notify — image ready for deploy
+      - name: Notify — images ready
         if: github.ref == 'refs/heads/main'
         run: |
-          echo "✅ Images pushed to GHCR:"
-          echo "   ghcr.io/${{ github.repository_owner }}/ecoit-app-backend:${{ github.sha }}"
-          echo "   ghcr.io/${{ github.repository_owner }}/ecoit-app-frontend:${{ github.sha }}"
-          echo ""
-          echo "📦 Deploy to Acer Ubuntu (from your Alpine VM):"
-          echo "   vagrant ssh"
-          echo "   ./cli.sh ansible-deploy ${{ github.sha }}"
+          echo "✅ HDTV images pushed to GHCR"
+          echo "   ghcr.io/${{ github.repository_owner }}/hdtv-ai-api:${{ github.sha }}"
+          echo "   ghcr.io/${{ github.repository_owner }}/hdtv-ai-worker:${{ github.sha }}"
+          echo "   ghcr.io/${{ github.repository_owner }}/hdtv-ai-frontend:${{ github.sha }}"
 
-  # ---------------------------------------------------------------------------
-  # STAGE 4: Build other platform services (DISABLED FOR SPEED)
-  # ---------------------------------------------------------------------------
-  # build-platform-services:
-  #   ... (Commented out to save time)
-
-  # ---------------------------------------------------------------------------
-  # STAGE 5: Final Status
-  # ---------------------------------------------------------------------------
   ci-status:
     name: "✅ CI Status"
     runs-on: ubuntu-24.04
-    needs: [build-ecoit]
+    needs: [build-hdtv]
     if: always()
     steps:
       - name: Final check
         run: |
-          ECOIT="${{ needs.build-ecoit.result }}"
-          echo "EcoIT build: ${ECOIT:-skipped}"
-          if [[ "$ECOIT" == "failure" ]]; then
+          HDTV="${{ needs.build-hdtv.result }}"
+          echo "HDTV build: ${HDTV:-skipped}"
+          if [[ "$HDTV" == "failure" ]]; then
             echo "❌ Build failed"; exit 1
           fi
           echo "✅ CI passed"

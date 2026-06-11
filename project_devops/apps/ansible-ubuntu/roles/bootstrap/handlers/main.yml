@@ -1,0 +1,8 @@
+---
+# roles/bootstrap/handlers/main.yml
+# T-55: SSH hardening handler
+
+- name: Restart sshd
+  ansible.builtin.systemd:
+    name: ssh
+    state: restarted

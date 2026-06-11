@@ -1,0 +1,18 @@
+# Grafana Dashboard Provisioning — HDTV AI Platform
+# Loads HDTV Agent Intelligence dashboard into the "HDTV" folder.
+# File is auto-reloaded every 10s — no Grafana restart needed.
+
+apiVersion: 1
+
+providers:
+  - name: 'HDTV AI Platform'
+    orgId: 1
+    folder: 'HDTV AI Platform'
+    folderUid: 'hdtv-ai-platform'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

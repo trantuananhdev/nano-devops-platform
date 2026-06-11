@@ -1,0 +1,177 @@
+---
+# roles/llm_node/tasks/main.yml
+# Gemma 4 via llama.cpp server on Ubuntu
+# T-31: Caddy TLS reverse proxy + node-exporter + promtail log shipping
+# T-55: tutinhhao sở hữu /opt/llm-node, chạy docker compose không sudo
+
+# ---------------------------------------------------------------------------
+# 1. Directory layout — owner: tutinhhao (app_user)
+# ---------------------------------------------------------------------------
+- name: "[LLM] Ensure app directory"
+  ansible.builtin.file:
+    path: "{{ llm_app_dir }}"
+    state: directory
+    owner: "{{ llm_app_owner }}"
+    group: "{{ llm_app_owner }}"
+    mode: "0755"
+
+- name: "[LLM] Ensure models directory"
+  ansible.builtin.file:
+    path: "{{ llm_app_dir }}/models"
+    state: directory
+    owner: "{{ llm_app_owner }}"
+    group: "{{ llm_app_owner }}"
+    mode: "0755"
+
+- name: "[LLM] Ensure caddy config directory"
+  ansible.builtin.file:
+    path: "{{ llm_app_dir }}/caddy"
+    state: directory
+    owner: "{{ llm_app_owner }}"
+    group: "{{ llm_app_owner }}"
+    mode: "0755"
+
+- name: "[LLM] Ensure caddy data directory (cert persistence)"
+  ansible.builtin.file:
+    path: "{{ llm_app_dir }}/caddy-data"
+    state: directory
+    owner: "{{ llm_app_owner }}"
+    group: "{{ llm_app_owner }}"
+    mode: "0755"
+
+- name: "[LLM] Ensure promtail config directory"
+  ansible.builtin.file:
+    path: "{{ llm_app_dir }}/promtail"
+    state: directory
+    owner: "{{ llm_app_owner }}"
+    group: "{{ llm_app_owner }}"
+    mode: "0755"
+
+# ---------------------------------------------------------------------------
+# 2. Download Gemma 4 model (one-time, may take a while)
+# ---------------------------------------------------------------------------
+- name: "[LLM] Check if model already downloaded"
+  ansible.builtin.stat:
+    path: "{{ llm_app_dir }}/models/{{ llm_model_file }}"
+  register: _llm_model_stat
+
+- name: "[LLM] Download Gemma 4 GGUF model (one-time, ~2GB)"
+  ansible.builtin.get_url:
+    url: "{{ llm_model_url }}"
+    dest: "{{ llm_app_dir }}/models/{{ llm_model_file }}"
+    owner: "{{ llm_app_owner }}"
+    group: "{{ llm_app_owner }}"
+    mode: "0644"
+    timeout: 3600
+    headers: "{{ {'Authorization': 'Bearer ' ~ llm_hf_token} if llm_hf_token else omit }}"
+  when: not _llm_model_stat.stat.exists
+
+# ---------------------------------------------------------------------------
+# 3. Template configs — owner tutinhhao
+# ---------------------------------------------------------------------------
+- name: "[LLM] Deploy Caddyfile"
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ llm_app_dir }}/caddy/Caddyfile"
+    owner: "{{ llm_app_owner }}"
+    group: "{{ llm_app_owner }}"
+    mode: "0644"
+  notify: Restart llama-server
+
+- name: "[LLM] Deploy promtail config"
+  ansible.builtin.template:
+    src: promtail-config.yml.j2
+    dest: "{{ llm_app_dir }}/promtail/config.yml"
+    owner: "{{ llm_app_owner }}"
+    group: "{{ llm_app_owner }}"
+    mode: "0644"
+  when: llm_log_shipping_enabled | bool
+  notify: Restart llama-server
+
+- name: "[LLM] Deploy docker-compose for full LLM stack"
+  ansible.builtin.template:
+    src: docker-compose.llm.yml.j2
+    dest: "{{ llm_app_dir }}/docker-compose.yml"
+    owner: "{{ llm_app_owner }}"
+    group: "{{ llm_app_owner }}"
+    mode: "0644"
+  notify: Restart llama-server
+
+# ---------------------------------------------------------------------------
+# 4. Start compose stack
+#    T-55: become: false — tutinhhao thuộc docker group, chạy trực tiếp
+# ---------------------------------------------------------------------------
+- name: "[LLM] Start LLM stack (llama-server + caddy + node-exporter + promtail)"
+  community.docker.docker_compose_v2:
+    project_src: "{{ llm_app_dir }}"
+    state: present
+    pull: always
+  become: false            # tutinhhao in docker group — không cần sudo
+
+# ---------------------------------------------------------------------------
+# 5. UFW rules — cần root (become: true kế thừa từ playbook)
+# ---------------------------------------------------------------------------
+- name: "[LLM] UFW allow HTTP proxy port {{ llm_port }} from VM"
+  community.general.ufw:
+    rule: allow
+    port: "{{ llm_port }}"
+    proto: tcp
+    from_ip: "{{ vm_ip }}"
+    comment: "LLM Caddy HTTP from Alpine VM"
+
+- name: "[LLM] UFW allow HTTPS port {{ llm_tls_port }} from VM (Caddy TLS)"
+  community.general.ufw:
+    rule: allow
+    port: "{{ llm_tls_port }}"
+    proto: tcp
+    from_ip: "{{ vm_ip }}"
+    comment: "LLM Caddy HTTPS from Alpine VM"
+  when: llm_tls_enabled | bool
+
+- name: "[LLM] UFW allow node-exporter {{ node_exporter_port }} from VM (metrics scrape)"
+  community.general.ufw:
+    rule: allow
+    port: "{{ node_exporter_port }}"
+    proto: tcp
+    from_ip: "{{ vm_ip }}"
+    comment: "LLM node-exporter for Prometheus scrape"
+  when: llm_metrics_enabled | bool
+
+# ---------------------------------------------------------------------------
+# 6. Health-check llama-server via Caddy proxy
+# ---------------------------------------------------------------------------
+- name: "[LLM] Wait for llama-server health (via Caddy HTTP)"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ llm_port }}/health"
+    method: GET
+    status_code: [200, 404]
+  register: _llm_health
+  retries: 30
+  delay: 10
+  until: _llm_health.status in [200, 404]
+
+- name: "[LLM] Wait for node-exporter metrics endpoint"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ node_exporter_port }}/metrics"
+    method: GET
+    status_code: 200
+  register: _node_exporter_health
+  retries: 6
+  delay: 5
+  until: _node_exporter_health.status == 200
+  when: llm_metrics_enabled | bool
+  ignore_errors: true   # Non-blocking — metrics nice-to-have on first deploy
+
+- name: "[LLM] Report deployment summary"
+  ansible.builtin.debug:
+    msg: |
+      ════════════════════════════════════════
+      LLM Node Deployment Complete
+      ════════════════════════════════════════
+      User          : {{ llm_app_owner }} (app owner)
+      llama-server  : 127.0.0.1:{{ llm_internal_port }} (internal)
+      Caddy HTTP    : http://{{ ansible_host | default(inventory_hostname) }}:{{ llm_port }}
+      Caddy HTTPS   : https://{{ ansible_host | default(inventory_hostname) }}:{{ llm_tls_port }}
+      node-exporter : :{{ node_exporter_port }}/metrics
+      log shipping  : {{ 'enabled → ' + loki_url if llm_log_shipping_enabled else 'disabled' }}
+      ════════════════════════════════════════

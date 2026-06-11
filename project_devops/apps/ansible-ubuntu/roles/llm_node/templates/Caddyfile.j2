@@ -1,0 +1,49 @@
+# Caddyfile — LLM node reverse proxy
+# Managed by Ansible role: llm_node
+# T-31: Caddy TLS self-signed + rate limiting
+
+# ---------------------------------------------------------------------------
+# HTTP (port {{ llm_port }}) — redirect or proxy (internal use only)
+# ---------------------------------------------------------------------------
+:{{ llm_port }} {
+    # Rate limiting: 60 req/min per IP (prevents accidental hammering)
+    rate_limit {remote.ip} 60r/m
+
+    # Reverse proxy to llama-server (internal)
+    reverse_proxy 127.0.0.1:{{ llm_internal_port }} {
+        header_up X-Forwarded-Proto http
+        header_up X-Real-IP {remote.host}
+    }
+
+    # Structured access log
+    log {
+        output stdout
+        format json
+        level INFO
+    }
+}
+
+# ---------------------------------------------------------------------------
+# HTTPS (port {{ llm_tls_port }}) — TLS self-signed (internal LAN use)
+# ---------------------------------------------------------------------------
+{% if llm_tls_enabled %}
+:{{ llm_tls_port }} {
+    tls internal {
+        on_demand
+    }
+
+    # Rate limiting
+    rate_limit {remote.ip} 60r/m
+
+    reverse_proxy 127.0.0.1:{{ llm_internal_port }} {
+        header_up X-Forwarded-Proto https
+        header_up X-Real-IP {remote.host}
+    }
+
+    log {
+        output stdout
+        format json
+        level INFO
+    }
+}
+{% endif %}

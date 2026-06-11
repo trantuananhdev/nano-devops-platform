@@ -10,7 +10,7 @@ $Domains = @(
     'prometheus.nano.platform', 'aggregator.nano.platform', 'faulty.nano.platform',
     'data.nano.platform', 'health.nano.platform', 'user.nano.platform',
     'crm-ingest.nano.platform', 'crm-demo.nano.platform', 'goclaw.nano.platform',
-    'shopee-search.nano.platform', 'shopee-api.nano.platform'
+    'shopee-search.nano.platform', 'shopee-api.nano.platform', 'hdtv.nano.platform'
 )
 $FallbackIp = '192.168.157.10'
 

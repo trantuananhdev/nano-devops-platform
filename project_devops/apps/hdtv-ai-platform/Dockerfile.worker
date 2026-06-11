@@ -1,0 +1,28 @@
+FROM python:3.11-alpine
+
+WORKDIR /app
+
+# Build dependencies (same as API — shared requirements.txt)
+RUN apk add --no-cache \
+    curl \
+    gcc \
+    g++ \
+    musl-dev \
+    libffi-dev \
+    openssl-dev \
+    make \
+    git \
+    libgcc \
+    rust \
+    cargo \
+    linux-headers \
+    python3-dev
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+
+ENV PYTHONPATH=/app
+
+CMD ["celery", "-A", "app.workers.celery_app.celery_app", "worker", "--loglevel=info", "-c", "4", "-P", "threads"]

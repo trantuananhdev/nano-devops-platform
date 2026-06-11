@@ -1,11 +1,30 @@
-# Dynamic configuration
+# Traefik Dynamic Configuration
+# Loaded automatically from /etc/traefik/dynamic.yml (file provider).
+# No Traefik restart needed — changes take effect within 2s (watchInterval).
+
 http:
+  # ---------------------------------------------------------------------------
+  # Middlewares
+  # ---------------------------------------------------------------------------
   middlewares:
     redirect-to-https:
       redirectScheme:
         scheme: https
         permanent: true
 
+    # T-29: Rate limiter for MCP endpoint — 50 req/min per IP (burst 10)
+    mcp-ratelimit:
+      rateLimit:
+        average: 50
+        period: "1m"
+        burst: 10
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+# ---------------------------------------------------------------------------
+# TLS
+# ---------------------------------------------------------------------------
 tls:
   options:
     default:

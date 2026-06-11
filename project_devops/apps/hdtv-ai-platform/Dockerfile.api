@@ -1,0 +1,33 @@
+FROM python:3.11-alpine
+
+WORKDIR /app
+
+# Build dependencies for C-ext packages (asyncpg, cryptography, grpcio, chromadb)
+RUN apk add --no-cache \
+    curl \
+    gcc \
+    g++ \
+    musl-dev \
+    libffi-dev \
+    openssl-dev \
+    make \
+    git \
+    libgcc \
+    rust \
+    cargo \
+    # grpcio (OTel exporter) needs these on Alpine musl
+    linux-headers \
+    python3-dev
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini .
+COPY scripts ./scripts
+
+ENV PYTHONPATH=/app
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,340 @@
+# HDTV AI Platform — Platform-integrated compose
+#
+# Dùng file này khi chạy TRONG Alpine VM cùng với core platform stack.
+# Khác với apps/hdtv-ai-platform/docker-compose.hdtv.yml (standalone):
+#   - KHÔNG có postgres/redis riêng → dùng platform-postgres + platform-redis
+#   - Tất cả services vào platform-network → Traefik + Prometheus tự discover
+#   - cli.sh dùng: ./cli.sh hdtv-up  (compose -f docker-compose.yml -f docker-compose.hdtv.yml)
+#
+# Prerequisite:
+#   docker compose -f docker-compose.yml up -d           # core infra
+#   docker compose -f docker-compose.observability.yml up -d  # optional obs
+#
+# Build context path assumes cli.sh runs from:
+#   /opt/platform/src/nano-project-devops/  (repo root)
+# Build context resolves relative to this file's directory:
+#   ../../apps/hdtv-ai-platform  →  project_devops/apps/hdtv-ai-platform
+#   ../../apps/hdtv-ai-prototype →  project_devops/apps/hdtv-ai-prototype
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# ---------------------------------------------------------------------------
+# Shared ENV snippets — merged via <<: [*hdtv-db, *hdtv-redis, *hdtv-services]
+# ---------------------------------------------------------------------------
+x-hdtv-db: &hdtv-db
+  DATABASE_URL: postgresql+asyncpg://${HDTV_POSTGRES_USER:-hdtv_user}:placeholder@platform-postgres:5432/${HDTV_POSTGRES_DB:-hdtv_db}
+
+x-hdtv-redis: &hdtv-redis
+  REDIS_URL: redis://platform-redis:6379/0
+  CELERY_BROKER_URL: redis://platform-redis:6379/1
+  CELERY_RESULT_BACKEND: redis://platform-redis:6379/2
+
+x-hdtv-services: &hdtv-services
+  CHROMA_HOST: hdtv-chroma
+  CHROMA_PORT: 8000
+  MINIO_ENDPOINT: hdtv-minio:9000
+  MINIO_ROOT_USER: ${MINIO_ROOT_USER:-hdtv_minio}
+  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme_minio}
+  MEILI_URL: http://hdtv-meilisearch:7700
+  MEILI_API_KEY: ${MEILI_MASTER_KEY:-changeme_meili}
+
+services:
+  # ---------------------------------------------------------------------------
+  # HDTV-specific infrastructure (not in core platform)
+  # ---------------------------------------------------------------------------
+  hdtv-chroma:
+    image: chromadb/chroma:0.5.23
+    container_name: hdtv-chroma
+    restart: unless-stopped
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - hdtv_chroma_data:/chroma/chroma
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 400m
+    logging: *default-logging
+    networks:
+      - platform-network
+
+  hdtv-meilisearch:
+    image: getmeili/meilisearch:v1.8
+    container_name: hdtv-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_ENV: development
+      MEILI_MASTER_KEY_FILE: /run/secrets/meili_master_key
+    volumes:
+      - hdtv_meili_data:/meili_data
+    secrets:
+      - meili_master_key
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    logging: *default-logging
+    networks:
+      - platform-network
+
+  hdtv-minio:
+    # Pinned release — avoid minio:latest drift
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    container_name: hdtv-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-hdtv_minio}
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+    volumes:
+      - hdtv_minio_data:/data
+    secrets:
+      - minio_root_password
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    logging: *default-logging
+    networks:
+      - platform-network
+
+  # ---------------------------------------------------------------------------
+  # HDTV Application services
+  # Uses platform-postgres + platform-redis from core stack (saves ~512m RAM)
+  # ---------------------------------------------------------------------------
+  hdtv-api:
+    build:
+      context: ../../apps/hdtv-ai-platform
+      dockerfile: Dockerfile.api
+    container_name: hdtv-api
+    restart: unless-stopped
+    env_file:
+      - ../../../.env
+    environment:
+      <<: [*hdtv-db, *hdtv-redis, *hdtv-services]
+      # Derive LLM_BASE_URL from ACER_HOST for consistency
+      LLM_BASE_URL: "http://${ACER_HOST:-192.168.100.6}:8080/v1"
+      HDTV_POSTGRES_PASSWORD_FILE: /run/secrets/hdtv_postgres_password
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+      MEILI_MASTER_KEY_FILE: /run/secrets/meili_master_key
+    secrets:
+      - hdtv_postgres_password
+      - minio_root_password
+      - meili_master_key
+    labels:
+      # Prometheus Docker SD — auto-discover by prometheus docker_sd job
+      prometheus.scrape: "true"
+      prometheus.job: "hdtv-ai"
+      prometheus.port: "8000"
+      prometheus.path: "/metrics"
+    ports:
+      - "8000:8000"
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+      platform-redis:
+        condition: service_healthy
+      hdtv-meilisearch:
+        condition: service_healthy
+      hdtv-chroma:
+        condition: service_healthy
+      hdtv-minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+    logging: *default-logging
+    networks:
+      - platform-network
+
+  hdtv-worker:
+    build:
+      context: ../../apps/hdtv-ai-platform
+      dockerfile: Dockerfile.worker
+    container_name: hdtv-worker
+    restart: unless-stopped
+    env_file:
+      - ../../../.env
+    environment:
+      <<: [*hdtv-db, *hdtv-redis, *hdtv-services]
+      # Derive LLM_BASE_URL from ACER_HOST for consistency
+      LLM_BASE_URL: "http://${ACER_HOST:-192.168.100.6}:8080/v1"
+      HDTV_POSTGRES_PASSWORD_FILE: /run/secrets/hdtv_postgres_password
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+      MEILI_MASTER_KEY_FILE: /run/secrets/meili_master_key
+    secrets:
+      - hdtv_postgres_password
+      - minio_root_password
+      - meili_master_key
+    volumes:
+      - hdtv_rag_docs:/opt/rag-docs        # T-27: shared RAG docs volume
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+      platform-redis:
+        condition: service_healthy
+      hdtv-api:
+        condition: service_healthy          # wait for API healthy before starting workers
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    logging: *default-logging
+    networks:
+      - platform-network
+
+  # T-27: Celery Beat — RAG ingestion pipeline scheduler (ingest every 6h, cleanup daily 02:00)
+  hdtv-beat:
+    build:
+      context: ../../apps/hdtv-ai-platform
+      dockerfile: Dockerfile.worker
+    container_name: hdtv-beat
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
+    env_file:
+      - ../../../.env
+    environment:
+      <<: [*hdtv-db, *hdtv-redis, *hdtv-services]
+      # Derive LLM_BASE_URL from ACER_HOST for consistency
+      LLM_BASE_URL: "http://${ACER_HOST:-192.168.100.6}:8080/v1"
+      HDTV_POSTGRES_PASSWORD_FILE: /run/secrets/hdtv_postgres_password
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+      MEILI_MASTER_KEY_FILE: /run/secrets/meili_master_key
+    secrets:
+      - hdtv_postgres_password
+      - minio_root_password
+      - meili_master_key
+    volumes:
+      - hdtv_rag_docs:/opt/rag-docs        # T-27: shared RAG docs volume
+    depends_on:
+      platform-redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 64m                      # Beat is lightweight — just a scheduler
+    logging: *default-logging
+    networks:
+      - platform-network
+
+  # T-35: Backup service — daily at 03:00 via cron
+  # Backs up: PostgreSQL (pg_dump) + MinIO (mc mirror) + ChromaDB (tar.gz)
+  # Manual run: docker compose exec hdtv-backup /scripts/backup.sh
+  hdtv-backup:
+    image: minio/mc:latest
+    container_name: hdtv-backup
+    restart: unless-stopped
+    entrypoint: >
+      sh -c "
+        apk add --no-cache postgresql-client tar gzip;
+        echo '0 3 * * * /scripts/backup.sh >> /backups/cron.log 2>&1' | crontab -;
+        crond -f -l 8
+      "
+    env_file:
+      - ../../../.env
+    environment:
+      <<: [*hdtv-db, *hdtv-redis, *hdtv-services]
+      BACKUP_DIR: /backups
+      KEEP_DAYS: "7"
+      POSTGRES_HOST: platform-postgres
+      HDTV_POSTGRES_DB: ${HDTV_POSTGRES_DB:-hdtv_db}
+      HDTV_POSTGRES_USER: ${HDTV_POSTGRES_USER:-hdtv_user}
+      HDTV_POSTGRES_PASSWORD_FILE: /run/secrets/hdtv_postgres_password
+      CHROMA_DATA_DIR: /chroma-data
+    secrets:
+      - hdtv_postgres_password
+    volumes:
+      - hdtv_backups:/backups
+      - hdtv_chroma_data:/chroma-data:ro   # access ChromaDB data for backup
+      - ../../apps/hdtv-ai-platform/scripts/backup.sh:/scripts/backup.sh:ro
+    depends_on:
+      hdtv-api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    logging: *default-logging
+    networks:
+      - platform-network
+
+  hdtv-frontend:
+    build:
+      context: ../../apps/hdtv-ai-prototype
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
+        VITE_WS_BASE_URL: ""
+    container_name: hdtv-frontend
+    restart: unless-stopped
+    ports:
+      - "3080:80"
+    depends_on:
+      hdtv-api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    logging: *default-logging
+    networks:
+      - platform-network
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "platform-network"
+      traefik.http.routers.hdtv-frontend-http.rule: "Host(`hdtv.nano.platform`)"
+      traefik.http.routers.hdtv-frontend-http.entrypoints: "web"
+      traefik.http.routers.hdtv-frontend-http.middlewares: "redirect-to-https@file"
+      traefik.http.routers.hdtv-frontend-https.rule: "Host(`hdtv.nano.platform`)"
+      traefik.http.routers.hdtv-frontend-https.entrypoints: "websecure"
+      traefik.http.routers.hdtv-frontend-https.tls: "true"
+      traefik.http.services.hdtv-frontend.loadbalancer.server.port: "80"
+
+volumes:
+  hdtv_chroma_data:
+  hdtv_minio_data:
+  hdtv_meili_data:
+  hdtv_rag_docs:           # T-27: shared volume — worker + beat + RAG pipeline
+  hdtv_backups:            # T-35: backup output volume
+
+networks:
+  platform-network:
+    external: true
+
+secrets:
+  hdtv_postgres_password:
+    file: ../secrets/hdtv_postgres_password.txt
+  minio_root_password:
+    file: ../secrets/minio_root_password.txt
+  meili_master_key:
+    file: ../secrets/meili_master_key.txt

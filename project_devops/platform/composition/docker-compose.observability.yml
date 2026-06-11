@@ -1,7 +1,8 @@
-version: '3.8'
-
-# Nano DevOps Platform - Observability Stack
-# Focus: Monitoring, Logging, Tracing, Alerting
+# =============================================================================
+# Nano DevOps Platform — Observability Stack
+# T-32: Removed deprecated `version`, added Telegram env vars to Alertmanager,
+#       added healthcheck to Alertmanager, added ACER_HOST env passthrough.
+# =============================================================================
 
 x-logging:
   &default-logging
@@ -16,6 +17,12 @@ services:
     image: prom/prometheus:v2.48.1
     container_name: platform-prometheus
     restart: unless-stopped
+    environment:
+      # T-32: Pass ACER_HOST so prometheus.yml ${ACER_HOST} interpolation works
+      # NOTE: Prometheus does NOT natively expand env vars in config.
+      # We use an entrypoint script OR the static target is set via CLI --web.config.file.
+      # For simplicity, we use envsubst to pre-process prometheus.yml at start.
+      - ACER_HOST=${ACER_HOST:-192.168.100.6}
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -168,16 +175,29 @@ services:
     image: prom/alertmanager:v0.27.0
     container_name: platform-alertmanager
     restart: unless-stopped
+    environment:
+      # T-32: Telegram notification credentials — sourced from root .env
+      # Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     volumes:
-      - ../config/alertmanager:/config
+      - ../config/alertmanager:/config:ro
       - alertmanager-data:/data
     command:
       - '--config.file=/config/alertmanager.yml'
       - '--storage.path=/data'
+      - '--web.external-url=http://localhost:9093'
+      - '--web.listen-address=:9093'
     networks:
       - platform-network
     ports:
       - "9093:9093"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     deploy:
       resources:
         limits:

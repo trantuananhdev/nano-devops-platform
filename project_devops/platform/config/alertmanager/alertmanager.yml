@@ -1,25 +1,118 @@
+# =============================================================================
+# Alertmanager Configuration — Nano DevOps Platform
+# T-32: Added Telegram notification + severity-based routing
+# =============================================================================
+#
+# ENV variables needed (set in .env / Docker compose environment):
+#   TELEGRAM_BOT_TOKEN  — e.g. 123456:ABC-DEF...
+#   TELEGRAM_CHAT_ID    — e.g. -1001234567890
+#
+# To test: curl -X POST http://localhost:9093/-/reload
+# =============================================================================
+
 global:
   resolve_timeout: 5m
-  slack_api_url: 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX' # Replace with your actual Slack Webhook URL
+  # HTTP client for outbound webhook / Telegram calls
+  http_config:
+    follow_redirects: true
 
+# ---------------------------------------------------------------------------
+# Inhibition — suppress warning if critical fires for the same service
+# ---------------------------------------------------------------------------
+inhibit_rules:
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    equal: ["alertname", "component", "service"]
+
+# ---------------------------------------------------------------------------
+# Routing tree
+# ---------------------------------------------------------------------------
 route:
-  group_by: ['job', 'alertname', 'severity']
+  # Default: group by alertname + component + service
+  group_by: ["alertname", "component", "service", "severity"]
   group_wait: 30s
   group_interval: 5m
-  repeat_interval: 12h
-  receiver: 'slack-notifications'
+  repeat_interval: 4h
+  receiver: "telegram-ops"
 
+  routes:
+    # Critical alerts → immediate Telegram (no group wait)
+    - matchers:
+        - severity = "critical"
+      group_wait: 0s
+      repeat_interval: 1h
+      receiver: "telegram-critical"
+
+    # HDTV AI agent alerts → separate channel/chat (can override chat_id via env)
+    - matchers:
+        - component = "hdtv"
+      group_by: ["alertname", "subsystem"]
+      group_wait: 30s
+      repeat_interval: 2h
+      receiver: "telegram-hdtv"
+
+    # Warning-level platform alerts — batched, less noisy
+    - matchers:
+        - severity = "warning"
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 8h
+      receiver: "telegram-ops"
+
+# ---------------------------------------------------------------------------
+# Receivers
+# ---------------------------------------------------------------------------
 receivers:
-- name: 'slack-notifications'
-  slack_configs:
-  - channel: '#alerts' # Replace with your channel
-    send_resolved: true
-    title: '[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }} for {{ .CommonLabels.job }}'
-    text: >-
-      {{ range .Alerts }}
-      *Alert:* {{ .Annotations.summary }}
-      *Description:* {{ .Annotations.description }}
-      *Details:*
-      {{ range .Labels.SortedPairs }} • *{{ .Name }}:* `{{ .Value }}`
-      {{ end }}
-      {{ end }}
+  # ── General ops (warnings, non-HDTV) ──────────────────────────────────────
+  - name: "telegram-ops"
+    telegram_configs:
+      - bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: "${TELEGRAM_CHAT_ID}"
+        parse_mode: "HTML"
+        message: |
+          🔔 <b>{{ .Status | toUpper }}</b> — {{ .CommonLabels.alertname }}
+          📦 Component: <code>{{ .CommonLabels.component }}</code>
+          ⚠️ Severity: {{ .CommonLabels.severity }}
+          {{ range .Alerts }}
+          ▸ {{ .Annotations.summary }}
+          {{ .Annotations.description | truncate 200 "…" }}
+          {{ end }}
+        send_resolved: true
+
+  # ── Critical alerts — immediate, no truncation ───────────────────────────
+  - name: "telegram-critical"
+    telegram_configs:
+      - bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: "${TELEGRAM_CHAT_ID}"
+        parse_mode: "HTML"
+        message: |
+          🚨 <b>CRITICAL: {{ .CommonLabels.alertname }}</b>
+          📦 <code>{{ .CommonLabels.component }}</code> / {{ .CommonLabels.service }}
+          {{ range .Alerts }}
+          ▸ {{ .Annotations.summary }}
+          {{ .Annotations.description }}
+          🕐 Started: {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          {{ end }}
+        send_resolved: true
+
+  # ── HDTV AI-specific alerts ───────────────────────────────────────────────
+  - name: "telegram-hdtv"
+    telegram_configs:
+      - bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: "${TELEGRAM_CHAT_ID}"
+        parse_mode: "HTML"
+        message: |
+          🤖 <b>HDTV AI Alert: {{ .Status | toUpper }}</b>
+          Alert: <b>{{ .CommonLabels.alertname }}</b>
+          Subsystem: <code>{{ .CommonLabels.subsystem }}</code>
+          Severity: {{ .CommonLabels.severity }}
+          {{ range .Alerts }}
+          ▸ {{ .Annotations.summary }}
+          {{ .Annotations.description | truncate 300 "…" }}
+          {{ end }}
+        send_resolved: true
+
+  # ── Null receiver (silence specific alerts) ───────────────────────────────
+  - name: "null"

@@ -11,7 +11,7 @@
 #
 # Pre-requisites:
 #   - vagrant up đã chạy
-#   - .ssh/prod_key đã có
+#   - .ssh/prod_deployer đã có (key đã inject lên Ubuntu server)
 #   - vagrant ssh vào VM, cd /opt/platform/src/nano-project-devops
 # =============================================================================
 set -euo pipefail
@@ -29,28 +29,29 @@ echo "   Image tag: $IMAGE_TAG"
 echo "   Ansible dir: $ANSIBLE_DIR"
 echo "================================================================"
 
-# Load ACER_HOST, ACER_USER from .env
+# Load ACER_HOST from .env (T-55: Ansible connects as tutinhhao by default)
 ENV_FILE="$REPO_ROOT/.env"
 if [ -f "$ENV_FILE" ]; then
-  export $(grep -E '^(ACER_HOST|ACER_USER|ACER_SSH_PORT)=' "$ENV_FILE" | xargs)
+  export $(grep -E '^(ACER_HOST|ACER_SSH_PORT)=' "$ENV_FILE" | xargs)
 fi
 
 ACER_HOST="${ACER_HOST:-}"
-ACER_USER="${ACER_USER:-}"
+ACER_USER="tutinhhao"   # T-55: Connect as tutinhhao, privilege escalation via become: true
 ACER_SSH_PORT="${ACER_SSH_PORT:-22}"
 
-if [ -z "$ACER_HOST" ] || [ -z "$ACER_USER" ]; then
-  echo "❌ ACER_HOST và ACER_USER phải được set trong .env"
+if [ -z "$ACER_HOST" ]; then
+  echo "❌ ACER_HOST phải được set trong .env"
   exit 1
 fi
 
-echo "▶  Target: ${ACER_USER}@${ACER_HOST}:${ACER_SSH_PORT}"
+echo "▶  Target: ${ACER_USER}@${ACER_HOST}:${ACER_SSH_PORT} (become root via sudo)"
 echo ""
 
-# SSH key
-SSH_KEY="$REPO_ROOT/.ssh/prod_key"
+# SSH key — prod_deployer (ed25519)
+SSH_KEY="$REPO_ROOT/.ssh/prod_deployer"
 if [ ! -f "$SSH_KEY" ]; then
   echo "❌ SSH key không tìm thấy: $SSH_KEY"
+  echo "   Copy prod_deployer vào .ssh/ (key đã inject vào cả root và tutinhhao)"
   exit 1
 fi
 

@@ -1,0 +1,304 @@
+# Prometheus Alert Rules — EVN HDTV AI Platform
+# Covers: API health, Agent loop safety, LLM circuit breaker, tool failures,
+#         appraisal timeouts, sandbox abuse, context overflow.
+# Depends on metrics emitted by hdtv-ai-platform FastAPI (/metrics endpoint).
+
+groups:
+
+  # ---------------------------------------------------------------------------
+  # Service Health
+  # ---------------------------------------------------------------------------
+  - name: hdtv_service_health
+    interval: 30s
+    rules:
+      - alert: HdtvApiDown
+        expr: up{job="hdtv-ai"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: hdtv
+          service: hdtv-api
+        annotations:
+          summary: "HDTV API is down"
+          description: "hdtv-api has been unreachable for more than 1 minute. All appraisal operations are halted."
+
+      - alert: HdtvApiHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(hdtv_http_request_duration_seconds_bucket[5m])) by (le, endpoint)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: hdtv
+          service: hdtv-api
+        annotations:
+          summary: "HDTV API high latency (P95 > 2s)"
+          description: "HDTV API endpoint {{ $labels.endpoint }} P95 latency is above 2 seconds for more than 5 minutes. Current: {{ $value }}s"
+
+      - alert: HdtvApiHighErrorRate
+        expr: |
+          sum(rate(hdtv_http_requests_total{status_code=~"5.."}[5m]))
+          /
+          sum(rate(hdtv_http_requests_total[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: hdtv
+          service: hdtv-api
+        annotations:
+          summary: "HDTV API high error rate (5xx > 5%)"
+          description: "HDTV API HTTP 5xx error rate is above 5% for more than 5 minutes. Current: {{ $value | humanizePercentage }}"
+
+  # ---------------------------------------------------------------------------
+  # LLM / Circuit Breaker
+  # ---------------------------------------------------------------------------
+  - name: hdtv_llm_health
+    interval: 30s
+    rules:
+      - alert: HdtvLlmCircuitOpen
+        expr: increase(hdtv_llm_circuit_trips_total[1m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: hdtv
+          subsystem: llm
+        annotations:
+          summary: "HDTV LLM circuit breaker tripped ({{ $labels.backend }})"
+          description: "LLM circuit breaker for backend '{{ $labels.backend }}' (role: {{ $labels.role }}) has tripped OPEN. Both LLM backends may be unavailable. Check llama-server on Ubuntu + Gemini quota."
+
+      - alert: HdtvLlmHighErrorRate
+        expr: |
+          sum(rate(hdtv_llm_calls_total{status!="ok"}[5m])) by (backend)
+          /
+          sum(rate(hdtv_llm_calls_total[5m])) by (backend)
+          > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          component: hdtv
+          subsystem: llm
+        annotations:
+          summary: "HDTV LLM high error rate ({{ $labels.backend }})"
+          description: "LLM backend '{{ $labels.backend }}' error rate above 20% for 5m. Current: {{ $value | humanizePercentage }}. Check network to Ubuntu LLM node or Gemini API quota."
+
+      - alert: HdtvAppraisalTimeout
+        expr: rate(hdtv_appraisal_timeouts_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: hdtv
+          subsystem: agent
+        annotations:
+          summary: "HDTV appraisal tasks timing out"
+          description: "Appraisal tasks are exceeding the maximum duration limit. Agent may be stuck in a loop or LLM is too slow. Review appraisal_max_duration_s config."
+
+  # ---------------------------------------------------------------------------
+  # Agent Loop Safety
+  # ---------------------------------------------------------------------------
+  - name: hdtv_agent_safety
+    interval: 30s
+    rules:
+      - alert: HdtvAgentInfiniteLoop
+        expr: rate(hdtv_agent_plans_total{verdict="revise"}[5m]) > 0.5
+        for: 3m
+        labels:
+          severity: critical
+          component: hdtv
+          subsystem: agent
+        annotations:
+          summary: "HDTV agent stuck in revision loop"
+          description: "Agent plan revisions are happening at rate {{ $value }}/s for 3+ minutes. Agent may be stuck in planner→reflector revision cycle. Check planner prompt quality and tool output format."
+
+      - alert: HdtvCriticHighRejectionRate
+        expr: |
+          rate(hdtv_agent_critic_rejections_total[5m])
+          /
+          rate(hdtv_agent_plans_total[5m])
+          > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: hdtv
+          subsystem: agent
+        annotations:
+          summary: "HDTV critic rejecting > 50% of drafts"
+          description: "Critic module is rejecting more than 50% of report drafts for 5+ minutes. This may indicate tool output quality issues or prompt misconfiguration."
+
+  # ---------------------------------------------------------------------------
+  # Tool Execution
+  # ---------------------------------------------------------------------------
+  - name: hdtv_tool_health
+    interval: 30s
+    rules:
+      - alert: HdtvToolHighFailureRate
+        expr: |
+          sum(rate(hdtv_tool_calls_total{status="error"}[5m])) by (tool_name)
+          /
+          sum(rate(hdtv_tool_calls_total[5m])) by (tool_name)
+          > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          component: hdtv
+          subsystem: tools
+        annotations:
+          summary: "HDTV tool {{ $labels.tool_name }} high failure rate"
+          description: "Tool '{{ $labels.tool_name }}' failure rate is above 30% for 5+ minutes ({{ $value | humanizePercentage }}). Check Gemini API or tool implementation."
+
+      - alert: HdtvToolHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(hdtv_tool_duration_seconds_bucket[5m])) by (le, tool_name)
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: hdtv
+          subsystem: tools
+        annotations:
+          summary: "HDTV tool {{ $labels.tool_name }} high latency (P95 > 10s)"
+          description: "Tool '{{ $labels.tool_name }}' P95 execution time is above 10 seconds for 5+ minutes."
+
+  # ---------------------------------------------------------------------------
+  # Sandbox Security
+  # ---------------------------------------------------------------------------
+  - name: hdtv_sandbox_security
+    interval: 30s
+    rules:
+      - alert: HdtvSandboxHighBlockRate
+        expr: rate(hdtv_sandbox_executions_total{status="blocked"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: hdtv
+          subsystem: sandbox
+        annotations:
+          summary: "HDTV sandbox blocking high rate of commands"
+          description: "Sandbox is blocking more than 1 command/second for 5+ minutes. Agent may be generating unsafe commands (forbidden patterns). Review AiAuditLog for SandboxShell entries."
+
+      - alert: HdtvSandboxTimeoutRate
+        expr: rate(hdtv_sandbox_executions_total{status="timeout"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: hdtv
+          subsystem: sandbox
+        annotations:
+          summary: "HDTV sandbox high timeout rate"
+          description: "Sandbox is timing out more than 0.5 times/second. Agent commands may be long-running or stuck."
+
+  # ---------------------------------------------------------------------------
+  # RAG / Context
+  # ---------------------------------------------------------------------------
+  - name: hdtv_rag_context
+    interval: 30s
+    rules:
+      - alert: HdtvContextTruncationSpike
+        expr: rate(hdtv_context_truncations_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: hdtv
+          subsystem: context
+        annotations:
+          summary: "HDTV context window truncation spike"
+          description: "Context is being truncated at rate {{ $value }}/s for 5+ minutes. Agent observation history may be too long — consider reducing memory_top_k or increasing context_max_tokens."
+
+      - alert: HdtvRateLimitHits
+        expr: rate(hdtv_rate_limit_hits_total[5m]) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: hdtv
+          subsystem: api
+        annotations:
+          summary: "HDTV API rate limit hits"
+          description: "Rate limiting is rejecting requests at {{ $value }}/s. May indicate bot traffic, misconfigured client, or too-low rate limits."
+
+  # ---------------------------------------------------------------------------
+  # LLM Node Health (T-31 + T-32) — Ubuntu Ubuntu node-exporter metrics
+  # Scraped via prometheus.yml job: llm-node
+  # ---------------------------------------------------------------------------
+  - name: hdtv_llm_node_health
+    interval: 60s
+    rules:
+      - alert: HdtvLlmNodeDown
+        expr: up{job="llm-node"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: hdtv
+          subsystem: llm
+          host: llm-node
+        annotations:
+          summary: "HDTV LLM Node (Ubuntu) is unreachable"
+          description: "The Ubuntu LLM node (llama-server + Caddy) has been unreachable for 2+ minutes. No appraisals can proceed without the local LLM. Check: SSH to {{ $labels.instance }}, run 'docker ps' in /opt/llm-node."
+
+      - alert: HdtvLlmNodeHighMemory
+        expr: |
+          (
+            node_memory_MemTotal_bytes{job="llm-node"}
+            - node_memory_MemAvailable_bytes{job="llm-node"}
+          )
+          / node_memory_MemTotal_bytes{job="llm-node"}
+          > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          component: hdtv
+          subsystem: llm
+          host: llm-node
+        annotations:
+          summary: "HDTV LLM Node memory usage > 90%"
+          description: "Ubuntu LLM node {{ $labels.instance }} memory is above 90% for 5+ minutes ({{ $value | humanizePercentage }}). llama-server may OOM — consider reducing context_size or enabling ZRAM."
+
+      - alert: HdtvLlmNodeHighCPU
+        expr: |
+          100 - (avg by (instance) (
+            rate(node_cpu_seconds_total{job="llm-node", mode="idle"}[5m])
+          ) * 100) > 90
+        for: 10m
+        labels:
+          severity: warning
+          component: hdtv
+          subsystem: llm
+          host: llm-node
+        annotations:
+          summary: "HDTV LLM Node CPU > 90%"
+          description: "Ubuntu LLM node {{ $labels.instance }} CPU usage is above 90% for 10+ minutes. Inference throughput may degrade."
+
+      - alert: HdtvLlmNodeDiskNearFull
+        expr: |
+          100 - (
+            node_filesystem_avail_bytes{job="llm-node", mountpoint="/", fstype!="rootfs"}
+            * 100
+            / node_filesystem_size_bytes{job="llm-node", mountpoint="/", fstype!="rootfs"}
+          ) > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: hdtv
+          subsystem: llm
+          host: llm-node
+        annotations:
+          summary: "HDTV LLM Node disk > 85%"
+          description: "Ubuntu LLM node {{ $labels.instance }} disk at {{ $value | humanize }}% full. GGUF model files are large (~2GB). Clean old models if disk is low."
+
+      - alert: HdtvLlmServerDown
+        expr: |
+          probe_success{job="blackbox-https", instance=~".*acer.*"} == 0
+          OR
+          probe_success{job="blackbox-http", instance=~".*:8080.*"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          component: hdtv
+          subsystem: llm
+          host: llm-node
+        annotations:
+          summary: "HDTV llama-server HTTP probe failed"
+          description: "Blackbox probe to llama-server endpoint failed for 3+ minutes. Caddy proxy or llama-server process may be down. Check /opt/llm-node/docker-compose.yml status."

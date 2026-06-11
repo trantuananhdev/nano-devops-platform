@@ -53,7 +53,7 @@ log_info "Step 9/9: Setting up platform system service..."
 "$SCRIPT_DIR/system/platform_service_setup.sh"
 
 log_info "Updating /etc/hosts with platform domains..."
-DOMAINS="odoo.nano.platform ai.nano.platform grafana.nano.platform prometheus.nano.platform aggregator.nano.platform user.nano.platform data.nano.platform health.nano.platform faulty.nano.platform crm-ingest.nano.platform crm-demo.nano.platform"
+DOMAINS="odoo.nano.platform ai.nano.platform grafana.nano.platform prometheus.nano.platform aggregator.nano.platform user.nano.platform data.nano.platform health.nano.platform faulty.nano.platform crm-ingest.nano.platform crm-demo.nano.platform hdtv.nano.platform"
 for d in $DOMAINS; do
     if ! grep -q "$d" /etc/hosts; then
         echo "127.0.0.1 $d" >> /etc/hosts

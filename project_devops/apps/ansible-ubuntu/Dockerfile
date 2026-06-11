@@ -1,13 +1,13 @@
 # =============================================================================
 # Dockerfile — Ansible Runner for Acer AI Host
 # =============================================================================
-# Produces a lean, reproducible execution environment for all Ansible
-# playbooks targeting the Acer physical server (Ubuntu 22.04).
+# SSH key: prod_deployer (ed25519) — baked pub key for reference only.
+# Private key provided at runtime via Docker secret /run/secrets/prod_deployer.
 #
 # Usage (via docker-compose):
 #   docker compose run --rm ansible-runner site.yml
-#   docker compose run --rm ansible-runner bootstrap-ssh.yml --ask-pass --ask-become-pass
 #   docker compose run --rm ansible-runner verify-ssh.yml
+#   docker compose run --rm ansible-runner deploy-llm.yml
 #
 # Usage (standalone):
 #   docker build -t ansible-runner .
@@ -23,6 +23,9 @@ FROM python:3.12-slim AS base
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openssh-client \
         sshpass \
+        gcc \
+        libssl-dev \
+        python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------- python deps -------------------------------------------------------
@@ -37,11 +40,12 @@ RUN ansible-galaxy collection install -r /tmp/requirements.yml
 WORKDIR /ansible
 COPY . /ansible
 
-# Bake .ssh/ into image (fallback when Docker secret is not mounted)
-# Priority: Docker secret /run/secrets/prod_key > baked .ssh/prod_key
+# prod_deployer.pub is baked in (public key only — safe to embed).
+# prod_deployer (private) excluded via .dockerignore — provided at runtime
+# via Docker secret /run/secrets/prod_deployer.
 RUN mkdir -p /ansible/.ssh /root/.ssh \
  && chmod 700 /ansible/.ssh /root/.ssh \
- && if [ -f /ansible/.ssh/prod_key ]; then chmod 600 /ansible/.ssh/prod_key; fi
+ && if [ -f /ansible/.ssh/prod_deployer.pub ]; then chmod 644 /ansible/.ssh/prod_deployer.pub; fi
 
 # ---------- entrypoint --------------------------------------------------------
 COPY docker-entrypoint.sh /usr/local/bin/entrypoint.sh

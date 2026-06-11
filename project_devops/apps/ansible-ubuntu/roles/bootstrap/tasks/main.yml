@@ -1,7 +1,11 @@
 ---
 # roles/bootstrap/tasks/main.yml
-# Base system hardening: package baseline + UFW firewall
+# Base system: package baseline + UFW firewall + sudoers + SSH hardening
+# T-55: Thêm sudoers cho tutinhhao + SSH hardening
 
+# ============================================================================
+# Section 1: Packages
+# ============================================================================
 - name: "[Bootstrap] Update apt cache"
   ansible.builtin.apt:
     update_cache: true
@@ -19,8 +23,26 @@
       - htop
       - jq
       - unzip
+      - sudo
     state: present
 
+# ============================================================================
+# Section 2: Sudoers — tutinhhao NOPASSWD (T-55)
+# ============================================================================
+- name: "[Bootstrap] Ensure tutinhhao has passwordless sudo"
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/tutinhhao
+    content: |
+      # T-55: Ansible dual-user — tutinhhao can sudo without password
+      tutinhhao ALL=(ALL) NOPASSWD: ALL
+    owner: root
+    group: root
+    mode: "0440"
+    validate: '/usr/sbin/visudo -cf %s'
+
+# ============================================================================
+# Section 3: UFW Firewall
+# ============================================================================
 - name: "[Bootstrap] Install UFW"
   ansible.builtin.apt:
     name: ufw
@@ -49,3 +71,25 @@
 - name: "[Bootstrap] Enable UFW"
   community.general.ufw:
     state: enabled
+
+# ============================================================================
+# Section 4: SSH Hardening (T-55)
+# ============================================================================
+- name: "[SSH Hardening] Apply sshd_config settings"
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?{{ item.key }}"
+    line: "{{ item.key }} {{ item.value }}"
+    state: present
+    backup: "{{ ansible_loop.first }}"
+  loop: "{{ sshd_settings | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"
+    extended: true
+  notify: Restart sshd
+
+- name: "[SSH Hardening] Validate sshd_config syntax"
+  ansible.builtin.command: sshd -t
+  changed_when: false
+  register: _sshd_validate
+  failed_when: _sshd_validate.rc != 0

@@ -1,0 +1,18 @@
+---
+description: HDTV AI Platform backend conventions
+globs: project_devops/apps/hdtv-ai-platform/**
+alwaysApply: false
+---
+
+# HDTV Backend Rules
+
+- Python 3.11, FastAPI strictly async
+- SQLAlchemy 2.0 Async + Alembic for migrations
+- Use `httpx` for HTTP (never `requests`)
+- LLM calls ONLY via `LLM_BASE_URL` HTTP — never embed model in FastAPI
+- Celery for ReAct agent loops; API returns 202 Accepted
+- Every tool call MUST log to `ai_audit_logs` table
+- Structure: `routers/` → `services/` → `models/` — no business logic in routers
+- Config via Pydantic `BaseSettings` + `.env` — no hardcoded IPs/keys
+- Strict type hints on all functions
+- Docker: alpine-based Python images, memory limits in compose

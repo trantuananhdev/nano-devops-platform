@@ -1,0 +1,280 @@
+# HDTV AI Platform — App stack on Alpine VM
+# LLM runs separately on Ubuntu (llama-server)
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: hdtv-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${HDTV_POSTGRES_DB:-hdtv_db}
+      POSTGRES_USER: ${HDTV_POSTGRES_USER:-hdtv_user}
+      POSTGRES_PASSWORD: ${HDTV_POSTGRES_PASSWORD:-changeme_hdtv}
+    volumes:
+      - hdtv_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${HDTV_POSTGRES_USER:-hdtv_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+    logging: *default-logging
+    networks:
+      - hdtv-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: hdtv-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    logging: *default-logging
+    networks:
+      - hdtv-net
+
+  chroma:
+    image: chromadb/chroma:0.5.23
+    container_name: hdtv-chroma
+    restart: unless-stopped
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - hdtv_chroma_data:/chroma/chroma
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 400m
+    logging: *default-logging
+    networks:
+      - hdtv-net
+
+  # T-11: Meilisearch full-text search
+  meilisearch:
+    image: getmeili/meilisearch:v1.8
+    container_name: hdtv-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_ENV: development
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-changeme_meili}
+    volumes:
+      - hdtv_meili_data:/meili_data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    logging: *default-logging
+    networks:
+      - hdtv-net
+
+  minio:
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    container_name: hdtv-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-hdtv_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme_minio}
+    volumes:
+      - hdtv_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    logging: *default-logging
+    networks:
+      - hdtv-net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: hdtv-api
+    restart: unless-stopped
+    env_file:
+      - ../../../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${HDTV_POSTGRES_USER:-hdtv_user}:${HDTV_POSTGRES_PASSWORD:-changeme_hdtv}@postgres:5432/${HDTV_POSTGRES_DB:-hdtv_db}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CHROMA_HOST: chroma
+      CHROMA_PORT: 8000
+      MINIO_ENDPOINT: minio:9000
+      MEILI_URL: http://meilisearch:7700
+      MEILI_API_KEY: ${MEILI_MASTER_KEY:-changeme_meili}
+    labels:
+      # T-28: Prometheus Docker SD — auto-discovered by prometheus docker_sd job
+      # (Standalone dev compose — Traefik labels removed; use platform compose for Traefik routing)
+      prometheus.scrape: "true"
+      prometheus.job: "hdtv-ai"
+      prometheus.port: "8000"
+      prometheus.path: "/metrics"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+    logging: *default-logging
+    networks:
+      - hdtv-net
+      # Uncomment khi chạy cùng platform stack để Prometheus có thể scrape /metrics:
+      # - platform-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: hdtv-worker
+    restart: unless-stopped
+    env_file:
+      - ../../../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${HDTV_POSTGRES_USER:-hdtv_user}:${HDTV_POSTGRES_PASSWORD:-changeme_hdtv}@postgres:5432/${HDTV_POSTGRES_DB:-hdtv_db}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CHROMA_HOST: chroma
+      CHROMA_PORT: 8000
+      MEILI_URL: http://meilisearch:7700
+      MEILI_API_KEY: ${MEILI_MASTER_KEY:-changeme_meili}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-hdtv_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme_minio}
+      # T-26: Docker sandbox — set SANDBOX_USE_DOCKER=true in .env to enable
+      # volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"]
+    volumes:
+      - hdtv_rag_docs:/opt/rag-docs        # T-27: shared RAG docs volume
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    logging: *default-logging
+    networks:
+      - hdtv-net
+
+  # T-27: Celery Beat — RAG pipeline scheduler (ingest every 6h, cleanup daily 02:00)
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: hdtv-beat
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
+    env_file:
+      - ../../../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${HDTV_POSTGRES_USER:-hdtv_user}:${HDTV_POSTGRES_PASSWORD:-changeme_hdtv}@postgres:5432/${HDTV_POSTGRES_DB:-hdtv_db}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CHROMA_HOST: chroma
+      CHROMA_PORT: 8000
+    volumes:
+      - hdtv_rag_docs:/opt/rag-docs        # T-27: shared RAG docs volume
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 64m                      # Beat is lightweight — just a scheduler
+    logging: *default-logging
+    networks:
+      - hdtv-net
+
+  frontend:
+    build:
+      context: ../hdtv-ai-prototype
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
+        VITE_WS_BASE_URL: ""
+    container_name: hdtv-frontend
+    restart: unless-stopped
+    ports:
+      - "3080:80"
+    depends_on:
+      - api
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    logging: *default-logging
+    networks:
+      - hdtv-net
+
+volumes:
+  hdtv_pg_data:
+  hdtv_chroma_data:
+  hdtv_minio_data:
+  hdtv_meili_data:
+  hdtv_rag_docs:           # T-27: shared volume — agent worker + beat scheduler + RAG pipeline
+
+networks:
+  hdtv-net:
+    driver: bridge
+  # platform-network: uncomment khi chạy cùng platform stack (cli.sh hdtv-up)
+  # platform-network:
+  #   external: true
+  #   name: platform-network

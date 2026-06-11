@@ -1,0 +1,332 @@
+{
+  "dashboard": {
+    "title": "HDTV AI Platform — Agent Intelligence",
+    "uid": "hdtv-agent-v1",
+    "tags": ["hdtv", "ai", "agent", "llm"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {"from": "now-1h", "to": "now"},
+    "timepicker": {},
+    "panels": [
+
+      {
+        "id": 1,
+        "type": "row",
+        "title": "Row 1 — LLM Health",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+        "collapsed": false
+      },
+      {
+        "id": 2,
+        "type": "stat",
+        "title": "HDTV API Status",
+        "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
+        "targets": [{"expr": "up{job=\"hdtv-ai\"}", "refId": "A"}],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}
+            ],
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "red"}, {"value": 1, "color": "green"}]}
+          }
+        }
+      },
+      {
+        "id": 3,
+        "type": "stat",
+        "title": "LLM Circuit Breaker Trips",
+        "description": "Total times LLM circuit breaker tripped OPEN (Gemini + Local)",
+        "gridPos": {"h": 4, "w": 4, "x": 4, "y": 1},
+        "targets": [{"expr": "sum(hdtv_llm_circuit_trips_total) or vector(0)", "refId": "A", "legendFormat": "Trips"}],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}, {"value": 1, "color": "orange"}, {"value": 3, "color": "red"}]},
+            "color": {"mode": "thresholds"}
+          }
+        }
+      },
+      {
+        "id": 4,
+        "type": "stat",
+        "title": "Appraisal Timeouts",
+        "description": "Appraisals that exceeded max duration limit",
+        "gridPos": {"h": 4, "w": 4, "x": 8, "y": 1},
+        "targets": [{"expr": "hdtv_appraisal_timeouts_total or vector(0)", "refId": "A"}],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}, {"value": 1, "color": "orange"}, {"value": 5, "color": "red"}]},
+            "color": {"mode": "thresholds"}
+          }
+        }
+      },
+      {
+        "id": 5,
+        "type": "timeseries",
+        "title": "LLM Calls by Backend / Status",
+        "description": "Rate of LLM calls per backend (local/gemini) and status (ok/error/circuit_open/fallback)",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 1},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_llm_calls_total[5m])) by (backend, status)",
+            "refId": "A",
+            "legendFormat": "{{backend}} / {{status}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "reqps", "color": {"mode": "palette-classic"}}
+        }
+      },
+      {
+        "id": 6,
+        "type": "timeseries",
+        "title": "LLM Token Consumption Rate",
+        "gridPos": {"h": 4, "w": 12, "x": 0, "y": 5},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_llm_tokens_estimated_total[5m])) by (role, backend)",
+            "refId": "A",
+            "legendFormat": "{{role}} / {{backend}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "tok/s", "color": {"mode": "palette-classic"}}
+        }
+      },
+
+      {
+        "id": 10,
+        "type": "row",
+        "title": "Row 2 — Agent Loop",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 9},
+        "collapsed": false
+      },
+      {
+        "id": 11,
+        "type": "stat",
+        "title": "Plan Revision Rate",
+        "description": "Fraction of plans that triggered revision (revise / total)",
+        "gridPos": {"h": 4, "w": 4, "x": 0, "y": 10},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_agent_plans_total{verdict=\"revise\"}[5m])) / sum(rate(hdtv_agent_plans_total[5m])) * 100 or vector(0)",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}, {"value": 30, "color": "orange"}, {"value": 60, "color": "red"}]},
+            "color": {"mode": "thresholds"}
+          }
+        }
+      },
+      {
+        "id": 12,
+        "type": "stat",
+        "title": "Critic Rejections",
+        "gridPos": {"h": 4, "w": 4, "x": 4, "y": 10},
+        "targets": [
+          {"expr": "hdtv_agent_critic_rejections_total or vector(0)", "refId": "A"}
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}, {"value": 5, "color": "orange"}, {"value": 20, "color": "red"}]},
+            "color": {"mode": "thresholds"}
+          }
+        }
+      },
+      {
+        "id": 13,
+        "type": "timeseries",
+        "title": "Agent Plan Outcomes (rate)",
+        "description": "Plan verdicts: sufficient / revise / escalate over time",
+        "gridPos": {"h": 8, "w": 16, "x": 8, "y": 10},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_agent_plans_total[5m])) by (verdict)",
+            "refId": "A",
+            "legendFormat": "{{verdict}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "ops", "color": {"mode": "palette-classic"}}
+        }
+      },
+      {
+        "id": 14,
+        "type": "timeseries",
+        "title": "API Request Latency P95 (per endpoint)",
+        "gridPos": {"h": 4, "w": 8, "x": 0, "y": 14},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(hdtv_http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+            "refId": "A",
+            "legendFormat": "P95 {{endpoint}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "s", "color": {"mode": "palette-classic"}}
+        }
+      },
+
+      {
+        "id": 20,
+        "type": "row",
+        "title": "Row 3 — Tool Execution",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 18},
+        "collapsed": false
+      },
+      {
+        "id": 21,
+        "type": "timeseries",
+        "title": "Tool Call Rate by Tool / Status",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 19},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_tool_calls_total[5m])) by (tool_name, status)",
+            "refId": "A",
+            "legendFormat": "{{tool_name}} / {{status}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "ops", "color": {"mode": "palette-classic"}}
+        }
+      },
+      {
+        "id": 22,
+        "type": "timeseries",
+        "title": "Tool Latency P95 by Tool",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 19},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(hdtv_tool_duration_seconds_bucket[5m])) by (le, tool_name))",
+            "refId": "A",
+            "legendFormat": "P95 {{tool_name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "s", "color": {"mode": "palette-classic"}}
+        }
+      },
+      {
+        "id": 23,
+        "type": "timeseries",
+        "title": "Sandbox Executions (shell / python) by Status",
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 27},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_sandbox_executions_total[5m])) by (type, status)",
+            "refId": "A",
+            "legendFormat": "{{type}} / {{status}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "ops", "color": {"mode": "palette-classic"}}
+        }
+      },
+      {
+        "id": 24,
+        "type": "stat",
+        "title": "Sandbox Blocked (total)",
+        "description": "Commands blocked by sandbox security policy",
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 27},
+        "targets": [
+          {
+            "expr": "sum(hdtv_sandbox_executions_total{status=\"blocked\"}) or vector(0)",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {"mode": "absolute", "steps": [{"value": 0, "color": "green"}, {"value": 10, "color": "orange"}, {"value": 50, "color": "red"}]},
+            "color": {"mode": "thresholds"}
+          }
+        }
+      },
+
+      {
+        "id": 30,
+        "type": "row",
+        "title": "Row 4 — RAG / Memory",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 33},
+        "collapsed": false
+      },
+      {
+        "id": 31,
+        "type": "timeseries",
+        "title": "Context Truncation Rate (by model)",
+        "description": "How often fit_messages() drops old messages to fit context window",
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 34},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_context_truncations_total[5m])) by (model)",
+            "refId": "A",
+            "legendFormat": "{{model}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "ops", "color": {"mode": "palette-classic"}}
+        }
+      },
+      {
+        "id": 32,
+        "type": "timeseries",
+        "title": "Rate Limit Hits (by endpoint)",
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 34},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_rate_limit_hits_total[5m])) by (endpoint)",
+            "refId": "A",
+            "legendFormat": "{{endpoint}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "ops", "color": {"mode": "palette-classic"}}
+        }
+      },
+
+      {
+        "id": 40,
+        "type": "row",
+        "title": "Row 5 — Infrastructure",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 40},
+        "collapsed": false
+      },
+      {
+        "id": 41,
+        "type": "timeseries",
+        "title": "HDTV API Request Rate (by status code)",
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 41},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_http_requests_total[5m])) by (status_code, method)",
+            "refId": "A",
+            "legendFormat": "{{method}} {{status_code}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "reqps", "color": {"mode": "palette-classic"}}
+        }
+      },
+      {
+        "id": 42,
+        "type": "timeseries",
+        "title": "HTTP Error Rate (4xx + 5xx)",
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 41},
+        "targets": [
+          {
+            "expr": "sum(rate(hdtv_http_requests_total{status_code=~\"[45]..\"}[5m])) / sum(rate(hdtv_http_requests_total[5m])) * 100",
+            "refId": "A",
+            "legendFormat": "Error %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "percent", "color": {"mode": "palette-classic"}}
+        }
+      }
+
+    ]
+  }
+}

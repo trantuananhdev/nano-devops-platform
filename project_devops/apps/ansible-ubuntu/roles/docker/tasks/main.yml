@@ -1,6 +1,7 @@
 ---
 # roles/docker/tasks/main.yml
 # Install Docker CE + Compose V2 plugin (official Docker apt repo)
+# T-55: Thêm cả app_user (tutinhhao) vào docker group
 
 - name: "[Docker] Check if Docker is already installed"
   ansible.builtin.command: docker --version
@@ -63,11 +64,20 @@
     enabled: true
     state: started
 
-- name: "[Docker] Add ansible_user to docker group (avoid sudo for docker CLI)"
+# T-55: Thêm CẢ ansible_user (tutinhhao) VÀ app_user vào docker group
+# Đảm bảo tutinhhao chạy docker compose không cần sudo
+- name: "[Docker] Add users to docker group (avoid sudo for docker CLI)"
   ansible.builtin.user:
-    name: "{{ ansible_user }}"
+    name: "{{ item }}"
     groups: docker
     append: true
+  loop:
+    - "{{ ansible_user }}"
+    - "{{ app_user | default(ansible_user) }}"
+  loop_control:
+    label: "{{ item }}"
+  # Deduplicate: khi ansible_user == app_user, chỉ chạy 1 lần
+  when: item != '' and item is defined
 
 - name: "[Docker] Configure Docker daemon options"
   ansible.builtin.copy:

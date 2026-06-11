@@ -1,0 +1,9 @@
+---
+# inventory/group_vars/acer.yml — runtime connection vars for [acer] group
+# Full stack vars (zram, docker, ufw, etc.): ../../group_vars/acer.yml
+#
+# T-55: Kết nối tutinhhao → become root khi cần.
+# Key: prod_deployer (ed25519) — inject vào cả root và tutinhhao trên Ubuntu.
+
+ansible_python_interpreter: /usr/bin/python3
+ansible_become_method: sudo

@@ -1,0 +1,416 @@
+﻿import json
+import logging
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.entities import (
+    AiAuditLog,
+    AgentMemory,
+    Alert,
+    AlertStatus,
+    AppraisalResult,
+    Dossier,
+    DossierStatus,
+    RiskLevel,
+    RiskRule,
+)
+from app.services import search_service
+from app.services.llm_client import chat_completions
+from app.services.pubsub import publish_event
+from app.services.tools.base import execute_tool, list_tools_dynamic
+
+logger = logging.getLogger(__name__)
+
+
+async def _build_system_prompt(tools: list[dict[str, Any]]) -> str:
+    """Build the system prompt with available tools."""
+    tools_desc = "\n".join([
+        f"- {t['name']}: {t['description']} (Category: {t['category']})"
+        for t in tools
+    ])
+    
+    return f"""You are an EVN Hanoi HDTV dossier appraisal autonomous agent.
+
+Your role is to intelligently assess dossier risk by choosing and executing the right tools.
+
+Available tools:
+{tools_desc}
+
+## Response Format
+You MUST respond in JSON format with the following structure:
+{{
+    "thought": "Your reasoning about what to do next",
+    "action": "tool_call" or "finish",
+    "tool_name": "Name of tool to call (only if action is tool_call)",
+    "tool_input": {{
+        "dossier_id": 123,
+        "doc_no": "123/TTr-B02",
+        "title": "Dossier title",
+        "query": "Specific query for this tool"
+    }}
+}}
+
+## Decision Process
+1. First, assess the dossier and decide which tools are needed
+2. Call tools one by one (don't call multiple tools in parallel)
+3. After each tool, analyze the result
+4. When you have enough information, finish and summarize
+
+## Risk Assessment Rules
+- High Risk: Budget exceeded OR inventory waste detected
+- Medium Risk: Missing legal documents or unsigned docs
+- Low Risk: All checks pass
+
+Think carefully and act autonomously!"""
+
+
+async def _execute_risk_rules(checks: list[dict[str, Any]], session: AsyncSession) -> RiskLevel:
+    """Evaluate risk using configurable rules from database."""
+    # Get active risk rules from DB
+    result = await session.execute(
+        select(RiskRule).where(RiskRule.is_active == True).order_by(RiskRule.priority.desc())
+    )
+    rules = list(result.scalars().all())
+    
+    if not rules:
+        # Fallback to simple rules if no DB rules
+        for check in checks:
+            if check.get("status") == "fail":
+                label = check.get("label", "")
+                if "ERP" in label or "ngÃ¢n sÃ¡ch" in label.lower() or "tá»“n kho" in label.lower():
+                    return RiskLevel.high
+                return RiskLevel.medium
+        return RiskLevel.low
+    
+    # Create context for rule evaluation
+    context = {"checks": checks}
+    
+    for rule in rules:
+        try:
+            # Safely evaluate the condition
+            if eval(rule.condition_expression, {"__builtins__": {}}, context):
+                logger.info("Risk rule '%s' matched: %s", rule.name, rule.description)
+                return rule.risk_level
+        except Exception as exc:
+            logger.error("Failed to evaluate risk rule '%s': %s", rule.name, exc)
+    
+    return RiskLevel.low
+
+
+async def _save_memory(
+    session: AsyncSession,
+    dossier_id: int,
+    step: int,
+    thought: str,
+    action: str,
+    tool_name: str | None = None,
+    tool_input: dict[str, Any] | None = None,
+    observation: str | None = None,
+) -> None:
+    """Save agent reasoning to memory."""
+    memory = AgentMemory(
+        dossier_id=dossier_id,
+        step=step,
+        thought=thought,
+        action=action,
+        tool_name=tool_name,
+        tool_input=tool_input or {},
+        observation=observation,
+    )
+    session.add(memory)
+    await session.commit()
+
+
+async def _build_check(tool_name: str, output: dict[str, Any]) -> dict[str, Any]:
+    """Build a check result from tool output."""
+    templates = {
+        "LegalGraphRAG": {
+            "label": "Kiá»ƒm tra cÄƒn cá»© phÃ¡p lÃ½",
+            "pass_key": lambda o: len(o.get("results", [])) > 0,
+            "desc_pass": "ÄÃ£ Ä‘Ã­nh kÃ¨m vÄƒn báº£n, cÃ²n hiá»‡u lá»±c.",
+            "desc_fail": "Thiáº¿u cÄƒn cá»© phÃ¡p lÃ½.",
+        },
+        "ErpBudgetCheck": {
+            "label": "Äá»‘i chiáº¿u Tá»•ng má»©c Ä‘áº§u tÆ° (ERP)",
+            "pass_key": lambda o: not o.get("exceeded", False),
+            "desc_pass": "Náº±m trong háº¡n má»©c an toÃ n.",
+            "desc_fail": "VÆ°á»£t quÃ¡ ngÃ¢n sÃ¡ch Ä‘Ã£ phÃª duyá»‡t.",
+        },
+        "ErpInventoryCheck": {
+            "label": "Kiá»ƒm tra Váº­t tÆ° tá»“n kho (ERP INV)",
+            "pass_key": lambda o: not o.get("waste_warning", False),
+            "desc_pass": "KhÃ´ng cÃ³ váº­t tÆ° tá»“n Ä‘á»ng.",
+            "desc_fail": "PhÃ¡t hiá»‡n váº­t tÆ° tá»“n kho â€” cáº£nh bÃ¡o lÃ£ng phÃ­.",
+        },
+        "DOfficeLookup": {
+            "label": "Äá»‘i chiáº¿u DOffice",
+            "pass_key": lambda o: o.get("signed", False),
+            "desc_pass": "Há»“ sÆ¡ Ä‘Ã£ Ä‘Äƒng kÃ½ vÃ  kÃ½.",
+            "desc_fail": "Há»“ sÆ¡ chÆ°a Ä‘á»§ chá»¯ kÃ½.",
+        },
+        "PmisProjectCheck": {
+            "label": "Checklist PMIS",
+            "pass_key": lambda o: o.get("on_schedule", True),
+            "desc_pass": "Dá»± Ã¡n Ä‘Ãºng tiáº¿n Ä‘á»™.",
+            "desc_fail": "Dá»± Ã¡n trá»… tiáº¿n Ä‘á»™.",
+        },
+        "EcoOcrExtract": {
+            "label": "TrÃ­ch xuáº¥t ná»™i dung PDF",
+            "pass_key": lambda o: o.get("extracted_text") is not None,
+            "desc_pass": "ÄÃ£ trÃ­ch xuáº¥t ná»™i dung PDF.",
+            "desc_fail": "KhÃ´ng thá»ƒ trÃ­ch xuáº¥t PDF.",
+        },
+    }
+    tpl = templates.get(tool_name, {"label": tool_name, "pass_key": lambda o: True, "desc_pass": "OK", "desc_fail": "Fail"})
+    passed = tpl["pass_key"](output)
+    return {
+        "tool": tool_name,
+        "label": tpl["label"],
+        "status": "pass" if passed else "fail",
+        "desc": tpl["desc_pass"] if passed else tpl["desc_fail"],
+        "details": json.dumps(output, ensure_ascii=False, indent=2),
+    }
+
+
+async def run_appraisal(
+    session: AsyncSession,
+    dossier_id: int,
+    task_id: str,
+) -> AppraisalResult:
+    """Run the autonomous ReAct agent appraisal."""
+    dossier = await session.get(Dossier, dossier_id)
+    if not dossier:
+        raise ValueError(f"Dossier {dossier_id} not found")
+
+    dossier.status = DossierStatus.appraising
+    await session.commit()
+
+    await publish_event(dossier_id, {"type": "started", "task_id": task_id, "dossier_id": dossier_id})
+
+    checks: list[dict[str, Any]] = []
+    observations: list[str] = []
+    step = 0
+    max_steps = 10  # Prevent infinite loops
+    
+    # Get dynamic tools from database
+    tools = await list_tools_dynamic()
+    if not tools:
+        logger.warning("No tools configured in database, using static list")
+        tools = [
+            {"name": "LegalGraphRAG", "description": "Check legal documents", "category": "legal", "priority": 10},
+            {"name": "ErpBudgetCheck", "description": "Check budget in ERP", "category": "financial", "priority": 9},
+            {"name": "ErpInventoryCheck", "description": "Check inventory in ERP", "category": "financial", "priority": 8},
+            {"name": "DOfficeLookup", "description": "Check document registry", "category": "admin", "priority": 7},
+            {"name": "PmisProjectCheck", "description": "Check project schedule", "category": "project", "priority": 6},
+        ]
+    
+    system_prompt = await _build_system_prompt(tools)
+    
+    # Agent loop - autonomous decision making
+    while step < max_steps:
+        step += 1
+        
+        # Build conversation history for LLM
+        conversation = [
+            {"role": "system", "content": system_prompt},
+        ]
+        
+        # Add previous observations to context
+        if observations:
+            context = f"Dossier: {dossier.title}\n\nPrevious observations:\n" + "\n".join(observations)
+            conversation.append({"role": "user", "content": context})
+        else:
+            conversation.append({
+                "role": "user", 
+                "content": f"Please assess this dossier: {dossier.title} (Doc No: {dossier.doc_no}). What should we check first?"
+            })
+        
+        # Get LLM decision
+        try:
+            llm_response = await chat_completions(conversation, response_format_json=True)
+            logger.info("LLM decision: %s", llm_response)
+            
+            # Parse LLM response
+            try:
+                if isinstance(llm_response, str):
+                    decision = json.loads(llm_response)
+                else:
+                    decision = llm_response
+            except json.JSONDecodeError:
+                # Fallback if LLM doesn't return proper JSON
+                logger.warning("LLM returned invalid JSON, using fallback strategy")
+                decision = {
+                    "thought": "Using fallback strategy - calling tools in sequence",
+                    "action": "tool_call",
+                    "tool_name": tools[min(step-1, len(tools)-1)]["name"],
+                    "tool_input": {
+                        "dossier_id": dossier_id,
+                        "doc_no": dossier.doc_no,
+                        "title": dossier.title,
+                        "query": dossier.title,
+                    }
+                }
+            
+            thought = decision.get("thought", "No reasoning provided")
+            action = decision.get("action", "finish")
+            
+            # Save agent reasoning
+            await _save_memory(
+                session=session,
+                dossier_id=dossier_id,
+                step=step,
+                thought=thought,
+                action=action,
+                tool_name=decision.get("tool_name"),
+                tool_input=decision.get("tool_input"),
+            )
+            
+            if action == "finish":
+                logger.info("Agent decided to finish")
+                break
+            
+            if action != "tool_call":
+                logger.warning("Unknown action: %s, finishing", action)
+                break
+            
+            tool_name = decision.get("tool_name")
+            if not tool_name:
+                logger.warning("No tool name provided, finishing")
+                break
+            
+            # Execute the tool
+            tool_input = decision.get("tool_input", {
+                "dossier_id": dossier_id,
+                "doc_no": dossier.doc_no,
+                "title": dossier.title,
+                "query": dossier.title,
+            })
+            
+            await publish_event(
+                dossier_id,
+                {"type": "tool_executing", "task_id": task_id, "tool_name": tool_name, "inputs": tool_input},
+            )
+            
+            output, elapsed_ms = await execute_tool(tool_name, tool_input)
+            
+            # Save audit log
+            audit = AiAuditLog(
+                task_id=task_id,
+                tool_name=tool_name,
+                execution_time_ms=elapsed_ms,
+                inputs=tool_input,
+                outputs=output,
+            )
+            session.add(audit)
+            await session.commit()
+            
+            # Build check result
+            check = await _build_check(tool_name, output)
+            checks.append(check)
+            observations.append(f"{tool_name}: {json.dumps(output, ensure_ascii=False)}")
+            
+            # Update memory with observation
+            await session.execute(
+                AgentMemory.__table__.update()
+                .where(AgentMemory.dossier_id == dossier_id)
+                .where(AgentMemory.step == step)
+                .values(observation=json.dumps(output, ensure_ascii=False))
+            )
+            await session.commit()
+            
+            await publish_event(
+                dossier_id,
+                {
+                    "type": "tool_result",
+                    "task_id": task_id,
+                    "tool_name": tool_name,
+                    "outputs": output,
+                    "execution_time_ms": elapsed_ms,
+                },
+            )
+            
+            # If we've called all tools, finish
+            called_tool_names = {c["tool"] for c in checks}
+            available_tool_names = {t["name"] for t in tools}
+            if called_tool_names.issuperset(available_tool_names):
+                logger.info("All tools have been called, finishing")
+                break
+                
+        except Exception as exc:
+            logger.exception("Error in agent loop step %d", step)
+            # Continue with next step or finish
+            if step >= 3:
+                break
+    
+    # Final LLM synthesis
+    llm_messages = [
+        {"role": "system", "content": "You are an expert financial analyst. Summarize the dossier appraisal."},
+        {
+            "role": "user",
+            "content": f"Dossier: {dossier.title}\nObservations:\n" + "\n".join(observations),
+        },
+    ]
+    llm_raw = await chat_completions(llm_messages, response_format_json=False)
+    
+    # Calculate final risk
+    overall_risk = await _execute_risk_rules(checks, session)
+    dossier.risk_level = overall_risk
+    
+    if overall_risk == RiskLevel.high:
+        alert = Alert(
+            dossier_id=dossier_id,
+            severity="high",
+            source="AI Appraisal",
+            description=f"Cáº£nh bÃ¡o rá»§i ro cao cho {dossier.doc_no}: vÆ°á»£t ngÆ°á»¡ng kiá»ƒm tra ERP/phÃ¡p lÃ½",
+            status=AlertStatus.open,
+        )
+        session.add(alert)
+        await publish_event(
+            dossier_id,
+            {"type": "risk_flagged", "task_id": task_id, "risk": overall_risk.value},
+        )
+    
+    report_md = (
+        f"# BÃ¡o cÃ¡o tháº©m Ä‘á»‹nh AI\n\n"
+        f"**Sá»‘ hiá»‡u**: {dossier.doc_no}\n\n"
+        f"**Má»©c rá»§i ro**: {overall_risk.value.upper()}\n\n"
+        f"**PhÆ°Æ¡ng phÃ¡p**: ÄÃ¡nh giÃ¡ tá»± Ä‘á»™ng báº±ng Agent AI ReAct\n\n"
+        f"## Káº¿t quáº£ kiá»ƒm tra\n\n"
+        + "\n".join(f"- **{c['label']}**: {c['status'].upper()} â€” {c['desc']}" for c in checks)
+        + f"\n\n## PhÃ¢n tÃ­ch LLM\n\n{llm_raw}\n"
+    )
+    resolution_md = (
+        f"# Dá»± tháº£o Nghá»‹ quyáº¿t\n\n"
+        f"HÄTV ghi nháº­n Tá» trÃ¬nh {dossier.doc_no}.\n\n"
+        f"{'Äá»€ NGHá»Š Bá»” SUNG Há»’ SÆ  trÆ°á»›c khi phÃª duyá»‡t.' if overall_risk == RiskLevel.high else 'Äá»’NG Ã CHá»¦ TRÆ¯Æ NG theo Ä‘á» xuáº¥t.'}\n"
+    )
+    
+    result = AppraisalResult(
+        dossier_id=dossier_id,
+        overall_risk=overall_risk,
+        report_md=report_md,
+        resolution_md=resolution_md,
+        checks={"items": checks},
+    )
+    session.add(result)
+    dossier.status = DossierStatus.needs_revision if overall_risk == RiskLevel.high else DossierStatus.approved
+    await session.commit()
+    await session.refresh(result)
+    await session.refresh(dossier)
+    
+    # Update search index
+    await search_service.index_dossier(search_service.dossier_to_doc(dossier))
+    
+    await publish_event(
+        dossier_id,
+        {
+            "type": "completed",
+            "task_id": task_id,
+            "overall_risk": overall_risk.value,
+            "appraisal_id": result.id,
+        },
+    )
+    return result
+

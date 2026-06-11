@@ -1,23 +1,33 @@
 ---
 # =============================================================================
-# site.yml — Acer Ubuntu Full Bootstrap (run once)
+# site.yml — Acer Ubuntu Full Bootstrap
 # =============================================================================
-# Orchestrates system hardening + Docker + observability + EcoIT base stack.
+# T-55: Kết nối tutinhhao → become root cho system tasks.
+# Key: prod_deployer (ed25519) inject vào cả root và tutinhhao ✅
+#
+# Prerequisites:
+#   - prod_deployer.pub inject vào /home/tutinhhao/.ssh/authorized_keys ✅
+#   - prod_deployer.pub inject vào /root/.ssh/authorized_keys ✅
+#   - tutinhhao có sudo NOPASSWD (hoặc chạy lần đầu qua root override)
 #
 # Usage:
 #   Dry-run:  ansible-playbook -i inventory/hosts.ini site.yml --check --diff
 #   Deploy:   ansible-playbook -i inventory/hosts.ini site.yml
 #   Tags:     ansible-playbook -i inventory/hosts.ini site.yml --tags docker
+#
+#   Lần đầu nếu tutinhhao chưa có sudo:
+#     ansible-playbook -i inventory/hosts.ini site.yml \
+#       -e "ansible_user=root ansible_become=false"
 # =============================================================================
 
 - name: "Acer Ubuntu — Full System Bootstrap"
   hosts: acer
-  become: true
+  become: true             # tutinhhao → sudo → root cho system tasks
   gather_facts: true
 
   roles:
     - role: bootstrap
-      tags: [bootstrap, ufw, ssh]
+      tags: [bootstrap, ufw, ssh, sudoers]
 
     - role: zram
       tags: [zram, sysctl, swap]

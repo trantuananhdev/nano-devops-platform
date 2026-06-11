@@ -1,0 +1,49 @@
+# promtail-config.yml — Ship LLM node logs to Alpine VM Loki
+# Managed by Ansible role: llm_node
+# T-31: Log shipping via Promtail → Loki
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/promtail-positions.yaml
+
+clients:
+  - url: {{ loki_url }}/loki/api/v1/push
+    tenant_id: hdtv-llm-node
+
+scrape_configs:
+  # llama-server stdout/stderr via Docker labels
+  - job_name: llama-server
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+        filters:
+          - name: name
+            values: ["llama-server"]
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        target_label: container
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: stream
+      - replacement: "llm-node"
+        target_label: host
+      - replacement: "llama-server"
+        target_label: job
+
+  # Caddy access logs
+  - job_name: caddy
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+        filters:
+          - name: name
+            values: ["llm-caddy"]
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        target_label: container
+      - replacement: "llm-node"
+        target_label: host
+      - replacement: "caddy"
+        target_label: job

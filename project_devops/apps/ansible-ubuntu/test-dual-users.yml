@@ -1,0 +1,247 @@
+---
+# =============================================================================
+# test-dual-users.yml — Kiểm tra SSH access cho CẢ 2 user (root + tutinhhao)
+# =============================================================================
+# Chạy trước khi áp dụng T-55 dual-user model.
+# Playbook này kết nối lần lượt bằng root và tutinhhao để xác nhận:
+#   1. SSH key-based auth hoạt động cho cả 2 user
+#   2. tutinhhao có thể sudo lên root (NOPASSWD)
+#   3. tutinhhao thuộc docker group (nếu Docker đã cài)
+#   4. Cả 2 user đều có prod_deployer key trong authorized_keys
+#
+# Usage:
+#   Từ Alpine VM (qua ansible-runner container):
+#     ansible-playbook -i /tmp/inventory.ini test-dual-users.yml
+#
+#   Hoặc trực tiếp (ngoài Docker):
+#     ansible-playbook -i inventory/hosts.ini test-dual-users.yml \
+#       -e "ansible_host=192.168.100.6" \
+#       --private-key=../../.ssh/prod_deployer
+#
+#   Từ cli.sh:
+#     ./cli.sh ansible-test-users
+# =============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Play 1: Kiểm tra ROOT access
+# ─────────────────────────────────────────────────────────────────────────────
+- name: "[Test] Play 1 — Root SSH access"
+  hosts: acer
+  gather_facts: false
+  become: false
+  vars:
+    ansible_user: root
+    ansible_become: false
+
+  tasks:
+    - name: "[Root] Kiểm tra whoami"
+      ansible.builtin.command: whoami
+      register: _root_whoami
+      changed_when: false
+
+    - name: "[Root] Xác nhận kết nối đúng root"
+      ansible.builtin.assert:
+        that: _root_whoami.stdout == 'root'
+        fail_msg: "❌ Kết nối root thất bại — whoami trả về '{{ _root_whoami.stdout }}'"
+        success_msg: "✅ SSH root OK — whoami = root"
+
+    - name: "[Root] Kiểm tra authorized_keys tồn tại"
+      ansible.builtin.stat:
+        path: /root/.ssh/authorized_keys
+      register: _root_authkeys
+
+    - name: "[Root] Đếm số key trong authorized_keys"
+      ansible.builtin.command: wc -l /root/.ssh/authorized_keys
+      register: _root_keycount
+      changed_when: false
+      when: _root_authkeys.stat.exists
+
+    - name: "[Root] Kiểm tra hostname"
+      ansible.builtin.command: hostname -f
+      register: _root_hostname
+      changed_when: false
+
+    - name: "[Root] Print kết quả"
+      ansible.builtin.debug:
+        msg: |
+          ══════════════════════════════════════════════════
+          ✅  ROOT SSH — {{ ansible_host }}
+          ══════════════════════════════════════════════════
+          Connected as  : {{ _root_whoami.stdout }}
+          Hostname      : {{ _root_hostname.stdout }}
+          Auth keys     : {{ _root_authkeys.stat.exists | ternary('có', 'KHÔNG CÓ') }}
+          Key count     : {{ _root_keycount.stdout | default('N/A') }}
+          ══════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Play 2: Kiểm tra TUTINHHAO access + sudo capability
+# ─────────────────────────────────────────────────────────────────────────────
+- name: "[Test] Play 2 — tutinhhao SSH access + sudo"
+  hosts: acer
+  gather_facts: false
+  become: false
+  vars:
+    ansible_user: tutinhhao
+    ansible_become: false
+
+  tasks:
+    - name: "[tutinhhao] Kiểm tra whoami"
+      ansible.builtin.command: whoami
+      register: _user_whoami
+      changed_when: false
+
+    - name: "[tutinhhao] Xác nhận kết nối đúng tutinhhao"
+      ansible.builtin.assert:
+        that: _user_whoami.stdout == 'tutinhhao'
+        fail_msg: "❌ Kết nối tutinhhao thất bại — whoami trả về '{{ _user_whoami.stdout }}'"
+        success_msg: "✅ SSH tutinhhao OK — whoami = tutinhhao"
+
+    - name: "[tutinhhao] Kiểm tra home directory"
+      ansible.builtin.stat:
+        path: /home/tutinhhao
+      register: _user_home
+
+    - name: "[tutinhhao] Kiểm tra authorized_keys"
+      ansible.builtin.stat:
+        path: /home/tutinhhao/.ssh/authorized_keys
+      register: _user_authkeys
+
+    - name: "[tutinhhao] Kiểm tra user groups (docker, sudo)"
+      ansible.builtin.command: id tutinhhao
+      register: _user_groups
+      changed_when: false
+
+    - name: "[tutinhhao] Phân tích groups"
+      ansible.builtin.set_fact:
+        _in_docker_group: "{{ 'docker' in _user_groups.stdout }}"
+        _in_sudo_group: "{{ 'sudo' in _user_groups.stdout }}"
+
+    # --- Test sudo access ---
+    - name: "[tutinhhao] Test sudo whoami (NOPASSWD)"
+      ansible.builtin.command: whoami
+      become: true
+      become_method: sudo
+      register: _sudo_whoami
+      changed_when: false
+      ignore_errors: true
+      vars:
+        ansible_become: true
+
+    - name: "[tutinhhao] Test sudo ls /root (kiểm tra quyền root thật)"
+      ansible.builtin.command: ls -la /root/.ssh/
+      become: true
+      become_method: sudo
+      register: _sudo_root_ls
+      changed_when: false
+      ignore_errors: true
+      vars:
+        ansible_become: true
+
+    # --- Test Docker access (nếu có) ---
+    - name: "[tutinhhao] Test docker ps (không sudo)"
+      ansible.builtin.command: docker ps --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}"
+      register: _docker_ps
+      changed_when: false
+      ignore_errors: true
+
+    # --- Kiểm tra hostname ---
+    - name: "[tutinhhao] Kiểm tra hostname"
+      ansible.builtin.command: hostname -f
+      register: _user_hostname
+      changed_when: false
+
+    # --- Tổng kết ---
+    - name: "[tutinhhao] Print kết quả chi tiết"
+      ansible.builtin.debug:
+        msg: |
+          ══════════════════════════════════════════════════
+          📋  TUTINHHAO SSH + SUDO — {{ ansible_host }}
+          ══════════════════════════════════════════════════
+          Connected as  : {{ _user_whoami.stdout }}
+          Hostname      : {{ _user_hostname.stdout }}
+          Home dir      : {{ _user_home.stat.exists | ternary('/home/tutinhhao ✅', 'KHÔNG CÓ ❌') }}
+          Auth keys     : {{ _user_authkeys.stat.exists | ternary('có ✅', 'KHÔNG CÓ ❌') }}
+          ──────────────────────────────────────────────────
+          Groups        : {{ _user_groups.stdout }}
+          Docker group  : {{ _in_docker_group | ternary('✅ CÓ', '⚠️  CHƯA — cần chạy bootstrap') }}
+          Sudo group    : {{ _in_sudo_group | ternary('✅ CÓ', '⚠️  CHƯA') }}
+          ──────────────────────────────────────────────────
+          Sudo whoami   : {{ _sudo_whoami.stdout | default('❌ THẤT BẠI: ' + _sudo_whoami.stderr | default('unknown')) }}
+          Sudo root dir : {{ _sudo_root_ls.rc | default(1) == 0 | ternary('✅ Truy cập /root OK', '❌ Không truy cập được /root') }}
+          ──────────────────────────────────────────────────
+          Docker ps     : {{ _docker_ps.rc | default(1) == 0 | ternary('✅ Docker OK (không sudo)', '⚠️  Docker chưa sẵn sàng hoặc chưa thuộc group') }}
+          {% if _docker_ps.rc | default(1) == 0 %}
+          {{ _docker_ps.stdout }}
+          {% endif %}
+          ══════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Play 3: Tổng kết — so sánh cả 2 user
+# ─────────────────────────────────────────────────────────────────────────────
+- name: "[Test] Play 3 — Tổng kết dual-user"
+  hosts: acer
+  gather_facts: true
+  become: false
+  vars:
+    ansible_user: tutinhhao
+    ansible_become: false
+
+  tasks:
+    - name: "[Summary] Thu thập system info"
+      ansible.builtin.command: "{{ item.cmd }}"
+      register: _sysinfo
+      loop:
+        - { label: "OS",      cmd: "lsb_release -ds" }
+        - { label: "Kernel",  cmd: "uname -r" }
+        - { label: "Uptime",  cmd: "uptime -p" }
+        - { label: "Memory",  cmd: "free -h --si" }
+        - { label: "Disk",    cmd: "df -h /" }
+      changed_when: false
+      loop_control:
+        label: "{{ item.label }}"
+
+    - name: "[Summary] Kiểm tra sshd config quan trọng"
+      ansible.builtin.command: grep -E "^(PermitRootLogin|PasswordAuthentication|PubkeyAuthentication)" /etc/ssh/sshd_config
+      become: true
+      register: _sshd_config
+      changed_when: false
+      ignore_errors: true
+      vars:
+        ansible_become: true
+
+    - name: "[Summary] Kiểm tra sudoers cho tutinhhao"
+      ansible.builtin.shell: "sudo -l -U tutinhhao 2>/dev/null | head -5"
+      become: true
+      register: _sudoers_check
+      changed_when: false
+      ignore_errors: true
+      vars:
+        ansible_become: true
+
+    - name: "[Summary] BÁO CÁO CUỐI CÙNG"
+      ansible.builtin.debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════╗
+          ║     DUAL-USER SSH TEST — KẾT QUẢ TỔNG HỢP             ║
+          ╠══════════════════════════════════════════════════════════╣
+          ║ Host: {{ ansible_host | default(inventory_hostname) }}
+          ║ {{ ansible_distribution | default('Ubuntu') }} {{ ansible_distribution_version | default('') }}
+          ╠══════════════════════════════════════════════════════════╣
+          ║ SSH CONFIG:
+          ║ {{ _sshd_config.stdout | default('(không đọc được — cần become)') }}
+          ╠══════════════════════════════════════════════════════════╣
+          ║ SUDOERS (tutinhhao):
+          ║ {{ _sudoers_check.stdout | default('(không kiểm tra được)') }}
+          ╠══════════════════════════════════════════════════════════╣
+          ║ SYSTEM INFO:
+          {% for item in _sysinfo.results %}
+          ║ {{ '%-10s' | format(item.item.label + ':') }} {{ item.stdout_lines[0] | default('') }}
+          {% endfor %}
+          ╚══════════════════════════════════════════════════════════╝
+
+          📌 TIẾP THEO:
+            - Nếu sudo thất bại → cần thêm tutinhhao vào sudoers trên Ubuntu:
+                echo "tutinhhao ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/tutinhhao
+                sudo chmod 440 /etc/sudoers.d/tutinhhao
+            - Nếu docker group thiếu → chạy: sudo usermod -aG docker tutinhhao
+            - Sau khi OK → chạy ./cli.sh ansible-bootstrap để hoàn tất T-55

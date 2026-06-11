@@ -1,0 +1,44 @@
+---
+# =============================================================================
+# llm_node role defaults — Gemma 4 llama-server + Caddy + Observability
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Core LLM config
+# ---------------------------------------------------------------------------
+llm_app_dir: /opt/llm-node
+llm_port: 8080                  # External port (Caddy HTTP proxy)
+llm_tls_port: 8443              # External port (Caddy HTTPS self-signed)
+llm_internal_port: 8081         # llama-server listens only on 127.0.0.1:8081
+llm_model_file: gemma-4-2b-it-Q4_K_M.gguf
+llm_model_url: "https://huggingface.co/bartowski/gemma-4-2b-it-GGUF/resolve/main/gemma-4-2b-it-Q4_K_M.gguf"
+llm_hf_token: ""                # Optional: Hugging Face token for private/gated repos
+llm_context_size: 4096
+llm_threads: 2
+llm_docker_image: "ghcr.io/ggerganov/llama.cpp:server"
+
+# T-55: App user owns /opt/llm-node (tutinhhao — overridable via group_vars)
+llm_app_owner: "{{ app_user | default('tutinhhao') }}"
+
+# Allowed source IPs for UFW rules (Alpine VM CIDR)
+llm_allowed_cidr: "192.168.0.0/16"
+vm_ip: "{{ lookup('env', 'VM_IP') | default('192.168.157.10', true) }}"
+acer_host: "{{ lookup('env', 'ACER_HOST') | default('192.168.100.6', true) }}"
+
+# ---------------------------------------------------------------------------
+# T-31: TLS (Caddy reverse proxy)
+# ---------------------------------------------------------------------------
+llm_tls_enabled: true
+caddy_docker_image: "caddy:2.8-alpine"
+
+# ---------------------------------------------------------------------------
+# T-31: Observability
+# ---------------------------------------------------------------------------
+llm_metrics_enabled: true
+node_exporter_port: 9100
+node_exporter_image: "prom/node-exporter:v1.8.2"
+
+llm_log_shipping_enabled: true
+promtail_image: "grafana/promtail:3.0.0"
+# Loki endpoint on Alpine VM
+loki_url: "http://{{ vm_ip }}:3100"

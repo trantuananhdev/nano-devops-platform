@@ -1,0 +1,2 @@
+ssh -i ./.ssh/prod_key platform_admin@IP
+ssh -i ./.ssh/prod_key tutinhhao@IP
