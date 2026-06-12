@@ -187,3 +187,39 @@ class DocumentVersionOut(BaseModel):
     created_by: int | None
     created_at: datetime
 
+
+class NotificationCreate(BaseModel):
+    user_id: int
+    dossier_id: int | None = None
+    type: str
+    title: str
+    message: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    user_id: int
+    dossier_id: int | None
+    type: str
+    title: str
+    message: str
+    is_read: bool
+    metadata: dict[str, Any]
+    created_at: datetime
+
+
+class NotificationMarkRead(BaseModel):
+    is_read: bool = True
+
+
+class NotificationPage(BaseModel):
+    items: list[NotificationOut]
+    total: int
+    offset: int
+    limit: int
+    has_more: bool
+    unread_count: int
+

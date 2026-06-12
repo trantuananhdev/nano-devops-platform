@@ -41,6 +41,15 @@ class AlertStatus(str, enum.Enum):
     resolved = "resolved"
 
 
+class NotificationType(str, enum.Enum):
+    status_change = "status_change"
+    appraisal_complete = "appraisal_complete"
+    feedback_submitted = "feedback_submitted"
+    clarification_requested = "clarification_requested"
+    document_uploaded = "document_uploaded"
+    version_created = "version_created"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -381,4 +390,20 @@ class DocumentVersion(Base):
     change_description: Mapped[str | None] = mapped_column(Text, nullable=True)  # What changed in this version
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Notification(Base):
+    """Notification system for user alerts (T-53: Notification System)."""
+
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    dossier_id: Mapped[int | None] = mapped_column(ForeignKey("dossiers.id"), nullable=True, index=True)
+    type: Mapped[NotificationType] = mapped_column(Enum(NotificationType), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 

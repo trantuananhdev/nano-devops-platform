@@ -4,6 +4,7 @@ from sqlalchemy import select
 from app.models.entities import Dossier, DossierStatus, UserRole, StatusHistory
 from app.core.permissions import is_allowed_to_submit_to_dept, is_allowed_to_approve_dept, is_allowed_to_submit_to_board, is_allowed_to_approve_final
 from app.services.audit_service import log_audit_event
+from app.services.notification_service import notify_on_status_change
 
 
 # Define valid status transitions
@@ -80,6 +81,15 @@ async def transition_dossier_status(
         user_id=changed_by,
         description=f"Status changed from {old_status} to {new_status}",
         metadata={"old_status": old_status, "new_status": new_status, "comment": comment},
+    )
+    
+    # Send notifications
+    await notify_on_status_change(
+        session=session,
+        dossier_id=dossier_id,
+        old_status=old_status,
+        new_status=new_status,
+        changed_by=changed_by,
     )
     
     return dossier

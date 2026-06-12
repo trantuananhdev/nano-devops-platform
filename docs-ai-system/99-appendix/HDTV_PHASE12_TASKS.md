@@ -177,11 +177,15 @@
 - **priority**: P2
 - **files**:
   - `hdtv-ai-platform/app/models/entities.py` — thêm bảng `notifications`
-  - `hdtv-ai-platform/app/api/routes/notifications.py` — NEW: notifications endpoints
+  - `hdtv-ai-platform/app/schemas/dossier.py` — thêm notification schemas
+  - `hdtv-ai-platform/app/routers/notifications.py` — NEW: notifications endpoints
   - `hdtv-ai-platform/app/services/notification_service.py` — NEW: service gửi notification
+  - `hdtv-ai-platform/app/services/workflow_service.py` — thêm trigger notification khi status thay đổi
+  - `hdtv-ai-platform/app/routers/__init__.py` — register notifications router
+  - `hdtv-ai-platform/alembic/versions/017_add_notifications.py` — NEW: migration
 - **acceptance**: Notification được tạo khi status thay đổi, có feedback mới, v.v.
 - **verify_cmd**:
-- **status**: PENDING
+- **status**: DONE ✅
 
 ---
 

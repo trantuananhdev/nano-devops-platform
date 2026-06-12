@@ -46,6 +46,11 @@
 | `POST /api/v1/mcp/tools/call/stream` | T-36 — MCP SSE streaming (audit log) |
 | `GET /api/v1/mcp/audit-logs` | T-36 — MCP call audit logs |
 | `GET /api/v1/mcp/health` | T-36 — MCP server health check |
+| `GET /api/v1/notifications/user/{user_id}` | T-53 — get notifications for user |
+| `GET /api/v1/notifications/{notification_id}` | T-53 — get single notification |
+| `PATCH /api/v1/notifications/{notification_id}` | T-53 — mark notification as read |
+| `PATCH /api/v1/notifications/user/{user_id}/mark-all-read` | T-53 — mark all user notifications as read |
+| `POST /api/v1/notifications` | T-53 — create notification |
 
 ## FE Views Wired
 
@@ -438,5 +443,5 @@ Hoàn thiện đầy đủ các tính năng cho quy trình nghiệp vụ thực 
 | T-50 | P2 | Audit Trail (FE) | ✅ DONE |
 | T-51 | P1 | Reference Document Management (BE) | ✅ DONE |
 | T-52 | P1 | Reference Document Management (FE) | ✅ DONE |
-| T-53 | P2 | Notification System (BE) | ⏳ PENDING |
+| T-53 | P2 | Notification System (BE) | ✅ DONE |
 | T-54 | P2 | Notification System (FE) | ⏳ PENDING |
