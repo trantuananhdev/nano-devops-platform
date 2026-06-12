@@ -71,7 +71,7 @@ export const deleteApiKey = (keyId) => api.delete(`/api-keys/${keyId}`)
 export const getMcpAuditLogs = (params) => api.get('/mcp/audit-logs', { params })
 
 // T-46: Formal Status Transitions
-export const transitionDossierStatus = (dossierId, body) => api.post(`/dossiers/${dossierId}/transition-status`, body)
+export const transitionDossierStatus = (dossierId, body, userRole) => api.post(`/dossiers/${dossierId}/transition-status`, body, { params: { user_role: userRole } })
 export const getDossierStatusHistory = (dossierId) => api.get(`/dossiers/${dossierId}/status-history`)
 
 // T-52: Reference Document Management
@@ -93,5 +93,9 @@ export const createDocumentVersion = (dossierId, body, createdBy) =>
   api.post(`/dossiers/${dossierId}/document-versions`, body, {
     params: { created_by: createdBy },
   })
+
+// T-50: Audit Trail (FE)
+export const getAuditLogs = (dossierId) => api.get(`/audit-logs`, { params: { dossier_id: dossierId } })
+export const getAuditLog = (logId) => api.get(`/audit-logs/${logId}`)
 
 export default api

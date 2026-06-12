@@ -431,12 +431,12 @@ Hoàn thiện đầy đủ các tính năng cho quy trình nghiệp vụ thực 
 | T-43 | P1 | User Roles & Permissions (BE) | ✅ DONE |
 | T-44 | P1 | User Roles & Permissions (FE) | ✅ DONE |
 | T-45 | P1 | Formal Status Transitions & Workflow (BE) | ✅ DONE |
-| T-46 | P1 | Formal Status Transitions & Workflow (FE) | ⏳ PENDING |
-| T-47 | P2 | Document Version Control (BE) | ⏳ PENDING |
-| T-48 | P2 | Document Version Control (FE) | ⏳ PENDING |
-| T-49 | P1 | Audit Trail (BE) | ⏳ PENDING |
-| T-50 | P2 | Audit Trail (FE) | ⏳ PENDING |
-| T-51 | P1 | Reference Document Management (BE) | ⏳ PENDING |
-| T-52 | P1 | Reference Document Management (FE) | ⏳ PENDING |
+| T-46 | P1 | Formal Status Transitions & Workflow (FE) | ✅ DONE |
+| T-47 | P2 | Document Version Control (BE) | ✅ DONE |
+| T-48 | P2 | Document Version Control (FE) | ✅ DONE |
+| T-49 | P1 | Audit Trail (BE) | ✅ DONE |
+| T-50 | P2 | Audit Trail (FE) | ✅ DONE |
+| T-51 | P1 | Reference Document Management (BE) | ✅ DONE |
+| T-52 | P1 | Reference Document Management (FE) | ✅ DONE |
 | T-53 | P2 | Notification System (BE) | ⏳ PENDING |
 | T-54 | P2 | Notification System (FE) | ⏳ PENDING |

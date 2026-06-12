@@ -20,9 +20,16 @@ export const useDossierStore = defineStore('dossier', () => {
   const hasMore  = ref(false)
 
   const statusLabels = {
-    pending:        'Chờ duyệt',
-    appraising:     'Đang thẩm định',
-    approved:       'Đã duyệt',
+    draft: 'Nháp',
+    pending: 'Chờ duyệt',
+    appraising: 'Đang thẩm định',
+    submitted_to_dept: 'Đã trình lên Ban',
+    dept_approved: 'Ban đã duyệt',
+    dept_rejected: 'Ban từ chối',
+    submitted_to_board: 'Đã trình lên HĐTV',
+    board_reviewed: 'HĐTV đã xem xét',
+    approved: 'Đã phê duyệt',
+    rejected: 'Đã từ chối',
     needs_revision: 'Bổ sung hồ sơ',
   }
   const riskLabels = { high: 'Cao', medium: 'Trung bình', low: 'Thấp' }

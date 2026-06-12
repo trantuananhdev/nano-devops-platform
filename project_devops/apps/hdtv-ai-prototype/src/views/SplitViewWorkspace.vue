@@ -5,7 +5,7 @@ import { ArrowLeft, CheckCircle2, AlertTriangle, FileCheck, MessageSquare, FileO
 import { useDossierStore } from '../stores/dossier'
 import { useAuthStore } from '../stores/auth'
 import { createAppraisalSocket } from '../services/ws'
-import { getDossierPdfUrl, submitFeedback, getPendingClarifications, answerClarification, transitionDossierStatus, getDossierStatusHistory, getReferenceDocuments, uploadReferenceDocument, deleteReferenceDocument, getDocumentVersions, createDocumentVersion } from '../services/api'
+import { getDossierPdfUrl, submitFeedback, getPendingClarifications, answerClarification, transitionDossierStatus, getDossierStatusHistory, getReferenceDocuments, uploadReferenceDocument, deleteReferenceDocument, getDocumentVersions, createDocumentVersion, getAuditLogs } from '../services/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,6 +30,8 @@ const selectedDocVersion = ref(null)
 const newDocVersionContent = ref("")
 const newDocVersionDescription = ref("")
 const isCreatingDocVersion = ref(false)
+const auditLogs = ref([])
+const selectedAuditLog = ref(null)
 
 // ─── Status Labels and Transitions ───────────────────────────────────────
 const STATUS_LABELS = {
@@ -143,8 +145,9 @@ const handleStatusTransition = async (action) => {
   try {
     await transitionDossierStatus(dossierId.value, {
       new_status: action,
-      user_id: authStore.currentUser?.id
-    })
+      changed_by: authStore.currentUser?.id,
+      comment: null // Can add a comment modal later if needed
+    }, authStore.currentUser?.role)
     await loadDossier()
     await loadStatusHistory()
   } catch (err) {
@@ -181,6 +184,15 @@ const loadDocumentVersions = async () => {
     }
   } catch (err) {
     console.error('Failed to load document versions:', err)
+  }
+}
+
+const loadAuditLogs = async () => {
+  try {
+    const { data } = await getAuditLogs(dossierId.value)
+    auditLogs.value = data.items || data
+  } catch (err) {
+    console.error('Failed to load audit logs:', err)
   }
 }
 
@@ -229,6 +241,7 @@ async function loadDossier() {
   await loadStatusHistory()
   await loadReferenceDocs()
   await loadDocumentVersions()
+  await loadAuditLogs()
 }
 
 let wsHandle = null
@@ -725,6 +738,9 @@ const sendRefMsg = () => {
           <button class="tab-btn" :class="{ active: activeTab === 'history' }" @click="activeTab = 'history'">
             <History size="16" /> Lịch sử Trạng thái
           </button>
+          <button class="tab-btn" :class="{ active: activeTab === 'audit' }" @click="activeTab = 'audit'">
+            <History size="16" /> Lịch sử Hoạt động
+          </button>
         </div>
 
         <div class="tab-content">
@@ -917,25 +933,71 @@ const sendRefMsg = () => {
               <h4 class="section-title">Lịch sử thay đổi trạng thái</h4>
               <div class="version-list">
                 <div 
-                  v-for="(entry, index) in statusHistory.slice().reverse()" 
+                  v-for="(entry, index) in statusHistory" 
                   :key="entry.id || index" 
                   class="version-card"
                 >
                   <div class="v-header">
                     <span class="v-name">
-                      <span :class="['badge', getStatusBadgeClass(entry.new_status)]">
-                        {{ STATUS_LABELS[entry.new_status] || entry.new_status }}
+                      <span :class="['badge', getStatusBadgeClass(entry.to_status)]">
+                        {{ STATUS_LABELS[entry.to_status] || entry.to_status }}
                       </span>
                     </span>
                     <span class="time">{{ new Date(entry.created_at).toLocaleString('vi-VN') }}</span>
                   </div>
                   <div class="v-desc">
-                    Người thay đổi: {{ entry.changed_by_name || 'N/A' }}
+                    Người thay đổi: {{ entry.changed_by || 'N/A' }}
                   </div>
-                  <div v-if="entry.old_status" class="v-desc text-xs">
-                    Từ: {{ STATUS_LABELS[entry.old_status] || entry.old_status }}
+                  <div v-if="entry.from_status" class="v-desc text-xs">
+                    Từ: {{ STATUS_LABELS[entry.from_status] || entry.from_status }}
+                  </div>
+                  <div v-if="entry.comment" class="v-desc text-xs text-muted">
+                    Ghi chú: {{ entry.comment }}
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Audit Trail Tab -->
+          <div v-if="activeTab === 'audit'" class="ai-analysis-panel">
+            <div class="ai-content-scroll">
+              <h4 class="section-title">Lịch sử hoạt động (Audit Trail)</h4>
+              <div class="version-list">
+                <div 
+                  v-for="(log, index) in auditLogs" 
+                  :key="log.id || index" 
+                  class="version-card cursor-pointer"
+                  :class="{'border-l-4 border-l-primary': selectedAuditLog?.id === log.id}"
+                  @click="selectedAuditLog = log"
+                >
+                  <div class="v-header">
+                    <span class="v-name">
+                      {{ log.action }}
+                    </span>
+                    <span class="time">{{ new Date(log.created_at).toLocaleString('vi-VN') }}</span>
+                  </div>
+                  <div class="v-desc">
+                    {{ log.description || 'Không có mô tả' }}
+                  </div>
+                  <div v-if="log.ip_address" class="v-desc text-xs text-muted">
+                    IP: {{ log.ip_address }}
+                  </div>
+                </div>
+                <div v-if="auditLogs.length === 0" class="text-muted text-center py-8">
+                  Chưa có hoạt động nào được ghi nhận.
+                </div>
+              </div>
+              <div v-if="selectedAuditLog" class="mt-4 p-4 bg-gray-50 rounded-lg">
+                <h5 class="mb-2 text-primary">Chi tiết hoạt động</h5>
+                <p class="text-sm text-muted mb-1">Thời gian: {{ new Date(selectedAuditLog.created_at).toLocaleString('vi-VN') }}</p>
+                <p class="text-sm text-muted mb-1">Action: {{ selectedAuditLog.action }}</p>
+                <p v-if="selectedAuditLog.description" class="text-sm mb-2">{{ selectedAuditLog.description }}</p>
+                <p v-if="selectedAuditLog.metadata" class="text-sm">
+                  <strong>Metadata:</strong>
+                  <br>
+                  <code class="whitespace-pre-wrap">{{ JSON.stringify(selectedAuditLog.metadata, null, 2) }}</code>
+                </p>
               </div>
             </div>
           </div>
