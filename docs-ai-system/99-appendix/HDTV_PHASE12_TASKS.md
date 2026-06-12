@@ -60,7 +60,7 @@
   - `hdtv-ai-prototype/src/components/` — thêm role-based conditional rendering
 - **acceptance**: Người dùng chỉ thấy/ làm được chức năng phù hợp với vai trò
 - **verify_cmd**:
-- **status**: PENDING
+- **status**: DONE ✅
 
 ---
 

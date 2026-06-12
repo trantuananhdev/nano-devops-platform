@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 // T-39: Lazy load all views — each chunk only loads when the route is visited.
 // This reduces initial bundle size significantly (bpmn-js alone is ~2MB).
@@ -30,8 +31,27 @@ const router = createRouter({
     { path: '/alerts',     name: 'alerts',     component: AlertsView },
     { path: '/chat',       name: 'chat',       component: AdvancedChatView },
     { path: '/settings',   name: 'settings',   component: DossierSettingsView },
-    { path: '/admin',      name: 'admin',      component: SystemAdminView },
+    { path: '/admin',      name: 'admin',      component: SystemAdminView, meta: { requiresAuth: true, requiresRole: ['admin'] } },
   ],
+})
+
+// T-44: Route guards for role-based access control
+router.beforeEach((to, from, next) => {
+  const authStore = useAuthStore()
+
+  // If route requires auth and user is not authenticated, redirect to dashboard
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    next('/dashboard')
+    return
+  }
+
+  // If route requires specific roles and user doesn't have any of them, redirect to dashboard
+  if (to.meta.requiresRole && !authStore.hasRole(to.meta.requiresRole)) {
+    next('/dashboard')
+    return
+  }
+
+  next()
 })
 
 export default router
