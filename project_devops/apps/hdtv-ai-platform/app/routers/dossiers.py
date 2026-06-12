@@ -18,6 +18,8 @@ from app.schemas.dossier import (
     UploadResult,
     StatusTransitionRequest,
     StatusHistoryOut,
+    ReferenceDocumentCreate,
+    ReferenceDocumentOut,
 )
 from app.services.dossier_service import (
     count_dossiers,
@@ -29,6 +31,12 @@ from app.services.dossier_service import (
 from app.services.workflow_service import (
     transition_dossier_status,
     get_dossier_status_history,
+)
+from app.services.reference_document_service import (
+    create_reference_document,
+    list_reference_documents,
+    get_reference_document,
+    delete_reference_document,
 )
 from app.services import minio_service, search_service
 from app.workers.tasks import run_appraisal_task
@@ -268,3 +276,98 @@ async def get_status_history(
     """Get full status history of a dossier, ordered by most recent first."""
     history = await get_dossier_status_history(session, dossier_id)
     return [StatusHistoryOut.model_validate(entry) for entry in history]
+
+
+@router.get("/{dossier_id}/reference-documents", response_model=list[ReferenceDocumentOut])
+async def get_reference_documents(
+    dossier_id: int,
+    session: AsyncSession = Depends(get_db),
+) -> list[ReferenceDocumentOut]:
+    """Get list of reference documents for a dossier."""
+    docs = await list_reference_documents(session, dossier_id)
+    return [ReferenceDocumentOut.model_validate(doc) for doc in docs]
+
+
+@router.get("/{dossier_id}/reference-documents/{document_id}", response_model=ReferenceDocumentOut)
+async def get_single_reference_document(
+    dossier_id: int,
+    document_id: int,
+    session: AsyncSession = Depends(get_db),
+) -> ReferenceDocumentOut:
+    """Get single reference document by ID."""
+    doc = await get_reference_document(session, document_id)
+    if not doc or doc.dossier_id != dossier_id:
+        raise HTTPException(status_code=404, detail="Reference document not found")
+    return ReferenceDocumentOut.model_validate(doc)
+
+
+@router.post(
+    "/{dossier_id}/reference-documents",
+    response_model=ReferenceDocumentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_reference_document(
+    dossier_id: int,
+    file: UploadFile = File(..., description="Reference document file"),
+    uploaded_by: int | None = Query(None, ge=1, description="User ID of uploader"),
+    session: AsyncSession = Depends(get_db),
+) -> ReferenceDocumentOut:
+    """Upload a reference document to MinIO and attach to dossier."""
+    detail = await get_dossier_detail(session, dossier_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Dossier not found")
+
+    data = await file.read()
+    
+    t0 = time.monotonic()
+    result = await minio_service.upload_pdf(data, file.filename or "document.pdf")
+    elapsed_ms = int((time.monotonic() - t0) * 1000)
+
+    if not result["ok"] or not result["key"]:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.get("error", "Upload failed"),
+        )
+
+    doc = await create_reference_document(
+        session=session,
+        dossier_id=dossier_id,
+        data=ReferenceDocumentCreate(
+            file_name=file.filename or "document.pdf",
+            file_key=result["key"],
+            file_size=len(data),
+            content_type=file.content_type,
+        ),
+        uploaded_by=uploaded_by,
+    )
+
+    # Audit log
+    session.add(AiAuditLog(
+        task_id=str(uuid.uuid4()),
+        tool_name="ReferenceDocumentUpload",
+        execution_time_ms=elapsed_ms,
+        inputs={
+            "dossier_id": dossier_id,
+            "filename": file.filename,
+            "size_bytes": len(data),
+        },
+        outputs={"document_id": doc.id, "key": result["key"]},
+    ))
+    await session.commit()
+    await session.refresh(doc)
+    
+    return ReferenceDocumentOut.model_validate(doc)
+
+
+@router.delete("/{dossier_id}/reference-documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_reference_document(
+    dossier_id: int,
+    document_id: int,
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete a reference document from dossier."""
+    doc = await get_reference_document(session, document_id)
+    if not doc or doc.dossier_id != dossier_id:
+        raise HTTPException(status_code=404, detail="Reference document not found")
+    await delete_reference_document(session, document_id)
+

@@ -82,6 +82,7 @@ class Dossier(Base):
     agent_memories: Mapped[list["AgentMemory"]] = relationship(back_populates="dossier")
     feedbacks: Mapped[list["AgentFeedback"]] = relationship(back_populates="dossier")
     status_history: Mapped[list["StatusHistory"]] = relationship("StatusHistory", order_by="StatusHistory.created_at.desc()")
+    reference_documents: Mapped[list["ReferenceDocument"]] = relationship("ReferenceDocument", order_by="ReferenceDocument.uploaded_at.desc()", back_populates="dossier")
 
 
 class AppraisalResult(Base):
@@ -347,4 +348,21 @@ class AuditLog(Base):
     metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class ReferenceDocument(Base):
+    """Reference document attached to a dossier (T-51: Reference Document Management)."""
+
+    __tablename__ = "reference_documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    dossier_id: Mapped[int] = mapped_column(ForeignKey("dossiers.id"), nullable=False, index=True)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_key: Mapped[str] = mapped_column(String(512), nullable=False)  # MinIO object key
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Size in bytes
+    content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)  # MIME type
+    uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    dossier: Mapped["Dossier"] = relationship(back_populates="reference_documents")
 

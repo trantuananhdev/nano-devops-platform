@@ -148,3 +148,23 @@ class GeneralAuditLogPage(BaseModel):
     limit: int
     has_more: bool
 
+
+class ReferenceDocumentCreate(BaseModel):
+    file_name: str
+    file_key: str
+    file_size: int | None = None
+    content_type: str | None = None
+
+
+class ReferenceDocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    dossier_id: int
+    file_name: str
+    file_key: str
+    file_size: int | None
+    content_type: str | None
+    uploaded_by: int | None
+    uploaded_at: datetime
+

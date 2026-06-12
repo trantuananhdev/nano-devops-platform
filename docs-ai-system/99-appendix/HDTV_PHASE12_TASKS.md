@@ -145,10 +145,14 @@
 - **deps**: —
 - **priority**: P1
 - **files**:
-  - `hdtv-ai-platform/app/api/routes/dossiers.py` — thêm endpoints upload/xem/xóa tài liệu tham khảo
+  - `hdtv-ai-platform/app/models/entities.py` — thêm bảng reference_documents và relationship với Dossier
+  - `hdtv-ai-platform/alembic/versions/015_add_reference_documents.py` — new migration
+  - `hdtv-ai-platform/app/schemas/dossier.py` — thêm ReferenceDocument schemas
+  - `hdtv-ai-platform/app/services/reference_document_service.py` — new service
+  - `hdtv-ai-platform/app/routers/dossiers.py` — thêm endpoints upload/xem/xóa tài liệu tham khảo
 - **acceptance**: Người dùng có thể upload nhiều file PDF/Excel làm tài liệu tham khảo cho dossier
 - **verify_cmd**:
-- **status**: PENDING
+- **status**: DONE ✅
 
 ---
 
