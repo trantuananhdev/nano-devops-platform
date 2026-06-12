@@ -333,3 +333,18 @@ class McpCallLog(Base):
     missing_fields: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
+
+class AuditLog(Base):
+    """General audit log for all important actions (T-49: Audit Trail)."""
+
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    dossier_id: Mapped[int | None] = mapped_column(ForeignKey("dossiers.id"), nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(128), nullable=False, index=True)  # e.g., "create_dossier", "status_change", "upload_pdf"
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+

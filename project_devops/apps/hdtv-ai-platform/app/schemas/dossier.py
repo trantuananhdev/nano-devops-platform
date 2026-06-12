@@ -127,3 +127,24 @@ class AuditLogOut(BaseModel):
     outputs: dict[str, Any]
     created_at: datetime | None = None
 
+
+class GeneralAuditLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    dossier_id: int | None
+    user_id: int | None
+    action: str
+    description: str | None
+    metadata: dict[str, Any]
+    ip_address: str | None
+    created_at: datetime
+
+
+class GeneralAuditLogPage(BaseModel):
+    items: list[GeneralAuditLogOut]
+    total: int
+    offset: int
+    limit: int
+    has_more: bool
+

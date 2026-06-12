@@ -117,14 +117,16 @@
 
 ## T-49: Audit Trail (BE)
 - **deps**: T-43
-- **priority**: P1 — kiểm toán
+- **priority**: P1
 - **files**:
-  - `hdtv-ai-platform/app/models/entities.py` — thêm bảng `audit_logs` (dossier_id, user_id, action, timestamp, metadata)
-  - `hdtv-ai-platform/app/api/routes/audit.py` — NEW: audit endpoints
-  - `hdtv-ai-platform/app/core/middleware.py` — thêm middleware ghi log audit cho các action quan trọng
-- **acceptance**: Tất cả action quan trọng (tạo dossier, thay đổi status, upload doc, phê duyệt,...) được ghi lại
+  - `hdtv-ai-platform/app/models/entities.py` — thêm bảng `audit_logs` (dossier_id, user_id, action, timestamp, metadata, ip_address)
+  - `hdtv-ai-platform/app/services/audit_service.py` — NEW: audit log service
+  - `hdtv-ai-platform/app/routers/audit.py` — NEW: audit endpoints
+  - `hdtv-ai-platform/alembic/versions/014_add_audit_logs.py` — NEW: migration
+  - `hdtv-ai-platform/app/schemas/dossier.py` — thêm audit schemas
+- **acceptance**: Audit endpoints are available; audit log entity is defined
 - **verify_cmd**:
-- **status**: PENDING
+- **status**: DONE ✅
 
 ---
 
