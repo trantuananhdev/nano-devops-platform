@@ -20,7 +20,7 @@ vagrant up
 cd /opt/platform/src/nano-project-devops
 ./cli.sh ansible-ping
 ./cli.sh ansible-bootstrap      # once: zram, docker, UFW on Ubuntu
-./cli.sh ansible-deploy-llm     # llama-server Gemma4 on Ubuntu
+./cli.sh ansible-deploy-llm     # llama-server Gemma2B on Ubuntu
 ./cli.sh obs-down               # free RAM before demo
 ./cli.sh hdtv-up
 ./cli.sh hdtv-migrate
@@ -46,7 +46,7 @@ ACER_HOST=192.168.100.26
 ACER_USER=tutinhhao
 ACER_SSH_PORT=22
 LLM_BASE_URL=http://192.168.100.26:8080/v1
-LLM_MODEL=gemma-4-2b-it
+LLM_MODEL=gemma-2b-it
 GEMINI_API_KEY=your_key
 HDTV_POSTGRES_PASSWORD=changeme_hdtv
 HDTV_POSTGRES_DB=hdtv_db
@@ -59,7 +59,7 @@ VM_IP=192.168.157.10
 ## RAM Budget
 
 ### Ubuntu (LLM only)
-- llama-server Gemma4-E2B Q4_K_M: ~2.5GB
+- llama-server Gemma2B Q4_K_M: ~1.63GB
 - Context 4096: ~1GB
 - No Docker app containers
 
@@ -76,7 +76,7 @@ VM_IP=192.168.157.10
 
 ## LLM Fallback
 
-If Gemma4 E2B OOM on Ubuntu:
+If Gemma2B OOM on Ubuntu:
 - Reduce context: `-c 4096`
 - Use Q2_K quantization
 - Last resort: point `LLM_BASE_URL` to Gemini API for demo

@@ -78,6 +78,8 @@ services:
     image: postgres:16-alpine
     container_name: platform-postgres
     restart: unless-stopped
+    env_file:
+      - ../../../.env               # provides HDTV_POSTGRES_PASSWORD for init scripts
     environment:
       POSTGRES_DB: platform_db
       POSTGRES_USER: platform_user
@@ -133,16 +135,11 @@ networks:
 volumes:
   postgres-data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /opt/platform/data/postgres
+    # NOTE: On Alpine VM, these are bind-mounted to /opt/platform/data/*.
+    # Override to bind mount in docker-compose.vm.yml (used by cli.sh hdtv-up).
+    # On Windows/Docker Desktop: standard named volumes (no driver_opts needed).
   redis-data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /opt/platform/data/redis
 
 secrets:
   postgres_password:

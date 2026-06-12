@@ -31,6 +31,8 @@ _MODEL_CONTEXT_LIMITS: dict[str, int] = {
     "gemma-4-2b-it":         8_192,
     "gemma-4-4b-it":         8_192,
     "gemma-4-8b-it":         8_192,
+    "gemma-4-e2b-it":        8_192,   # Gemma 4 E2B (2B params, 8K context)
+    "gemma-2b-it":          8_192,   # Gemma 2B (2B params, 8K context)
     "gemini-2.5-flash":    1_048_576,   # 1M token context window
     "gemini-2.5-flash-lite": 1_048_576,
     "gemini-2.0-flash":      32_768,

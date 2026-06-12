@@ -5,9 +5,9 @@
 # ---------------------------------------------------------------------------
 # HTTP (port {{ llm_port }}) — redirect or proxy (internal use only)
 # ---------------------------------------------------------------------------
-:{{ llm_port }} {
+http://:{{ llm_port }} {
     # Rate limiting: 60 req/min per IP (prevents accidental hammering)
-    rate_limit {remote.ip} 60r/m
+    # rate_limit {remote.ip} 60r/m
 
     # Reverse proxy to llama-server (internal)
     reverse_proxy 127.0.0.1:{{ llm_internal_port }} {
@@ -27,13 +27,13 @@
 # HTTPS (port {{ llm_tls_port }}) — TLS self-signed (internal LAN use)
 # ---------------------------------------------------------------------------
 {% if llm_tls_enabled %}
-:{{ llm_tls_port }} {
+https://:{{ llm_tls_port }} {
     tls internal {
         on_demand
     }
 
     # Rate limiting
-    rate_limit {remote.ip} 60r/m
+    # rate_limit {remote.ip} 60r/m
 
     reverse_proxy 127.0.0.1:{{ llm_internal_port }} {
         header_up X-Forwarded-Proto https

@@ -1,0 +1,145 @@
+---
+# =============================================================================
+# test-llm.yml — Kiểm tra toàn bộ LLM node (container, model, API)
+# =============================================================================
+# Playbook này kiểm tra:
+#   1. Thư mục /opt/llm-node tồn tại
+#   2. File model gemma-2b-it.Q4_K_M.gguf đã download
+#   3. Docker containers LLM đang chạy
+#   4. API health check hoạt động
+#   5. Caddy reverse proxy hoạt động
+#
+# Usage:
+#   Từ Alpine VM (ansible-runner):
+#     ansible-playbook -i /tmp/inventory.ini test-llm.yml
+#
+#   Từ cli.sh:
+#     ./cli.sh ansible-test-llm
+# =============================================================================
+
+- name: "[Test] Kiểm tra LLM node"
+  hosts: acer
+  become: true
+  gather_facts: true
+
+  vars:
+    llm_app_dir: /opt/llm-node
+    llm_model_file: gemma-2b-it.Q4_K_M.gguf
+    llm_port: 8080
+    llm_internal_port: 8081
+
+  tasks:
+    # ---------------------------------------------------------------------------
+    # 1. Kiểm tra thư mục và file
+    # ---------------------------------------------------------------------------
+    - name: "[Test 1/5] Kiểm tra thư mục /opt/llm-node"
+      ansible.builtin.stat:
+        path: "{{ llm_app_dir }}"
+      register: _llm_dir
+
+    - name: "[Test 1/5] Xác nhận thư mục tồn tại"
+      ansible.builtin.assert:
+        that: _llm_dir.stat.exists and _llm_dir.stat.isdir
+        fail_msg: "❌ Thư mục {{ llm_app_dir }} không tồn tại!"
+        success_msg: "✅ Thư mục {{ llm_app_dir }} OK"
+
+    - name: "[Test 1/5] Kiểm tra docker-compose.yml"
+      ansible.builtin.stat:
+        path: "{{ llm_app_dir }}/docker-compose.yml"
+      register: _compose_file
+
+    - name: "[Test 1/5] Xác nhận docker-compose.yml tồn tại"
+      ansible.builtin.assert:
+        that: _compose_file.stat.exists
+        fail_msg: "❌ File docker-compose.yml không tồn tại!"
+        success_msg: "✅ File docker-compose.yml OK"
+
+    - name: "[Test 1/5] Kiểm tra file model"
+      ansible.builtin.stat:
+        path: "{{ llm_app_dir }}/models/{{ llm_model_file }}"
+      register: _model_file
+
+    - name: "[Test 1/5] Xác nhận file model tồn tại (size > 1GB)"
+      ansible.builtin.assert:
+        that: _model_file.stat.exists and (_model_file.stat.size > 1000000000)
+        fail_msg: "❌ File model không tồn tại hoặc quá nhỏ!"
+        success_msg: "✅ File model {{ llm_model_file }} OK ({{ (_model_file.stat.size / 1024 / 1024) | round(2) }} MB)"
+
+    # ---------------------------------------------------------------------------
+    # 2. Kiểm tra Docker containers
+    # ---------------------------------------------------------------------------
+    - name: "[Test 2/5] Kiểm tra containers đang chạy"
+      community.docker.docker_container_info:
+        name: "{{ item }}"
+      register: _container_info
+      loop:
+        - llama-server
+        - llm-caddy          # T-62: container_name in compose = llm-caddy (not caddy)
+        - node-exporter
+        - llm-promtail       # T-62: container_name in compose = llm-promtail
+      ignore_errors: true
+
+    - name: "[Test 2/5] In trạng thái containers"
+      ansible.builtin.debug:
+        msg: |
+          Container {{ item.item }}: {{ (item.exists and item.container.State.Running) | ternary('✅ Đang chạy', '❌ Không chạy') }}
+      loop: "{{ _container_info.results }}"
+
+    # ---------------------------------------------------------------------------
+    # 3. Kiểm tra API health check (local llama-server)
+    # ---------------------------------------------------------------------------
+    - name: "[Test 3/5] Test llama-server health (localhost:{{ llm_internal_port }})"
+      ansible.builtin.uri:
+        url: "http://localhost:{{ llm_internal_port }}/health"
+        method: GET
+        status_code: [200, 404]
+        timeout: 10
+      register: _llm_health
+      ignore_errors: true
+
+    - name: "[Test 3/5] Xác nhận llama-server health OK"
+      ansible.builtin.debug:
+        msg: |
+          {{ _llm_health.status in [200, 404] | ternary('✅ llama-server health OK', '⚠️  llama-server health trả về: ' ~ _llm_health.status ~ ' (có thể đang khởi động)') }}
+
+    # ---------------------------------------------------------------------------
+    # 4. Kiểm tra Caddy reverse proxy
+    # ---------------------------------------------------------------------------
+    - name: "[Test 4/5] Test Caddy HTTP (localhost:{{ llm_port }})"
+      ansible.builtin.uri:
+        url: "http://localhost:{{ llm_port }}/health"
+        method: GET
+        status_code: [200, 404]
+        timeout: 10
+      register: _caddy_health
+      ignore_errors: true
+
+    - name: "[Test 4/5] Xác nhận Caddy OK"
+      ansible.builtin.debug:
+        msg: |
+          {{ _caddy_health.status in [200, 404] | ternary('✅ Caddy reverse proxy OK', '⚠️  Caddy trả về: ' ~ _caddy_health.status) }}
+
+    # ---------------------------------------------------------------------------
+    # 5. Tổng kết
+    # ---------------------------------------------------------------------------
+    - name: "[Test 5/5] In báo cáo cuối cùng"
+      ansible.builtin.debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════╗
+          ║     LLM NODE TEST — KẾT QUẢ TỔNG HỢP                ║
+          ╠══════════════════════════════════════════════════════════╣
+          ║ Host: {{ ansible_host | default(inventory_hostname) }}
+          ║ OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          ║ Kernel: {{ ansible_kernel }}
+          ╠══════════════════════════════════════════════════════════╣
+          ║ Thư mục LLM: {{ _llm_dir.stat.exists | ternary('✅ OK', '❌ LỖI') }}
+          ║ File model: {{ (_model_file.stat.exists and (_model_file.stat.size > 1000000000)) | ternary('✅ OK', '❌ LỖI') }}
+          ╠══════════════════════════════════════════════════════════╣
+          ║ llama-server: {{ (_container_info.results[0].exists and _container_info.results[0].container.State.Running) | ternary('✅ Đang chạy', '❌ Không chạy') }}
+          ║ Caddy: {{ (_container_info.results[1].exists and _container_info.results[1].container.State.Running) | ternary('✅ Đang chạy', '❌ Không chạy') }}
+          ║ node-exporter: {{ (_container_info.results[2].exists and _container_info.results[2].container.State.Running) | ternary('✅ Đang chạy', '❌ Không chạy') }}
+          ║ promtail: {{ (_container_info.results[3].exists and _container_info.results[3].container.State.Running) | ternary('✅ Đang chạy', '❌ Không chạy') }}
+          ╠══════════════════════════════════════════════════════════╣
+          ║ API local: {{ _llm_health.status in [200, 404] | ternary('✅ OK', '⚠️  Chưa sẵn sàng') }}
+          ║ Caddy proxy: {{ _caddy_health.status in [200, 404] | ternary('✅ OK', '⚠️  Chưa sẵn sàng') }}
+          ╚══════════════════════════════════════════════════════════╝

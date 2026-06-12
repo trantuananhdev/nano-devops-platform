@@ -1,22 +1,19 @@
 version: '3.8'
 
 # Docker Compose Override for Nano DevOps Platform
-# Purpose: Environment-specific overrides (development/local)
+# Purpose: Local Windows/Docker Desktop development overrides
+#
+# Auto-applied when running: docker compose up -d
+# (Docker merges docker-compose.yml + docker-compose.override.yml automatically)
+#
+# On Alpine VM: cli.sh uses docker-compose.vm.yml instead for bind mounts.
 
 services:
-  # Add development-specific overrides here if needed
-  # For example, mapping additional volumes for local source code
-
   platform-postgres:
-    # Ensure standard ports are exposed for local debugging if necessary
+    # Expose port for local debugging
     ports:
       - "5432:5432"
 
   platform-redis:
     ports:
       - "6379:6379"
-
-  # odoo:
-  #   # Development specific Odoo settings
-  #   environment:
-  #     - ODOO_LOAD_DEMO=yes # Load demo data for initial setup

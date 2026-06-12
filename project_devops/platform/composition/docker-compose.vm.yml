@@ -1,0 +1,23 @@
+# Alpine VM — Bind-mount override for persistent data directories
+#
+# Used by cli.sh hdtv-up (and obs-up) on Alpine VM where
+# /opt/platform/data/* directories exist and are managed by Ansible.
+#
+# Usage (automatically merged by cli.sh):
+#   docker compose -f docker-compose.yml -f docker-compose.vm.yml up -d
+#
+# NOT used on Windows Docker Desktop (directories don't exist there).
+
+volumes:
+  postgres-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/platform/data/postgres
+  redis-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/platform/data/redis

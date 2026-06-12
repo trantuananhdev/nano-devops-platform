@@ -19,30 +19,43 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "mcp_call_logs",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("api_key_id", sa.Integer(), sa.ForeignKey("api_keys.id"), nullable=True),
-        sa.Column("api_key_prefix", sa.String(16), nullable=False),
-        sa.Column("tool_name", sa.String(128), nullable=False),
-        sa.Column("inputs", JSONB(), nullable=False, server_default=sa.text("'{}'")),
-        sa.Column("outputs", JSONB(), nullable=False, server_default=sa.text("'{}'")),
-        sa.Column("is_error", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-        sa.Column("is_streaming", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-        sa.Column("execution_ms", sa.Integer(), nullable=False, server_default=sa.text("0")),
-        sa.Column("output_incomplete", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-        sa.Column("missing_fields", JSONB(), nullable=False, server_default=sa.text("'[]'")),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("NOW()"),
-            nullable=False,
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index("ix_mcp_call_logs_api_key_id", "mcp_call_logs", ["api_key_id"])
-    op.create_index("ix_mcp_call_logs_tool_name", "mcp_call_logs", ["tool_name"])
-    op.create_index("ix_mcp_call_logs_created_at", "mcp_call_logs", ["created_at"])
+    bind = op.get_bind()
+    table_exists = bind.execute(
+        sa.text("SELECT 1 FROM information_schema.tables WHERE table_name='mcp_call_logs' AND table_schema='public'")
+    ).scalar()
+
+    if not table_exists:
+        op.create_table(
+            "mcp_call_logs",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("api_key_id", sa.Integer(), sa.ForeignKey("api_keys.id"), nullable=True),
+            sa.Column("api_key_prefix", sa.String(16), nullable=False),
+            sa.Column("tool_name", sa.String(128), nullable=False),
+            sa.Column("inputs", JSONB(), nullable=False, server_default=sa.text("'{}'")),
+            sa.Column("outputs", JSONB(), nullable=False, server_default=sa.text("'{}'")),
+            sa.Column("is_error", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+            sa.Column("is_streaming", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+            sa.Column("execution_ms", sa.Integer(), nullable=False, server_default=sa.text("0")),
+            sa.Column("output_incomplete", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+            sa.Column("missing_fields", JSONB(), nullable=False, server_default=sa.text("'[]'")),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("NOW()"),
+                nullable=False,
+            ),
+            sa.PrimaryKeyConstraint("id"),
+        )
+
+    idx_exists = lambda name: bind.execute(
+        sa.text(f"SELECT 1 FROM pg_indexes WHERE indexname='{name}' AND tablename='mcp_call_logs'")
+    ).scalar()
+    if not idx_exists("ix_mcp_call_logs_api_key_id"):
+        op.create_index("ix_mcp_call_logs_api_key_id", "mcp_call_logs", ["api_key_id"])
+    if not idx_exists("ix_mcp_call_logs_tool_name"):
+        op.create_index("ix_mcp_call_logs_tool_name", "mcp_call_logs", ["tool_name"])
+    if not idx_exists("ix_mcp_call_logs_created_at"):
+        op.create_index("ix_mcp_call_logs_created_at", "mcp_call_logs", ["created_at"])
 
 
 def downgrade() -> None:

@@ -4,7 +4,7 @@ plan_step_id: correlates audit row → agent_plans.plan_json step ID → OTel tr
 error_type:   records ToolErrorType classification for post-mortem analysis
 
 Revision ID: 010
-Revises:     009_agent_clarifications
+Revises:     009
 """
 
 from alembic import op

@@ -10,12 +10,12 @@ llm_app_dir: /opt/llm-node
 llm_port: 8080                  # External port (Caddy HTTP proxy)
 llm_tls_port: 8443              # External port (Caddy HTTPS self-signed)
 llm_internal_port: 8081         # llama-server listens only on 127.0.0.1:8081
-llm_model_file: gemma-4-2b-it-Q4_K_M.gguf
-llm_model_url: "https://huggingface.co/bartowski/gemma-4-2b-it-GGUF/resolve/main/gemma-4-2b-it-Q4_K_M.gguf"
+llm_hf_repo: "MaziyarPanahi/gemma-2b-it-GGUF"
+llm_model_file: "gemma-2b-it.Q4_K_M.gguf"
 llm_hf_token: ""                # Optional: Hugging Face token for private/gated repos
 llm_context_size: 4096
 llm_threads: 2
-llm_docker_image: "ghcr.io/ggerganov/llama.cpp:server"
+llm_docker_image: "ghcr.io/ggml-org/llama.cpp:server"   # T-61: migrated ggerganov → ggml-org (2025-06)
 
 # T-55: App user owns /opt/llm-node (tutinhhao — overridable via group_vars)
 llm_app_owner: "{{ app_user | default('tutinhhao') }}"

@@ -84,10 +84,12 @@ services:
     volumes:
       - hdtv_meili_data:/meili_data
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:7700/health"]
+      # Meilisearch v1.8 image (Debian slim) has curl available
+      test: ["CMD-SHELL", "curl -sf http://localhost:7700/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 20s
     deploy:
       resources:
         limits:

@@ -1,0 +1,30 @@
+wsl
+
+source .venv1/bin/activate
+
+wsl --shutdown
+
+set COPY_PROJECT_DEVOPS=1
+
+./cli.sh ansible-ping
+
+# (Tùy chọn) Reset LLM node trước nếu RESET_UBUNTU_LLM=true
+./cli.sh ansible-teardown-llm
+
+# Chạy bootstrap
+./cli.sh ansible-bootstrap
+
+./cli.sh ansible-deploy-llm
+
+
+# Thay thế bằng IP của bạn
+ssh -i /opt/platform/src/nano-project-devops/.ssh/prod_deployer tutinhhao@192.168.1.120
+
+# Kiểm tra các container
+docker ps -a
+
+# Kiểm tra log llama-server
+docker logs -f llama-server
+
+# Thay thế bằng IP Ubuntu của bạn
+curl http://192.168.1.120:8080/health

@@ -22,7 +22,7 @@ python-multipart==0.0.18
 
 # Storage & search
 minio==7.2.12              # T-13: MinIO PDF upload
-chromadb==0.5.23           # T-15: Vector Memory (HTTP client only)
+chromadb-client==0.5.23    # T-15: Vector Memory (HTTP client only)
 prometheus-client==0.21.1  # Prometheus metrics exposition
 
 # Auth

@@ -13,6 +13,13 @@ COMPOSE_FILES="-f ${COMPOSE_DIR}/docker-compose.yml \
                -f ${COMPOSE_DIR}/docker-compose.apps.yml \
                -f ${COMPOSE_DIR}/docker-compose.override.yml"
 
+# On Alpine VM, bind-mount volumes need docker-compose.vm.yml overlay.
+# Detect: /opt/platform/data exists only on the VM.
+_VM_OVERLAY=""
+if [ -d "/opt/platform/data" ]; then
+    _VM_OVERLAY="-f ${COMPOSE_DIR}/docker-compose.vm.yml"
+fi
+
 # Detect Docker Compose command (support both v1 and v2)
 if docker compose version >/dev/null 2>&1; then
     COMPOSE="docker compose"
@@ -88,6 +95,7 @@ print_usage() {
     echo "Acer Ubuntu (Ansible từ Alpine VM — T-55 dual-user):"
     echo "  ansible-ping          Verify SSH tutinhhao + sudo root (verify-ssh.yml)."
     echo "  ansible-test-users    Test SSH access cho CẢ 2 user root + tutinhhao."
+    echo "  ansible-test-llm      Test LLM node (containers, model, API health)."
     echo "  ansible-bootstrap     Bootstrap Ubuntu: Docker, zram, UFW, sudoers, SSH hardening."
     echo "  ansible-deploy-llm    Deploy Gemma 4 llama-server trên Ubuntu (LLM node)."
     echo "  ansible-teardown-llm  Reset LLM node (xóa containers/volumes/data)."
@@ -259,6 +267,12 @@ cmd_ansible_test_users() {
     cmd_ansible_runner test-dual-users.yml
 }
 
+cmd_ansible_test_llm() {
+    _check_ansible_prereqs
+    echo "[HDTV] Testing LLM node (containers, model, API)..."
+    cmd_ansible_runner test-llm.yml
+}
+
 cmd_ansible_deploy_llm() {
     _check_ansible_prereqs
     echo "[HDTV] Deploying Gemma 4 llama-server on Ubuntu (LLM node)..."
@@ -285,6 +299,7 @@ cmd_obs_down() {
     echo "[HDTV] Stopping observability stack to free RAM..."
     $COMPOSE $COMPOSE_ENV_FILE \
         -f "${COMPOSE_DIR}/docker-compose.yml" \
+        ${_VM_OVERLAY} \
         -f "${COMPOSE_DIR}/docker-compose.observability.yml" \
         down
 }
@@ -311,6 +326,7 @@ cmd_hdtv_up() {
     echo "[HDTV] Starting HDTV AI platform stack..."
     $COMPOSE --env-file .env \
         -f "${COMPOSE_DIR}/docker-compose.yml" \
+        ${_VM_OVERLAY} \
         -f "$HDTV_COMPOSE" up -d --build
     echo "  API:      http://localhost:8000/docs"
     echo "  Frontend: http://localhost:3080"
@@ -320,12 +336,14 @@ cmd_hdtv_down() {
     echo "[HDTV] Stopping HDTV stack..."
     $COMPOSE --env-file .env \
         -f "${COMPOSE_DIR}/docker-compose.yml" \
+        ${_VM_OVERLAY} \
         -f "$HDTV_COMPOSE" down
 }
 
 cmd_hdtv_logs() {
     $COMPOSE --env-file .env \
         -f "${COMPOSE_DIR}/docker-compose.yml" \
+        ${_VM_OVERLAY} \
         -f "$HDTV_COMPOSE" logs -f "${2:-}"
 }
 
@@ -333,6 +351,7 @@ cmd_hdtv_migrate() {
     echo "[HDTV] Running Alembic migrations..."
     $COMPOSE --env-file .env \
         -f "${COMPOSE_DIR}/docker-compose.yml" \
+        ${_VM_OVERLAY} \
         -f "$HDTV_COMPOSE" run --rm hdtv-api alembic upgrade head
 }
 
@@ -340,6 +359,7 @@ cmd_hdtv_seed() {
     echo "[HDTV] Seeding database and Chroma..."
     $COMPOSE --env-file .env \
         -f "${COMPOSE_DIR}/docker-compose.yml" \
+        ${_VM_OVERLAY} \
         -f "$HDTV_COMPOSE" run --rm hdtv-api python scripts/seed.py
 }
 
@@ -347,6 +367,7 @@ cmd_hdtv_backup() {
     echo "[HDTV] Running backup (PostgreSQL, MinIO, Chroma)..."
     $COMPOSE --env-file .env \
         -f "${COMPOSE_DIR}/docker-compose.yml" \
+        ${_VM_OVERLAY} \
         -f "$HDTV_COMPOSE" exec hdtv-backup /scripts/backup.sh
 }
 
@@ -413,6 +434,9 @@ case "$COMMAND" in
         ;;
     ansible-test-users)
         cmd_ansible_test_users
+        ;;
+    ansible-test-llm)
+        cmd_ansible_test_llm
         ;;
     ansible-deploy-llm)
         cmd_ansible_deploy_llm

@@ -76,16 +76,18 @@ services:
     environment:
       MEILI_NO_ANALYTICS: "true"
       MEILI_ENV: development
-      MEILI_MASTER_KEY_FILE: /run/secrets/meili_master_key
+      # Meilisearch does not support _FILE suffix — read key directly from env
+      # Secret file is provided via entrypoint wrapper below
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-changeme_meili}
     volumes:
       - hdtv_meili_data:/meili_data
-    secrets:
-      - meili_master_key
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:7700/health"]
+      # Meilisearch v1.8 image (Debian slim) has curl available
+      test: ["CMD-SHELL", "curl -sf http://localhost:7700/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 20s
     deploy:
       resources:
         limits:

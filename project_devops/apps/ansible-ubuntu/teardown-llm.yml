@@ -3,9 +3,18 @@
 # teardown-llm.yml — Wipe the LLM stack from the Ubuntu node
 # =============================================================================
 # T-55: Kết nối tutinhhao → become root cho destructive operations.
+# T-60: Xóa tường minh model file + Docker image llama-server để giải phóng disk.
+#
 # Stops and removes all Docker containers, volumes, and data directories
 # provisioned by deploy-llm.yml. The host OS, Docker Engine, SSH config are
 # left intact — only the LLM workload layer is removed.
+#
+# Thứ tự xóa:
+#   1. Docker Compose stack down (containers, networks, volumes)
+#   2. Xóa model file (gemma-2b-it.Q4_K_M.gguf ~ 1.63 GB)
+#   3. Xóa thư mục /opt/llm-node (configs, caddy certs, promtail config)
+#   4. Prune Docker images / build cache (giải phóng disk layer)
+#   5. [Optional] Nuclear: uninstall Docker Engine (wipe_docker=true)
 #
 # After teardown, run deploy-llm.yml to get a clean install:
 #   ./cli.sh ansible-teardown-llm
@@ -25,7 +34,13 @@
 
   vars:
     llm_app_dir: /opt/llm-node
+    llm_model_file: "gemma-2b-it.Q4_K_M.gguf"   # T-57: tên model Gemma 2B Instruct
+    llm_docker_image: "ghcr.io/ggml-org/llama.cpp:server"   # T-61: ggerganov → ggml-org
+    caddy_docker_image: "caddy:2.8-alpine"
+    node_exporter_image: "prom/node-exporter:v1.8.2"
+    promtail_image: "grafana/promtail:3.0.0"
     wipe_docker: false    # set true only for full nuclear reset
+    wipe_llm_images: false  # set true để xóa Docker images llama/caddy/node-exporter/promtail
 
   tasks:
     # -------------------------------------------------------------------------
@@ -46,9 +61,44 @@
       ignore_errors: true   # tolerate if compose file is missing
 
     # -------------------------------------------------------------------------
-    # 2. Prune dangling images and build cache (reclaim disk space)
+    # 2. Xóa model file tường minh (T-60: model ~ 3.35 GB — log trước khi xóa)
     # -------------------------------------------------------------------------
-    - name: "[LLM Teardown] Prune unused Docker images"
+    - name: "[LLM Teardown] Stat model file before delete"
+      ansible.builtin.stat:
+        path: "{{ llm_app_dir }}/models/{{ llm_model_file }}"
+        get_checksum: false
+      register: _model_stat
+
+    - name: "[LLM Teardown] Log model size before delete"
+      ansible.builtin.debug:
+        msg: >-
+          [LLM Teardown] Model found: {{ llm_app_dir }}/models/{{ llm_model_file }}
+          ({{ (_model_stat.stat.size / 1024 / 1024 / 1024) | round(2) }} GB) — will be deleted.
+      when: _model_stat.stat.exists
+
+    - name: "[LLM Teardown] Delete model file ({{ llm_model_file }})"
+      ansible.builtin.file:
+        path: "{{ llm_app_dir }}/models/{{ llm_model_file }}"
+        state: absent
+      when: _model_stat.stat.exists
+
+    - name: "[LLM Teardown] Delete entire models directory (including any other GGUF files)"
+      ansible.builtin.file:
+        path: "{{ llm_app_dir }}/models"
+        state: absent
+
+    # -------------------------------------------------------------------------
+    # 3. Wipe entire LLM app directory (configs, certs, promtail, caddy-data)
+    # -------------------------------------------------------------------------
+    - name: "[LLM Teardown] Remove entire LLM stack directory ({{ llm_app_dir }})"
+      ansible.builtin.file:
+        path: "{{ llm_app_dir }}"
+        state: absent
+
+    # -------------------------------------------------------------------------
+    # 4. Prune dangling images and build cache (reclaim disk space)
+    # -------------------------------------------------------------------------
+    - name: "[LLM Teardown] Prune unused Docker images (dangling only)"
       ansible.builtin.command: docker image prune -f
       changed_when: true
       ignore_errors: true
@@ -59,15 +109,43 @@
       ignore_errors: true
 
     # -------------------------------------------------------------------------
-    # 3. Wipe data directories
+    # 4b. Optional: Remove LLM-specific Docker images (free disk from layers)
+    #     Use -e "wipe_llm_images=true" to activate
     # -------------------------------------------------------------------------
-    - name: "[LLM Teardown] Remove LLM stack directory"
-      ansible.builtin.file:
-        path: "{{ llm_app_dir }}"
+    - name: "[LLM Teardown] (Image Wipe) Remove llama-server image"
+      community.docker.docker_image:
+        name: "{{ llm_docker_image }}"
         state: absent
+        force_absent: true
+      when: wipe_llm_images | bool
+      ignore_errors: true
+
+    - name: "[LLM Teardown] (Image Wipe) Remove caddy image"
+      community.docker.docker_image:
+        name: "{{ caddy_docker_image }}"
+        state: absent
+        force_absent: true
+      when: wipe_llm_images | bool
+      ignore_errors: true
+
+    - name: "[LLM Teardown] (Image Wipe) Remove node-exporter image"
+      community.docker.docker_image:
+        name: "{{ node_exporter_image }}"
+        state: absent
+        force_absent: true
+      when: wipe_llm_images | bool
+      ignore_errors: true
+
+    - name: "[LLM Teardown] (Image Wipe) Remove promtail image"
+      community.docker.docker_image:
+        name: "{{ promtail_image }}"
+        state: absent
+        force_absent: true
+      when: wipe_llm_images | bool
+      ignore_errors: true
 
     # -------------------------------------------------------------------------
-    # 4. Optional: uninstall Docker Engine (nuclear reset)
+    # 5. Optional: uninstall Docker Engine (nuclear reset)
     # -------------------------------------------------------------------------
     - name: "[LLM Teardown] (Nuclear) Stop Docker daemon"
       ansible.builtin.systemd:
@@ -102,14 +180,20 @@
       when: wipe_docker | bool
 
     # -------------------------------------------------------------------------
-    # 5. Summary
+    # 6. Summary
     # -------------------------------------------------------------------------
     - name: "[LLM Teardown] Done"
       ansible.builtin.debug:
         msg: |
           ✅  LLM Teardown complete.
-              Removed : LLM stack containers, volumes, data directories
-              Kept    : Docker Engine, SSH config, base OS
+              Removed : LLM stack containers, volumes, Docker networks
+              Removed : Gemma 2B model file ({{ llm_model_file }})
+              Removed : /opt/llm-node (configs, caddy certs, promtail)
+              Pruned  : Dangling Docker images + build cache
+              Kept    : Docker Engine, SSH config, base OS, pipx/huggingface-cli install
+              {% if wipe_llm_images | bool %}
+              🗑️   LLM Docker images also removed (wipe_llm_images=true).
+              {% endif %}
               {% if wipe_docker | bool %}
               ⚠️   Docker Engine also removed (wipe_docker=true).
               {% endif %}
