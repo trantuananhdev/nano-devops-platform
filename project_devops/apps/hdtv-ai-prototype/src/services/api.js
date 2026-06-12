@@ -85,4 +85,13 @@ export const uploadReferenceDocument = (dossierId, formData, uploadedBy) =>
 export const deleteReferenceDocument = (dossierId, documentId) =>
   api.delete(`/dossiers/${dossierId}/reference-documents/${documentId}`)
 
+// T-48: Document Version Control (FE)
+export const getDocumentVersions = (dossierId) => api.get(`/dossiers/${dossierId}/document-versions`)
+export const getLatestDocumentVersion = (dossierId) => api.get(`/dossiers/${dossierId}/document-versions/latest`)
+export const getDocumentVersion = (dossierId, versionId) => api.get(`/dossiers/${dossierId}/document-versions/${versionId}`)
+export const createDocumentVersion = (dossierId, body, createdBy) =>
+  api.post(`/dossiers/${dossierId}/document-versions`, body, {
+    params: { created_by: createdBy },
+  })
+
 export default api

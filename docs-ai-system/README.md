@@ -11,18 +11,17 @@ Chào mừng bạn đến với tài liệu thiết kế hệ thống AI của H
 
 ## Cấu trúc thư mục
 
-| Thư mục | Mục đích |
-|---------|----------|
-| `00-overview` | Tổng quan hệ thống, mục tiêu và kiến trúc tổng quát |
-| `01-core-concepts` | Khái niệm cốt lõi: Agent Loop, Prompt Engineering, ... |
-| `02-components` | Từng thành phần chi tiết: MCP, Memory, Tools, LLM Router, ... |
-| `03-architectures` | Các mẫu kiến trúc: Plan-Execute-Reflect, ReAct, ... |
-| `04-security` | An ninh hệ thống, sandboxing, API keys, guardrails |
-| `05-observability` | Monitoring, logging, audit trails |
-| `06-infrastructure` | Cơ sở hạ tầng: Docker, K8s, 2-node topology |
-| `07-evaluation` | Đánh giá và testing agent |
-| `08-roadmap-coverage` | Độ phủ so với roadmap.sh, chỉ ra thành tựu |
-| `99-appendix` | Tham khảo, glossary, quick reference |
+| Thư mục | Audience | Mục đích |
+|---------|----------|----------|
+| `00-executive-summary/` | CEO + CTO | Bức tranh tổng quan — đọc đầu tiên (~5 phút) |
+| `01-system-architecture/` | CTO | Biểu đồ kiến trúc 3 layers: Platform → HDTV AI → Flow |
+| `02-ai-agent-design/` | CTO | AI Engine: Agent loop, LLM Router, Memory, HITL |
+| `03-component-deep-dive/` | CTO | Từng component: Harness, MCP, RAG, Frontend |
+| `04-platform-engineering/` | CTO | DevOps: Infra topology, CI/CD, Resource constraints |
+| `05-security-and-reliability/` | CTO | Security design, Resilience patterns, Observability |
+| `06-delivery-evidence/` | CEO | Proof of delivery: Sprint history, API coverage, Demo guide |
+| `07-scaling-roadmap/` | CEO + CTO | Lộ trình scale: Medium → Enterprise → Air-gapped LLM |
+| `99-appendix/` | Internal | Raw docs, task lists, implementation notes |
 
 ## Điểm nổi bật
 

@@ -5,7 +5,7 @@ import { ArrowLeft, CheckCircle2, AlertTriangle, FileCheck, MessageSquare, FileO
 import { useDossierStore } from '../stores/dossier'
 import { useAuthStore } from '../stores/auth'
 import { createAppraisalSocket } from '../services/ws'
-import { getDossierPdfUrl, submitFeedback, getPendingClarifications, answerClarification, transitionDossierStatus, getDossierStatusHistory, getReferenceDocuments, uploadReferenceDocument, deleteReferenceDocument } from '../services/api'
+import { getDossierPdfUrl, submitFeedback, getPendingClarifications, answerClarification, transitionDossierStatus, getDossierStatusHistory, getReferenceDocuments, uploadReferenceDocument, deleteReferenceDocument, getDocumentVersions, createDocumentVersion } from '../services/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,6 +25,11 @@ const statusHistory = ref([])
 const isTransitioning = ref(false)
 const referenceDocs = ref([])
 const isUploadingRefDoc = ref(false)
+const documentVersions = ref([])
+const selectedDocVersion = ref(null)
+const newDocVersionContent = ref("")
+const newDocVersionDescription = ref("")
+const isCreatingDocVersion = ref(false)
 
 // ─── Status Labels and Transitions ───────────────────────────────────────
 const STATUS_LABELS = {
@@ -167,6 +172,18 @@ const loadReferenceDocs = async () => {
   }
 }
 
+const loadDocumentVersions = async () => {
+  try {
+    const { data } = await getDocumentVersions(dossierId.value)
+    documentVersions.value = data
+    if (data.length > 0) {
+      selectedDocVersion.value = data[0] // select latest by default
+    }
+  } catch (err) {
+    console.error('Failed to load document versions:', err)
+  }
+}
+
 const defaultChecks = [
   { id: 1, label: 'Kiểm tra căn cứ pháp lý', status: 'pass', desc: 'Chờ thẩm định AI...', details: '' },
   { id: 2, label: 'Đối chiếu Tổng mức đầu tư (ERP)', status: 'pass', desc: 'Chờ thẩm định AI...', details: '' },
@@ -211,6 +228,7 @@ async function loadDossier() {
   }
   await loadStatusHistory()
   await loadReferenceDocs()
+  await loadDocumentVersions()
 }
 
 let wsHandle = null
@@ -342,6 +360,29 @@ const handleFileSelect = (event) => {
   event.target.value = '' // Reset input
 }
 
+const handleCreateDocVersion = async () => {
+  if (!newDocVersionContent.trim()) return
+  isCreatingDocVersion.value = true
+  try {
+    await createDocumentVersion(
+      dossierId.value,
+      {
+        content: newDocVersionContent,
+        content_type: 'text/plain',
+        change_description: newDocVersionDescription || 'Tạo phiên bản mới',
+      },
+      authStore.currentUser?.id
+    )
+    newDocVersionContent.value = ''
+    newDocVersionDescription.value = ''
+    await loadDocumentVersions()
+  } catch (err) {
+    console.error('Failed to create document version:', err)
+  } finally {
+    isCreatingDocVersion.value = false
+  }
+}
+
 const feedbackComment = ref('')
 const feedbackSubmitted = ref(null)
 const isSubmittingFeedback = ref(false)
@@ -456,6 +497,9 @@ const sendRefMsg = () => {
           <button class="tab-btn" :class="{ active: leftTab === 'reference' }" @click="leftTab = 'reference'">
             <BookOpen size="16"/> Tài liệu Khác
           </button>
+          <button class="tab-btn" :class="{ active: leftTab === 'versions' }" @click="leftTab = 'versions'">
+            <History size="16"/> Phiên bản
+          </button>
           <button class="tab-btn" :class="{ active: leftTab === 'report' }" @click="leftTab = 'report'">
             <FileBadge size="16"/> Báo cáo Thẩm định
           </button>
@@ -469,6 +513,7 @@ const sendRefMsg = () => {
           <span v-else-if="leftTab === 'report'">Báo cáo Thẩm định (Dự thảo)</span>
           <span v-else-if="leftTab === 'resolution'">Nghị quyết HĐTV (Dự thảo)</span>
           <span v-else-if="leftTab === 'reference'">Nguồn dữ liệu tham khảo cho AI</span>
+          <span v-else-if="leftTab === 'versions'">Quản lý phiên bản tài liệu</span>
           <div v-else-if="leftTab === 'appendix'" class="flex items-center gap-2">
             <span>Chọn Phụ lục:</span>
             <select class="form-select text-sm">
@@ -559,6 +604,73 @@ const sendRefMsg = () => {
               </div>
             </div>
 
+          </div>
+
+          <!-- Phiên bản tài liệu -->
+          <div v-if="leftTab === 'versions'" class="versions-page w-full" style="padding: 2rem;">
+            
+            <div class="glass-panel" style="padding: 1.5rem; margin-bottom: 2rem;">
+              <h3 class="mb-4 text-primary flex items-center gap-2"><History size="20"/> Tạo phiên bản mới</h3>
+              <div class="form-group">
+                <label class="form-label">Mô tả thay đổi</label>
+                <input 
+                  type="text" 
+                  class="form-input" 
+                  placeholder="Mô tả ngắn gọn về thay đổi..." 
+                  v-model="newDocVersionDescription"
+                />
+              </div>
+              <div class="form-group mt-3">
+                <label class="form-label">Nội dung</label>
+                <textarea 
+                  class="form-input" 
+                  rows="10" 
+                  placeholder="Nhập nội dung tài liệu..." 
+                  v-model="newDocVersionContent"
+                ></textarea>
+              </div>
+              <button 
+                class="btn btn-primary flex-center gap-2 mt-4" 
+                @click="handleCreateDocVersion" 
+                :disabled="isCreatingDocVersion"
+              >
+                <UploadCloud size="16"/>
+                {{ isCreatingDocVersion ? 'Đang tạo...' : 'Tạo phiên bản' }}
+              </button>
+            </div>
+
+            <div class="glass-panel" style="padding: 1.5rem;">
+              <h3 class="mb-4 text-primary flex items-center gap-2"><History size="20"/> Lịch sử phiên bản</h3>
+              <div class="versions-list">
+                <div 
+                  v-for="version in documentVersions" 
+                  :key="version.id" 
+                  class="version-item p-4 border-b border-border cursor-pointer"
+                  :class="{ 'border-l-4 border-l-primary': selectedDocVersion?.id === version.id }"
+                  @click="selectedDocVersion = version"
+                >
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <div class="font-medium">Phiên bản {{ version.version_number }}</div>
+                      <div class="text-xs text-muted">
+                        {{ new Date(version.created_at).toLocaleString('vi-VN') }}
+                        {{ version.change_description ? ` — ${version.change_description}` : '' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="documentVersions.length === 0" class="text-muted text-center py-8">
+                  Chưa có phiên bản nào được tạo.
+                </div>
+              </div>
+              <div v-if="selectedDocVersion" class="mt-4 p-4 bg-gray-50 rounded-lg">
+                <h4 class="mb-2 text-primary">Nội dung phiên bản {{ selectedDocVersion.version_number }}</h4>
+                <p class="text-sm text-muted mb-2">
+                  {{ new Date(selectedDocVersion.created_at).toLocaleString('vi-VN') }}
+                </p>
+                <p class="whitespace-pre-wrap">{{ selectedDocVersion.content || '(Không có nội dung)' }}</p>
+              </div>
+            </div>
           </div>
 
           <!-- Báo cáo thẩm định -->

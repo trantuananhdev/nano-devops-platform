@@ -111,10 +111,11 @@
 - **deps**: T-47
 - **priority**: P2
 - **files**:
-  - `hdtv-ai-prototype/src/views/SplitViewWorkspace.vue` — thêm version selector cho các tab
+  - `hdtv-ai-prototype/src/services/api.js` — thêm các API calls cho document versions
+  - `hdtv-ai-prototype/src/views/SplitViewWorkspace.vue` — thêm tab "Phiên bản" để xem và tạo versions
 - **acceptance**: Người dùng có thể xem các phiên bản cũ, chọn phiên bản để xem
 - **verify_cmd**:
-- **status**: PENDING
+- **status**: DONE ✅
 
 ---
 
