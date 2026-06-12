@@ -62,10 +62,17 @@ SCHEDULE_TEMPLATES: list[dict[str, Any]] = [
 ]
 
 STATUS_LABELS = {
+    DossierStatus.draft: "Nháp",
     DossierStatus.pending: "Chờ duyệt",
     DossierStatus.appraising: "Đang thẩm định",
-    DossierStatus.approved: "Đã thông qua",
-    DossierStatus.needs_revision: "Bổ sung hồ sơ",
+    DossierStatus.submitted_to_dept: "Đã trình lên Ban",
+    DossierStatus.dept_approved: "Ban đã duyệt",
+    DossierStatus.dept_rejected: "Ban từ chối",
+    DossierStatus.submitted_to_board: "Đã trình lên HĐTV",
+    DossierStatus.board_reviewed: "HĐTV đã xem xét",
+    DossierStatus.approved: "Đã phê duyệt",
+    DossierStatus.rejected: "Đã từ chối",
+    DossierStatus.needs_revision: "Cần chỉnh sửa",
 }
 
 RISK_LABELS = {
@@ -234,7 +241,7 @@ async def build_knowledge_graph(session: AsyncSession, dossier_id: int) -> Knowl
 
 async def dashboard_summary(session: AsyncSession) -> DashboardSummaryOut:
     dossiers = (await session.execute(select(Dossier).order_by(Dossier.id))).scalars().all()
-    pending = sum(1 for d in dossiers if d.status in (DossierStatus.pending, DossierStatus.needs_revision))
+    pending = sum(1 for d in dossiers if d.status in (DossierStatus.draft, DossierStatus.pending, DossierStatus.appraising, DossierStatus.submitted_to_dept, DossierStatus.dept_approved, DossierStatus.submitted_to_board, DossierStatus.board_reviewed, DossierStatus.needs_revision))
     high_risk = sum(1 for d in dossiers if d.risk_level == RiskLevel.high)
     approved = sum(1 for d in dossiers if d.status == DossierStatus.approved)
 
@@ -320,23 +327,22 @@ def default_checklist() -> list[ChecklistItemOut]:
 
 
 # ---------------------------------------------------------------------------
-# Admin meta — static seeds (no users table in current sprint)
+# Admin meta — DB-based users and roles
 # ---------------------------------------------------------------------------
 
-_USERS: list[dict] = [
-    {"id": "U001", "name": "Nguyễn Văn A", "email": "nva@evnhanoi.vn", "dept": "Ban Kế hoạch", "role": "Trưởng ban", "status": "Hoạt động"},
-    {"id": "U002", "name": "Trần Thị B", "email": "ttb@evnhanoi.vn", "dept": "Hội đồng Thành viên", "role": "Lãnh đạo HĐTV", "status": "Hoạt động"},
-    {"id": "U003", "name": "Lê Văn C", "email": "lvc@evnhanoi.vn", "dept": "Ban CNTT", "role": "Quản trị viên", "status": "Hoạt động"},
-    {"id": "U004", "name": "Phạm Thị D", "email": "ptd@evnhanoi.vn", "dept": "Ban Tài chính", "role": "Chuyên viên", "status": "Tạm khóa"},
-    {"id": "U005", "name": "Hoàng Văn E", "email": "hve@evnhanoi.vn", "dept": "Ban Quản lý Đầu tư", "role": "Chuyên viên", "status": "Hoạt động"},
-]
+_ROLE_LABELS = {
+    UserRole.admin: "Quản trị viên",
+    UserRole.hdtv_leader: "Lãnh đạo HĐTV",
+    UserRole.dept_head: "Trưởng ban chuyên môn",
+    UserRole.specialist: "Chuyên viên",
+}
 
-_ROLES: list[dict] = [
-    {"id": "R001", "name": "Quản trị viên", "desc": "Toàn quyền cấu hình hệ thống, AI, người dùng.", "users_count": 3},
-    {"id": "R002", "name": "Lãnh đạo HĐTV", "desc": "Quyền chốt duyệt Tờ trình, xem toàn bộ báo cáo AI, ra Nghị quyết.", "users_count": 7},
-    {"id": "R003", "name": "Trưởng ban chuyên môn", "desc": "Trình duyệt Tờ trình, trả lời giải trình, xem cảnh báo thuộc Ban quản lý.", "users_count": 15},
-    {"id": "R004", "name": "Chuyên viên", "desc": "Tạo nháp Tờ trình, upload hồ sơ, xem đồ thị tri thức cơ bản.", "users_count": 85},
-]
+_ROLE_DESCS = {
+    UserRole.admin: "Toàn quyền cấu hình hệ thống, AI, người dùng.",
+    UserRole.hdtv_leader: "Quyền chốt duyệt Tờ trình, xem toàn bộ báo cáo AI, ra Nghị quyết.",
+    UserRole.dept_head: "Trình duyệt Tờ trình, trả lời giải trình, xem cảnh báo thuộc Ban quản lý.",
+    UserRole.specialist: "Tạo nháp Tờ trình, upload hồ sơ, xem đồ thị tri thức cơ bản.",
+}
 
 _SYSTEM_LOGS: list[dict] = [
     {"id": 1, "time": "25/05/2026 10:45:12", "user": "Hệ thống AI", "action": "Tự động quét", "details": "Quét 5 Tờ trình mới, sinh 2 cảnh báo rủi ro cao.", "type": "info"},
@@ -346,12 +352,40 @@ _SYSTEM_LOGS: list[dict] = [
     {"id": 5, "time": "24/05/2026 15:30:00", "user": "lvc@evnhanoi.vn", "action": "Khóa tài khoản", "details": "Đã tạm khóa tài khoản ptd@evnhanoi.vn", "type": "warning"},
 ]
 
-def list_users() -> list[UserOut]:
-    return [UserOut(**u) for u in _USERS]
+async def list_users(session: AsyncSession) -> list[UserOut]:
+    result = await session.execute(select(User).order_by(User.id))
+    users = result.scalars().all()
+    return [
+        UserOut(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            role=user.role.value,
+            is_active=user.is_active,
+        )
+        for user in users
+    ]
 
 
-def list_roles() -> list[RoleOut]:
-    return [RoleOut(**r) for r in _ROLES]
+async def list_roles(session: AsyncSession) -> list[RoleOut]:
+    # Get user count per role
+    count_result = await session.execute(
+        select(User.role, func.count(User.id)).group_by(User.role)
+    )
+    role_counts = {row[0]: row[1] for row in count_result.all()}
+    
+    # Create RoleOut for each enum value
+    roles = []
+    for idx, role in enumerate(UserRole, start=1):
+        roles.append(
+            RoleOut(
+                id=f"R{idx:03d}",
+                name=_ROLE_LABELS.get(role, role.value),
+                desc=_ROLE_DESCS.get(role, ""),
+                users_count=role_counts.get(role, 0),
+            )
+        )
+    return roles
 
 
 def list_system_logs() -> list[SystemLogOut]:

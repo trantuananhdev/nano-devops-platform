@@ -1,88 +1,80 @@
-"""T-12: BPMN workflow persistence service.
-
-Router → Service → Repository pattern.
-Audit log: every Save recorded in ai_audit_logs with tool_name='WorkflowSave'.
-"""
-
-import time
-import uuid
-from typing import Any
-
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from app.models.entities import AiAuditLog, Dossier, WorkflowDiagram
-
-
-async def get_workflow(session: AsyncSession, dossier_id: int) -> WorkflowDiagram | None:
-    """Return saved BPMN for given dossier, or None if not yet saved."""
-    result = await session.execute(
-        select(WorkflowDiagram).where(WorkflowDiagram.dossier_id == dossier_id)
-    )
-    return result.scalar_one_or_none()
+from app.models.entities import Dossier, DossierStatus, UserRole, StatusHistory
+from app.core.permissions import is_allowed_to_submit_to_dept, is_allowed_to_approve_dept, is_allowed_to_submit_to_board, is_allowed_to_approve_final
 
 
-async def save_workflow(
+# Define valid status transitions
+VALID_TRANSITIONS = {
+    DossierStatus.draft: [DossierStatus.pending, DossierStatus.submitted_to_dept],
+    DossierStatus.pending: [DossierStatus.appraising, DossierStatus.submitted_to_dept, DossierStatus.draft],
+    DossierStatus.appraising: [DossierStatus.pending, DossierStatus.submitted_to_dept, DossierStatus.needs_revision, DossierStatus.approved],
+    DossierStatus.submitted_to_dept: [DossierStatus.dept_approved, DossierStatus.dept_rejected, DossierStatus.draft],
+    DossierStatus.dept_approved: [DossierStatus.submitted_to_board, DossierStatus.draft],
+    DossierStatus.dept_rejected: [DossierStatus.draft],
+    DossierStatus.submitted_to_board: [DossierStatus.board_reviewed, DossierStatus.dept_approved],
+    DossierStatus.board_reviewed: [DossierStatus.approved, DossierStatus.rejected, DossierStatus.needs_revision],
+    DossierStatus.approved: [],
+    DossierStatus.rejected: [DossierStatus.draft],
+    DossierStatus.needs_revision: [DossierStatus.draft],
+}
+
+
+async def transition_dossier_status(
     session: AsyncSession,
     dossier_id: int,
-    bpmn_xml: str,
-) -> WorkflowDiagram:
-    """Upsert BPMN XML for a dossier.
-
-    Records action to ai_audit_logs — satisfies the 'every tool call → audit' rule
-    (WorkflowSave is treated as a system tool invocation).
-    """
-    t0 = time.monotonic()
-
-    # Validate dossier exists
-    dossier = await session.get(Dossier, dossier_id)
+    new_status: DossierStatus,
+    user_role: UserRole,
+    changed_by: int | None = None,
+    comment: str | None = None,
+) -> Dossier:
+    # Get dossier
+    result = await session.execute(select(Dossier).where(Dossier.id == dossier_id))
+    dossier = result.scalar_one_or_none()
     if not dossier:
-        raise ValueError(f"Dossier {dossier_id} not found")
+        raise ValueError(f"Dossier with id {dossier_id} not found")
 
-    # Upsert
-    existing = await get_workflow(session, dossier_id)
-    if existing:
-        existing.bpmn_xml = bpmn_xml
-        diagram = existing
-    else:
-        diagram = WorkflowDiagram(dossier_id=dossier_id, bpmn_xml=bpmn_xml)
-        session.add(diagram)
+    # Check if transition is valid
+    if new_status not in VALID_TRANSITIONS.get(dossier.status, []):
+        raise ValueError(f"Invalid status transition from {dossier.status} to {new_status}")
 
-    # Audit log
-    duration_ms = int((time.monotonic() - t0) * 1000)
-    session.add(
-        AiAuditLog(
-            task_id=str(uuid.uuid4()),
-            tool_name="WorkflowSave",
-            execution_time_ms=duration_ms,
-            inputs={"dossier_id": dossier_id, "xml_length": len(bpmn_xml)},
-            outputs={"action": "upsert", "dossier_doc_no": dossier.doc_no},
-        )
+    # Check permissions
+    if new_status == DossierStatus.submitted_to_dept:
+        if not is_allowed_to_submit_to_dept(user_role):
+            raise PermissionError("You don't have permission to submit to department")
+    elif new_status in [DossierStatus.dept_approved, DossierStatus.dept_rejected]:
+        if not is_allowed_to_approve_dept(user_role):
+            raise PermissionError("You don't have permission to approve/reject at department")
+    elif new_status == DossierStatus.submitted_to_board:
+        if not is_allowed_to_submit_to_board(user_role):
+            raise PermissionError("You don't have permission to submit to board")
+    elif new_status in [DossierStatus.approved, DossierStatus.rejected]:
+        if not is_allowed_to_approve_final(user_role):
+            raise PermissionError("You don't have permission to give final approval/rejection")
+
+    # Create status history
+    history_entry = StatusHistory(
+        dossier_id=dossier_id,
+        from_status=dossier.status,
+        to_status=new_status,
+        changed_by=changed_by,
+        comment=comment,
     )
+    session.add(history_entry)
+
+    # Update dossier status
+    dossier.status = new_status
 
     await session.commit()
-    await session.refresh(diagram)
-    return diagram
+    await session.refresh(dossier)
+    return dossier
 
 
-async def list_workflows(session: AsyncSession) -> list[dict[str, Any]]:
-    """Return all saved workflow metadata (no XML in list view — too large)."""
-    rows = await session.execute(
-        select(
-            WorkflowDiagram.id,
-            WorkflowDiagram.dossier_id,
-            WorkflowDiagram.updated_at,
-            Dossier.doc_no,
-            Dossier.title,
-        ).join(Dossier, Dossier.id == WorkflowDiagram.dossier_id)
+async def get_dossier_status_history(session: AsyncSession, dossier_id: int) -> list[StatusHistory]:
+    result = await session.execute(
+        select(StatusHistory)
+        .where(StatusHistory.dossier_id == dossier_id)
+        .order_by(StatusHistory.created_at.desc())
     )
-    return [
-        {
-            "id": row.id,
-            "dossier_id": row.dossier_id,
-            "doc_no": row.doc_no,
-            "title": row.title,
-            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-        }
-        for row in rows.all()
-    ]
+    return list(result.scalars().all())

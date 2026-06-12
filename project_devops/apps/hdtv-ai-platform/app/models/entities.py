@@ -17,9 +17,16 @@ class UserRole(str, enum.Enum):
 
 
 class DossierStatus(str, enum.Enum):
+    draft = "draft"
     pending = "pending"
     appraising = "appraising"
+    submitted_to_dept = "submitted_to_dept"
+    dept_approved = "dept_approved"
+    dept_rejected = "dept_rejected"
+    submitted_to_board = "submitted_to_board"
+    board_reviewed = "board_reviewed"
     approved = "approved"
+    rejected = "rejected"
     needs_revision = "needs_revision"
 
 
@@ -44,6 +51,18 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class StatusHistory(Base):
+    __tablename__ = "status_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    dossier_id: Mapped[int] = mapped_column(ForeignKey("dossiers.id"), nullable=False, index=True)
+    from_status: Mapped[DossierStatus | None] = mapped_column(Enum(DossierStatus), nullable=True)
+    to_status: Mapped[DossierStatus] = mapped_column(Enum(DossierStatus), nullable=False)
+    changed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Dossier(Base):
     __tablename__ = "dossiers"
 
@@ -52,7 +71,7 @@ class Dossier(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     unit: Mapped[str] = mapped_column(String(255), nullable=False)
     risk_level: Mapped[RiskLevel] = mapped_column(Enum(RiskLevel), default=RiskLevel.low)
-    status: Mapped[DossierStatus] = mapped_column(Enum(DossierStatus), default=DossierStatus.pending)
+    status: Mapped[DossierStatus] = mapped_column(Enum(DossierStatus), default=DossierStatus.draft)
     pdf_url: Mapped[str | None] = mapped_column(String(512))
     pdf_text: Mapped[str | None] = mapped_column(Text)  # OCR extracted text
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -62,6 +81,7 @@ class Dossier(Base):
     workflows: Mapped[list["WorkflowDiagram"]] = relationship(back_populates="dossier")
     agent_memories: Mapped[list["AgentMemory"]] = relationship(back_populates="dossier")
     feedbacks: Mapped[list["AgentFeedback"]] = relationship(back_populates="dossier")
+    status_history: Mapped[list["StatusHistory"]] = relationship("StatusHistory", order_by="StatusHistory.created_at.desc()")
 
 
 class AppraisalResult(Base):
