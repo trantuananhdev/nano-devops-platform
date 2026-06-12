@@ -83,6 +83,7 @@ class Dossier(Base):
     feedbacks: Mapped[list["AgentFeedback"]] = relationship(back_populates="dossier")
     status_history: Mapped[list["StatusHistory"]] = relationship("StatusHistory", order_by="StatusHistory.created_at.desc()")
     reference_documents: Mapped[list["ReferenceDocument"]] = relationship("ReferenceDocument", order_by="ReferenceDocument.uploaded_at.desc()", back_populates="dossier")
+    document_versions: Mapped[list["DocumentVersion"]] = relationship("DocumentVersion", order_by="DocumentVersion.version_number.desc()")
 
 
 class AppraisalResult(Base):
@@ -365,4 +366,19 @@ class ReferenceDocument(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     dossier: Mapped["Dossier"] = relationship(back_populates="reference_documents")
+
+
+class DocumentVersion(Base):
+    """Version control for dossier documents (T-47: Document Version Control)."""
+
+    __tablename__ = "document_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    dossier_id: Mapped[int] = mapped_column(ForeignKey("dossiers.id"), nullable=False, index=True)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)  # e.g., 1, 2, 3
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)  # Document content or JSON
+    content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    change_description: Mapped[str | None] = mapped_column(Text, nullable=True)  # What changed in this version
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

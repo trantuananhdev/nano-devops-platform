@@ -20,6 +20,8 @@ from app.schemas.dossier import (
     StatusHistoryOut,
     ReferenceDocumentCreate,
     ReferenceDocumentOut,
+    DocumentVersionCreate,
+    DocumentVersionOut,
 )
 from app.services.dossier_service import (
     count_dossiers,
@@ -37,6 +39,12 @@ from app.services.reference_document_service import (
     list_reference_documents,
     get_reference_document,
     delete_reference_document,
+)
+from app.services.document_version_service import (
+    create_document_version,
+    get_document_versions,
+    get_document_version,
+    get_latest_document_version,
 )
 from app.services import minio_service, search_service
 from app.workers.tasks import run_appraisal_task
@@ -370,4 +378,85 @@ async def remove_reference_document(
     if not doc or doc.dossier_id != dossier_id:
         raise HTTPException(status_code=404, detail="Reference document not found")
     await delete_reference_document(session, document_id)
+
+
+@router.get("/{dossier_id}/document-versions", response_model=list[DocumentVersionOut])
+async def get_document_versions(
+    dossier_id: int,
+    session: AsyncSession = Depends(get_db),
+) -> list[DocumentVersionOut]:
+    """Get all document versions for a dossier (newest first)."""
+    versions = await get_document_versions(session, dossier_id)
+    return [DocumentVersionOut.model_validate(v) for v in versions]
+
+
+@router.get("/{dossier_id}/document-versions/latest", response_model=DocumentVersionOut)
+async def get_latest_doc_version(
+    dossier_id: int,
+    session: AsyncSession = Depends(get_db),
+) -> DocumentVersionOut:
+    """Get the latest document version for a dossier."""
+    version = await get_latest_document_version(session, dossier_id)
+    if not version:
+        raise HTTPException(status_code=404, detail="No document versions found for this dossier")
+    return DocumentVersionOut.model_validate(version)
+
+
+@router.get("/{dossier_id}/document-versions/{version_id}", response_model=DocumentVersionOut)
+async def get_single_doc_version(
+    dossier_id: int,
+    version_id: int,
+    session: AsyncSession = Depends(get_db),
+) -> DocumentVersionOut:
+    """Get a single document version by ID."""
+    version = await get_document_version(session, version_id)
+    if not version or version.dossier_id != dossier_id:
+        raise HTTPException(status_code=404, detail="Document version not found")
+    return DocumentVersionOut.model_validate(version)
+
+
+@router.post(
+    "/{dossier_id}/document-versions",
+    response_model=DocumentVersionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_new_doc_version(
+    dossier_id: int,
+    body: DocumentVersionCreate,
+    created_by: int | None = Query(None, ge=1, description="User ID of creator"),
+    session: AsyncSession = Depends(get_db),
+) -> DocumentVersionOut:
+    """Create a new document version (auto-increments version number)."""
+    # Verify dossier exists
+    detail = await get_dossier_detail(session, dossier_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Dossier not found")
+    
+    t0 = time.monotonic()
+    version = await create_document_version(
+        session=session,
+        dossier_id=dossier_id,
+        content=body.content,
+        content_type=body.content_type,
+        change_description=body.change_description,
+        created_by=created_by,
+    )
+    elapsed_ms = int((time.monotonic() - t0) * 1000)
+    
+    # Audit log
+    session.add(AiAuditLog(
+        task_id=str(uuid.uuid4()),
+        tool_name="DocumentVersionCreate",
+        execution_time_ms=elapsed_ms,
+        inputs={
+            "dossier_id": dossier_id,
+            "version_number": version.version_number,
+            "change_description": body.change_description,
+        },
+        outputs={"version_id": version.id},
+    ))
+    await session.commit()
+    await session.refresh(version)
+    
+    return DocumentVersionOut.model_validate(version)
 

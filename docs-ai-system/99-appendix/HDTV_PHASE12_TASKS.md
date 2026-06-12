@@ -96,11 +96,14 @@
 - **deps**: —
 - **priority**: P2 — quan trọng cho kiểm toán
 - **files**:
-  - `hdtv-ai-platform/app/models/entities.py` — thêm bảng `document_versions`
-  - `hdtv-ai-platform/app/api/routes/dossiers.py` — thêm endpoints quản lý versions
+  - `hdtv-ai-platform/app/models/entities.py` — thêm bảng `document_versions` và relationship với Dossier
+  - `hdtv-ai-platform/alembic/versions/016_add_document_versions.py` — new migration
+  - `hdtv-ai-platform/app/schemas/dossier.py` — thêm DocumentVersion schemas
+  - `hdtv-ai-platform/app/services/document_version_service.py` — new service
+  - `hdtv-ai-platform/app/routers/dossiers.py` — thêm endpoints quản lý versions
 - **acceptance**: Mỗi thay đổi tài liệu tạo version mới, lưu user, thời gian, mô tả thay đổi
 - **verify_cmd**:
-- **status**: PENDING
+- **status**: DONE ✅
 
 ---
 

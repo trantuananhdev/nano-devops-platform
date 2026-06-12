@@ -168,3 +168,22 @@ class ReferenceDocumentOut(BaseModel):
     uploaded_by: int | None
     uploaded_at: datetime
 
+
+class DocumentVersionCreate(BaseModel):
+    content: str | None
+    content_type: str | None
+    change_description: str | None
+
+
+class DocumentVersionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
+    dossier_id: int
+    version_number: int
+    content: str | None
+    content_type: str | None
+    change_description: str | None
+    created_by: int | None
+    created_at: datetime
+
