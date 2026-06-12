@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.entities import AiAuditLog, Dossier
+from app.models.entities import AiAuditLog, Dossier, DossierStatus, UserRole
 from app.schemas.dossier import (
     AppraiseRequest,
     AppraiseResponse,
@@ -16,6 +16,8 @@ from app.schemas.dossier import (
     DossierPage,
     PdfUrlOut,
     UploadResult,
+    StatusTransitionRequest,
+    StatusHistoryOut,
 )
 from app.services.dossier_service import (
     count_dossiers,
@@ -23,6 +25,10 @@ from app.services.dossier_service import (
     get_dossier_detail,
     list_dossiers,
     update_pdf_url,
+)
+from app.services.workflow_service import (
+    transition_dossier_status,
+    get_dossier_status_history,
 )
 from app.services import minio_service, search_service
 from app.workers.tasks import run_appraisal_task
@@ -219,3 +225,46 @@ async def get_dossier_units(
         select(Dossier.unit).distinct().order_by(Dossier.unit)
     )
     return [row[0] for row in result.all() if row[0]]
+
+
+@router.post("/{dossier_id}/transition-status", response_model=DossierOut)
+async def transition_status(
+    dossier_id: int,
+    body: StatusTransitionRequest,
+    user_role: str = Query(..., description="User role for permission check"),
+    session: AsyncSession = Depends(get_db),
+) -> DossierOut:
+    """Transition dossier to new status with permission checks and audit history."""
+    try:
+        dossier_status = DossierStatus(body.new_status)
+        role = UserRole(user_role)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    try:
+        dossier = await transition_dossier_status(
+            session=session,
+            dossier_id=dossier_id,
+            new_status=dossier_status,
+            user_role=role,
+            changed_by=body.changed_by,
+            comment=body.comment,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    await search_service.index_dossier(search_service.dossier_to_doc(dossier))
+
+    return DossierOut.model_validate(dossier)
+
+
+@router.get("/{dossier_id}/status-history", response_model=list[StatusHistoryOut])
+async def get_status_history(
+    dossier_id: int,
+    session: AsyncSession = Depends(get_db),
+) -> list[StatusHistoryOut]:
+    """Get full status history of a dossier, ordered by most recent first."""
+    history = await get_dossier_status_history(session, dossier_id)
+    return [StatusHistoryOut.model_validate(entry) for entry in history]

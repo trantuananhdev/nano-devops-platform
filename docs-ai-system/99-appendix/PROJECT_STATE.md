@@ -1,8 +1,8 @@
 # Project State — EVN HDTV AI
 
-**Phase:** 10 — Production Professionalization (ALL DONE ✅)
-**Last updated:** 2026-06-09 (session 20 — Phase 10 complete: LLM node professionalization, API keys management, backup strategy, MCP audit)
-**Demo ready:** yes (pending `hdtv-migrate` 001–012 on VM + `hdtv-up` with beat service)
+**Phase**: 12 — EVN Production Feature Complete (IN PROGRESS ✨)
+**Last updated**: 2026-06-12 (session 21 — Phase 11 complete, Phase 12 T-43 done)
+**Demo ready**: yes (with real dossier 198/TTr-EVNHANOI data)
 
 ## Verified Endpoints
 
@@ -324,3 +324,119 @@ Admin tab **Agent Intelligence** at `/admin` → 4 KPI cards + drill-down counts
 | meilisearch | 256m |
 | nginx | 64m |
 | **Total** | **~2.45GB** |
+
+---
+
+## Phase 11 — Real Data & UX Optimization (Session 21)
+
+### What's New
+- **T-38**: Created data folder structure and copied real EVN PDF dossier files
+  - Dossier: 198/TTr-EVNHANOI — Tiêu chuẩn kỹ thuật UAV
+  - Files organized in `data/seed/dossier_198_uav/`
+  - 10+ real PDF/Excel files from EVN Hanoi
+
+- **T-39**: Enhanced seed.py to upload real PDFs to MinIO
+  - Uploads main dossier PDF and all reference documents
+  - Updates dossier record with PDF URL
+
+- **T-40**: Implemented PDF text extraction & RAG ingestion
+  - Added `PyMuPDF` dependency for fast PDF parsing
+  - Created `app/services/rag/pdf_extractor.py`
+  - `extract_text_from_pdf()` function for PDF → text
+  - `chunk_text()` for vector embedding-friendly chunks
+  - Seed script automatically ingests legal docs into Chroma
+
+- **T-41**: UX/UI Optimization
+  - DashboardView: Added "Tờ trình mới nhất" widget with grid cards
+  - DashboardView: Improved risk badges consistency
+  - SplitViewWorkspace: Added proper PDF loading state with spinner
+  - SplitViewWorkspace: Optimized PDF viewer layout
+
+### New Files
+- `docs-ai-system/99-appendix/HDTV_PHASE11_TASKS.md`: Task list for Phase 11
+- `project_devops/apps/hdtv-ai-platform/app/services/rag/__init__.py`: RAG package
+- `project_devops/apps/hdtv-ai-platform/app/services/rag/pdf_extractor.py`: PDF extractor
+- `project_devops/apps/hdtv-ai-platform/data/seed/dossier_198_uav/`: Real dossier data folder
+
+### Updated Files
+- `requirements.txt`: Added `PyMuPDF==1.24.13`
+- `seed.py`: Added dossier 198, `seed_dossier_198_pdfs()`, `seed_real_legal_docs()`
+- `PROJECT_STATE.md`: Updated to Phase 11
+- `project_devops/apps/hdtv-ai-prototype/src/views/DashboardView.vue`: Added "Tờ trình mới nhất" widget
+- `project_devops/apps/hdtv-ai-prototype/src/views/SplitViewWorkspace.vue`: Added PDF loading state
+
+### Demo Data Highlights
+Dossier **198/TTr-EVNHANOI** includes:
+- Tờ trình chính (01_to_trinh_198_TTr_EVNHANOI.pdf)
+- Tờ trình 07/KT đã duyệt
+- Báo cáo thẩm tra
+- Phiếu trình với ý kiến HĐTV
+- Phụ lục kỹ thuật (Excel)
+- Ý kiến góp ý từ nhà cung cấp Apex & MAJ
+- Quyết định 8594/QĐ-EVNHANOI (căn cứ pháp lý)
+
+---
+
+## Phase 12 — EVN Production Feature Complete (In Progress)
+
+### What's New
+- **T-43**: User Roles & Permissions (BE)
+  - Updated UserOut schema to match real User entity
+  - Updated meta_service's list_users and list_roles to use real DB data
+  - Added role-based permission utilities in `app/core/permissions.py`
+  - Updated `meta.py`'s `/users` and `/roles` endpoints to use DB
+- **T-44**: User Roles & Permissions (FE)
+  - Updated SystemAdminView.vue: removed dept column, added ROLE_LABELS mapping, updated status display using is_active
+  - Created auth.js Pinia store for auth state and role-based checks
+- **T-45**: Formal Status Transitions & Workflow (BE)
+  - Updated DossierStatus enum with full workflow (draft → submitted_to_dept → dept_approved/dept_rejected → submitted_to_board → board_reviewed → approved/rejected)
+  - Added StatusHistory entity to track full audit history of status changes
+  - Created workflow_service.py to manage valid transitions and enforce permissions
+  - Added status transition endpoint POST /dossiers/{id}/transition-status
+  - Added status history endpoint GET /dossiers/{id}/status-history
+  - Added migration 013_add_status_history.py
+  - Updated seed.py to use new status values
+
+### New Files
+- `project_devops/apps/hdtv-ai-platform/app/core/permissions.py`: NEW role-based permission checks
+- `project_devops/apps/hdtv-ai-platform/app/services/workflow_service.py`: NEW workflow and status transition service
+- `project_devops/apps/hdtv-ai-platform/alembic/versions/013_add_status_history.py`: NEW migration
+- `project_devops/apps/hdtv-ai-prototype/src/stores/auth.js`: NEW — auth store with current user state
+
+### Updated Files
+- `project_devops/apps/hdtv-ai-platform/app/models/entities.py
+- `project_devops/apps/hdtv-ai-platform/app/schemas/meta.py
+- `project_devops/apps/hdtv-ai-platform/app/schemas/dossier.py
+- `project_devops/apps/hdtv-ai-platform/app/services/meta_service.py
+- `project_devops/apps/hdtv-ai-platform/app/routers/meta.py
+- `project_devops/apps/hdtv-ai-platform/app/routers/dossiers.py
+- `project_devops/apps/hdtv-ai-platform/scripts/seed.py
+- `project_devops/apps/hdtv-ai-prototype/src/views/SystemAdminView.vue
+
+---
+
+## Phase 12 — EVN Production Feature Complete (Planned)
+
+### Mục tiêu
+Hoàn thiện đầy đủ các tính năng cho quy trình nghiệp vụ thực tế của EVN:
+- User roles & permissions (Chuyên viên, Trưởng Ban, Thành viên HĐTV, Lãnh đạo HĐTV, Admin)
+- Formal status transitions workflow with audit trail
+- Document version control
+- Reference document management
+- Notification system
+
+### Tasks (T-43 to T-54)
+| Task | Priority | Description | Status |
+|------|----------|-------------|--------|
+| T-43 | P1 | User Roles & Permissions (BE) | ✅ DONE |
+| T-44 | P1 | User Roles & Permissions (FE) | ✅ DONE |
+| T-45 | P1 | Formal Status Transitions & Workflow (BE) | ✅ DONE |
+| T-46 | P1 | Formal Status Transitions & Workflow (FE) | ⏳ PENDING |
+| T-47 | P2 | Document Version Control (BE) | ⏳ PENDING |
+| T-48 | P2 | Document Version Control (FE) | ⏳ PENDING |
+| T-49 | P1 | Audit Trail (BE) | ⏳ PENDING |
+| T-50 | P2 | Audit Trail (FE) | ⏳ PENDING |
+| T-51 | P1 | Reference Document Management (BE) | ⏳ PENDING |
+| T-52 | P1 | Reference Document Management (FE) | ⏳ PENDING |
+| T-53 | P2 | Notification System (BE) | ⏳ PENDING |
+| T-54 | P2 | Notification System (FE) | ⏳ PENDING |

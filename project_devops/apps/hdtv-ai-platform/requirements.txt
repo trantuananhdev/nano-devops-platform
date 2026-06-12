@@ -25,6 +25,9 @@ minio==7.2.12              # T-13: MinIO PDF upload
 chromadb-client==0.5.23    # T-15: Vector Memory (HTTP client only)
 prometheus-client==0.21.1  # Prometheus metrics exposition
 
+# PDF processing (T-40)
+PyMuPDF==1.24.13           # PDF text extraction
+
 # Auth
 passlib[bcrypt]==1.7.4     # T-33: bcrypt key hashing; pinned — passlib 2.x breaks bcrypt compat
 

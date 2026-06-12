@@ -63,13 +63,13 @@ async def get_checklist_template() -> list[ChecklistItemOut]:
 
 # T-14: Admin panel endpoints
 @router.get("/users", response_model=list[UserOut])
-async def get_users() -> list[UserOut]:
-    return meta_service.list_users()
+async def get_users(session: AsyncSession = Depends(get_db)) -> list[UserOut]:
+    return await meta_service.list_users(session)
 
 
 @router.get("/roles", response_model=list[RoleOut])
-async def get_roles() -> list[RoleOut]:
-    return meta_service.list_roles()
+async def get_roles(session: AsyncSession = Depends(get_db)) -> list[RoleOut]:
+    return await meta_service.list_roles(session)
 
 
 @router.get("/system-logs", response_model=list[SystemLogOut])

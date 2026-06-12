@@ -97,6 +97,25 @@ class AlertOut(BaseModel):
     created_at: datetime | None = None
 
 
+class StatusTransitionRequest(BaseModel):
+    """Request to transition dossier to new status."""
+    new_status: str
+    changed_by: int | None = None
+    comment: str | None = None
+
+
+class StatusHistoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    dossier_id: int
+    from_status: str | None
+    to_status: str
+    changed_by: int | None
+    comment: str | None
+    created_at: datetime
+
+
 class AuditLogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

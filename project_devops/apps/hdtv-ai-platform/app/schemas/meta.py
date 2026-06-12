@@ -70,12 +70,11 @@ class DashboardSummaryOut(BaseModel):
 
 
 class UserOut(BaseModel):
-    id: str
+    id: int
     name: str
     email: str
-    dept: str
     role: str
-    status: str
+    is_active: bool
 
 
 class RoleOut(BaseModel):

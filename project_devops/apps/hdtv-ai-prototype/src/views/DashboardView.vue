@@ -14,8 +14,46 @@ const highRiskCount = computed(() => store.summary?.high_risk_count ?? '—')
 const approvedCount = computed(() => store.summary?.approved_count ?? '—')
 const alertSources = computed(() => store.summary?.alert_sources || [])
 
+// Mock newest dossiers data
+const newestDossiers = computed(() => [
+  { 
+    id: '198/TTr-EVNHANOI', 
+    doc_no: '198/TTr-EVNHANOI', 
+    title: 'Phê duyệt Tiêu chuẩn kỹ thuật thiết bị bay không người lái (UAV) phục vụ kiểm tra đường dây 220/110kV',
+    dept: 'Ban Kỹ thuật (KT)',
+    unit: 'Ban Kỹ thuật (KT)',
+    date: '2026-06-12',
+    risk_level: 'medium',
+    status: 'pending'
+  },
+  { 
+    id: '124/TTr-B02', 
+    doc_no: '124/TTr-B02', 
+    title: 'Phê duyệt Kế hoạch đấu thầu Dự án Cáp ngầm Ba Đình',
+    dept: 'Ban Kế hoạch (B02)',
+    unit: 'Ban Kế hoạch (B02)',
+    date: '2026-06-10',
+    risk_level: 'high',
+    status: 'needs_revision'
+  },
+  { 
+    id: '89/TTr-B08', 
+    doc_no: '89/TTr-B08', 
+    title: 'Phê duyệt Quyết toán Dự án Trạm biến áp 110kV',
+    dept: 'Ban QLDA (B08)',
+    unit: 'Ban QLDA (B08)',
+    date: '2026-06-08',
+    risk_level: 'medium',
+    status: 'approved'
+  }
+])
+
 const openDossier = (d) => {
-  if (d.dossier_id) router.push(`/workspace/${d.dossier_id}`)
+  if (d.dossier_id) {
+    router.push(`/workspace/${d.dossier_id}`)
+  } else if (d.id) {
+    router.push(`/workspace/${d.id}`)
+  }
 }
 </script>
 
@@ -83,6 +121,33 @@ const openDossier = (d) => {
       </div>
     </div>
 
+    <!-- Newest Dossiers Widget -->
+    <div class="newest-dossiers-area mt-6">
+      <div class="glass-panel" style="padding: 1.5rem;">
+        <h3 class="card-title">Tờ trình mới nhất</h3>
+        <div class="dossier-grid">
+          <div 
+            v-for="d in newestDossiers" 
+            :key="d.id" 
+            @click="openDossier(d)" 
+            class="dossier-card clickable-row"
+          >
+            <div class="dossier-card-header">
+              <span class="dossier-id">{{ d.doc_no || d.id }}</span>
+              <span class="risk-badge" :class="{'high': d.risk_level === 'high' || d.risk === 'Cao', 'medium': d.risk_level === 'medium' || d.risk === 'Trung bình', 'low': d.risk_level === 'low' || d.risk === 'Thấp'}">
+                {{ d.risk_level === 'high' || d.risk === 'Cao' ? 'Rủi ro cao' : d.risk_level === 'medium' || d.risk === 'Trung bình' ? 'Trung bình' : 'Thấp' }}
+              </span>
+            </div>
+            <div class="dossier-card-title">{{ d.title }}</div>
+            <div class="dossier-card-footer">
+              <span class="dossier-dept">{{ d.dept || d.unit }}</span>
+              <span class="dossier-date">{{ d.date }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Notable Dossiers List -->
     <div class="dossiers-table-area mt-6">
       <div class="glass-panel" style="padding: 1.5rem;">
@@ -101,17 +166,17 @@ const openDossier = (d) => {
             </thead>
             <tbody>
               <tr v-for="d in notableDossiers" :key="d.id" @click="openDossier(d)" class="clickable-row">
-                <td class="font-medium text-primary">{{ d.id }}</td>
+                <td class="font-medium text-primary">{{ d.doc_no || d.id }}</td>
                 <td>{{ d.title }}</td>
-                <td>{{ d.dept }}</td>
+                <td>{{ d.dept || d.unit }}</td>
                 <td>{{ d.date }}</td>
                 <td>
-                  <span class="risk-badge" :class="{'high': d.risk === 'Cao', 'medium': d.risk === 'Trung bình', 'low': d.risk === 'Thấp'}">
-                    {{ d.risk }}
+                  <span class="risk-badge" :class="{'high': d.risk_level === 'high' || d.risk === 'Cao', 'medium': d.risk_level === 'medium' || d.risk === 'Trung bình', 'low': d.risk_level === 'low' || d.risk === 'Thấp'}">
+                    {{ d.risk_level === 'high' || d.risk === 'Cao' ? 'Rủi ro cao' : d.risk_level === 'medium' || d.risk === 'Trung bình' ? 'Trung bình' : 'Thấp' }}
                   </span>
                 </td>
                 <td>
-                  <span class="status-dot" :class="{'pending': d.status === 'Chờ duyệt', 'processing': d.status === 'Đang thẩm định', 'approved': d.status === 'Đã thông qua'}"></span>
+                  <span class="status-dot" :class="{'pending': d.status === 'Chờ duyệt' || d.status === 'pending', 'processing': d.status === 'Đang thẩm định' || d.status === 'needs_revision', 'approved': d.status === 'Đã thông qua' || d.status === 'approved'}"></span>
                   {{ d.status }}
                 </td>
               </tr>
@@ -291,8 +356,53 @@ const openDossier = (d) => {
 .status-dot.processing { background: var(--color-warning); }
 .status-dot.approved { background: var(--color-success); }
 
+.dossier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+.dossier-card {
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  transition: all 0.2s ease;
+}
+.dossier-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 4px 12px rgba(0, 86, 179, 0.1);
+  transform: translateY(-2px);
+}
+.dossier-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+.dossier-id {
+  font-weight: 600;
+  color: var(--color-primary);
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+.dossier-card-title {
+  font-weight: 500;
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+.dossier-card-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+.dossier-dept { font-weight: 500; }
+.dossier-date { font-family: monospace; }
+
 @media (max-width: 768px) {
   .charts-area { grid-template-columns: 1fr; }
   .page-container { padding: 1rem; }
+  .dossier-grid { grid-template-columns: 1fr; }
 }
 </style>

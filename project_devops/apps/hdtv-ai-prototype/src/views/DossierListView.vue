@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, reactive } from 'vue'
+import { onMounted, ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDossierStore } from '../stores/dossier'
 import { getDossierUnits } from '../services/api'
@@ -9,10 +9,48 @@ import VirtualList from '../components/VirtualList.vue'
 const router = useRouter()
 const store  = useDossierStore()
 
-// T-38: Row height must match .virtual-row height in CSS below
+// T-40: Row height must match .virtual-row height in CSS below
 const ROW_HEIGHT   = 52
-// T-38: Visible scroll area — shows ~9 rows before scroll
+// T-40: Visible scroll area — shows ~9 rows before scroll
 const TABLE_HEIGHT = 480
+
+// ─── Status Labels ───────────────────────────────────────────────────────
+const STATUS_LABELS = {
+  'draft': 'Nháp',
+  'pending': 'Chờ duyệt',
+  'appraising': 'Đang thẩm định',
+  'submitted_to_dept': 'Đã trình lên Ban',
+  'dept_approved': 'Ban đã duyệt',
+  'dept_rejected': 'Ban từ chối',
+  'submitted_to_board': 'Đã trình lên HĐTV',
+  'board_reviewed': 'HĐTV đã xem xét',
+  'approved': 'Đã phê duyệt',
+  'rejected': 'Đã từ chối',
+  'needs_revision': 'Cần chỉnh sửa',
+}
+
+const getStatusBadgeClass = (status) => {
+  switch (status) {
+    case 'draft':
+    case 'needs_revision':
+      return 'badge-secondary'
+    case 'pending':
+    case 'submitted_to_dept':
+    case 'submitted_to_board':
+      return 'badge-info'
+    case 'appraising':
+    case 'dept_approved':
+    case 'board_reviewed':
+      return 'badge-warning'
+    case 'dept_rejected':
+    case 'rejected':
+      return 'badge-danger'
+    case 'approved':
+      return 'badge-success'
+    default:
+      return 'badge-secondary'
+  }
+}
 
 // ─── Filter state ─────────────────────────────────────────────────────────
 const unitOptions   = ref([])   // populated from API on mount
@@ -182,11 +220,15 @@ const STEPS = ['Thông tin', 'Đính kèm PDF', 'Hoàn tất']
               <span class="col-unit">{{ item.unit }}</span>
               <span class="col-date muted-sm">{{ item.date }}</span>
               <span class="col-risk">
-                <span v-if="item.risk === 'high'"   class="badge badge-danger">Rủi ro Cao</span>
-                <span v-else-if="item.risk === 'medium'" class="badge badge-warning">Trung bình</span>
-                <span v-else class="badge badge-success">Thấp</span>
-              </span>
-              <span class="col-status muted-sm">{{ item.status }}</span>
+                    <span v-if="item.risk === 'high'"   class="badge badge-danger">Rủi ro Cao</span>
+                    <span v-else-if="item.risk === 'medium'" class="badge badge-warning">Trung bình</span>
+                    <span v-else class="badge badge-success">Thấp</span>
+                  </span>
+                  <span class="col-status">
+                    <span :class="['badge', getStatusBadgeClass(item.status)]">
+                      {{ STATUS_LABELS[item.status] || item.status }}
+                    </span>
+                  </span>
             </div>
           </template>
         </VirtualList>
@@ -448,6 +490,8 @@ const STEPS = ['Thông tin', 'Đính kèm PDF', 'Hoàn tất']
 .badge-danger  { background: rgba(239,68,68,0.15);  color: #ef4444; }
 .badge-warning { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .badge-success { background: rgba(34,197,94,0.15);  color: #22c55e; }
+.badge-info { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.badge-secondary { background: rgba(107,114,128,0.15); color: #6b7280; }
 
 /* ─── Modal ──────────────────────────────────────────────────────────────── */
 .modal-overlay {

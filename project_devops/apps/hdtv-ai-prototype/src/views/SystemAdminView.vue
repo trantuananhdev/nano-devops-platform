@@ -56,6 +56,13 @@ const KEY_TYPE_LABELS = {
   minio: 'MinIO / S3',
   internal: 'Internal',
 }
+
+const ROLE_LABELS = {
+  admin: 'Quản trị viên',
+  hdtv_leader: 'Lãnh đạo HĐTV',
+  dept_head: 'Trưởng ban chuyên môn',
+  specialist: 'Chuyên viên',
+}
 </script>
 
 <template>
@@ -113,10 +120,9 @@ const KEY_TYPE_LABELS = {
           <table class="data-table mt-4">
             <thead>
               <tr>
-                <th>Mã NV</th>
+                <th>ID</th>
                 <th>Họ và tên</th>
                 <th>Email / Tài khoản</th>
-                <th>Phòng ban</th>
                 <th>Vai trò</th>
                 <th>Trạng thái</th>
                 <th width="100">Thao tác</th>
@@ -127,10 +133,11 @@ const KEY_TYPE_LABELS = {
                 <td class="font-medium">{{ u.id }}</td>
                 <td>{{ u.name }}</td>
                 <td>{{ u.email }}</td>
-                <td>{{ u.dept }}</td>
-                <td><span class="role-badge">{{ u.role }}</span></td>
+                <td><span class="role-badge">{{ ROLE_LABELS[u.role] || u.role }}</span></td>
                 <td>
-                  <span class="status-badge" :class="u.status === 'Hoạt động' ? 'pass' : 'fail'">{{ u.status }}</span>
+                  <span class="status-badge" :class="u.is_active ? 'pass' : 'fail'">
+                    {{ u.is_active ? 'Hoạt động' : 'Vô hiệu' }}
+                  </span>
                 </td>
                 <td>
                   <div class="flex gap-2">

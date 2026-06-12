@@ -115,6 +115,24 @@ h1, h2, h3, h4, h5, h6 {
   background-color: rgba(255,255,255,0.05);
 }
 
+.btn-success {
+  background-color: var(--color-success);
+  color: white;
+}
+.btn-success:hover {
+  background-color: #059669;
+  transform: translateY(-1px);
+}
+
+.btn-danger {
+  background-color: var(--color-danger);
+  color: white;
+}
+.btn-danger:hover {
+  background-color: #dc2626;
+  transform: translateY(-1px);
+}
+
 /* Utilities */
 .flex { display: flex; }
 .flex-col { display: flex; flex-direction: column; }

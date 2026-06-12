@@ -9,6 +9,7 @@ from sqlalchemy import select
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.database import async_session_factory
+from app.core.config import settings
 from app.models.entities import (
     Dossier,
     DossierStatus,
@@ -19,6 +20,9 @@ from app.models.entities import (
     UserPreference,
     UserRole,
 )
+from app.services.minio_service import MinioService
+from app.services.rag.pdf_extractor import extract_text_from_pdf, chunk_text
+from app.services.memory import vector_store
 
 DOSSIERS = [
     {
@@ -26,21 +30,21 @@ DOSSIERS = [
         "title": "Tờ trình phê duyệt Kế hoạch đấu thầu Dự án Cáp ngầm Ba Đình",
         "unit": "Ban Kế hoạch (B02)",
         "risk_level": RiskLevel.high,
-        "status": DossierStatus.pending,
+        "status": DossierStatus.submitted_to_dept,
     },
     {
         "doc_no": "89/TTr-B08",
         "title": "Phê duyệt Quyết toán Dự án Trạm biến áp 110kV",
         "unit": "Ban QLĐT (B08)",
         "risk_level": RiskLevel.medium,
-        "status": DossierStatus.needs_revision,
+        "status": DossierStatus.draft,
     },
     {
         "doc_no": "45/TTr-B12",
         "title": "Kế hoạch mua sắm vật tư thiết bị An toàn PCTT 2026",
         "unit": "Ban An toàn (B12)",
         "risk_level": RiskLevel.high,
-        "status": DossierStatus.pending,
+        "status": DossierStatus.dept_approved,
     },
     {
         "doc_no": "210/TTr-B09",
@@ -48,6 +52,13 @@ DOSSIERS = [
         "unit": "Ban Kinh doanh (B09)",
         "risk_level": RiskLevel.low,
         "status": DossierStatus.approved,
+    },
+    {
+        "doc_no": "198/TTr-EVNHANOI",
+        "title": "Phê duyệt Tiêu chuẩn kỹ thuật thiết bị bay không người lái (UAV) phục vụ kiểm tra đường dây 220/110kV",
+        "unit": "Ban Kỹ thuật (KT)",
+        "risk_level": RiskLevel.medium,
+        "status": DossierStatus.board_reviewed,
     },
 ]
 
@@ -328,6 +339,107 @@ async def seed_user_preferences() -> None:
             print(f"  user_id={user_id} prefs={list(prefs.keys())}")
 
 
+async def seed_dossier_198_pdfs() -> None:
+    """T-39: Upload dossier 198 real PDFs to MinIO and update dossier."""
+    import os
+    from pathlib import Path
+    from app.services import minio_service
+
+    # Get dossier 198 from DB
+    dossier_id = None
+    dossier_pdf_key = None
+    async with async_session_factory() as session:
+        result = await session.execute(select(Dossier).where(Dossier.doc_no == "198/TTr-EVNHANOI"))
+        dossier = result.scalar_one_or_none()
+        if not dossier:
+            print("Dossier 198 not found, skipping PDF upload")
+            return
+        dossier_id = dossier.id
+
+    # Data folder path
+    data_root = Path(__file__).parent.parent / "data" / "seed" / "dossier_198_uav"
+    if not data_root.exists():
+        print(f"Data folder not found: {data_root}")
+        return
+
+    try:
+        # Upload main dossier PDF
+        main_pdf = data_root / "01_to_trinh_198_TTr_EVNHANOI.pdf"
+        if main_pdf.exists():
+            with open(main_pdf, "rb") as f:
+                data_bytes = f.read()
+                result = await minio_service.upload_pdf(data_bytes, main_pdf.name)
+                if result["ok"]:
+                    dossier_pdf_key = result["key"]
+                    # Update dossier with PDF URL (store the key, not the presigned URL)
+                    async with async_session_factory() as session:
+                        dossier = (await session.execute(select(Dossier).where(Dossier.id == dossier_id))).scalar_one()
+                        dossier.pdf_url = result["key"]  # Store internal key, not presigned URL
+                        await session.commit()
+                    print(f"Uploaded main PDF: key={result['key']}")
+                else:
+                    print(f"Failed to upload main PDF: {result.get('error')}")
+
+        # Upload all other PDFs to MinIO (reference docs) - just log, don't store
+        ref_files = list(data_root.glob("*.pdf")) + list(data_root.glob("ref/*.pdf"))
+        for pdf_path in ref_files:
+            if pdf_path.name == "01_to_trinh_198_TTr_EVNHANOI.pdf":
+                continue  # already uploaded as main
+            with open(pdf_path, "rb") as f:
+                data_bytes = f.read()
+                result = await minio_service.upload_pdf(data_bytes, pdf_path.name)
+                if result["ok"]:
+                    print(f"Uploaded reference: {pdf_path.name} (key={result['key']})")
+                else:
+                    print(f"Failed to upload reference {pdf_path.name}: {result.get('error')}")
+
+    except Exception as exc:
+        print(f"MinIO upload skipped: {exc}")
+
+
+async def seed_real_legal_docs() -> None:
+    """T-40: Extract and ingest real legal PDFs into Chroma legal_docs collection."""
+    import os
+    from pathlib import Path
+
+    data_root = Path(__file__).parent.parent / "data" / "seed" / "dossier_198_uav" / "ref"
+    if not data_root.exists():
+        print(f"Reference folder not found: {data_root}")
+        return
+
+    legal_pdfs = list(data_root.glob("*.pdf"))
+    if not legal_pdfs:
+        print("No legal PDFs found to ingest")
+        return
+
+    print(f"Ingesting {len(legal_pdfs)} real legal docs into Chroma...")
+    
+    for pdf_path in legal_pdfs:
+        try:
+            print(f"  Extracting: {pdf_path.name}")
+            text, page_count = extract_text_from_pdf(pdf_path)
+            chunks = chunk_text(text)
+            
+            # Upsert to Chroma legal_docs collection
+            doc_id = pdf_path.stem
+            for i, chunk in enumerate(chunks):
+                chunk_id = f"{doc_id}-chunk-{i}"
+                await vector_store.upsert_legal_doc(
+                    doc_id=chunk_id,
+                    text=chunk,
+                    metadata={
+                        "source": pdf_path.name,
+                        "chunk_index": i,
+                        "total_chunks": len(chunks),
+                        "page_count": page_count,
+                    },
+                )
+            print(f"    → {len(chunks)} chunks ingested")
+            
+        except Exception as exc:
+            print(f"    Failed: {exc}")
+
+
 async def main() -> None:
     await seed_db()
     await seed_tool_chains()
@@ -335,6 +447,8 @@ async def main() -> None:
     await seed_meilisearch()
     await seed_agent_memories()
     await seed_user_preferences()
+    await seed_dossier_198_pdfs()
+    await seed_real_legal_docs()
 
 
 if __name__ == "__main__":

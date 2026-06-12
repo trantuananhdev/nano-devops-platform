@@ -70,4 +70,8 @@ export const deleteApiKey = (keyId) => api.delete(`/api-keys/${keyId}`)
 // T-36: MCP Audit Logs
 export const getMcpAuditLogs = (params) => api.get('/mcp/audit-logs', { params })
 
+// T-46: Formal Status Transitions
+export const transitionDossierStatus = (dossierId, body) => api.post(`/dossiers/${dossierId}/transition-status`, body)
+export const getDossierStatusHistory = (dossierId) => api.get(`/dossiers/${dossierId}/status-history`)
+
 export default api

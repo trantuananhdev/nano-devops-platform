@@ -1,14 +1,16 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, CheckCircle2, AlertTriangle, FileCheck, MessageSquare, FileOutput, Share2, FileBadge, Bot, FileText, Files, Info, X, BookOpen, Trash2, UploadCloud, RefreshCw, ThumbsUp, ThumbsDown } from '@lucide/vue'
+import { ArrowLeft, CheckCircle2, AlertTriangle, FileCheck, MessageSquare, FileOutput, Share2, FileBadge, Bot, FileText, Files, Info, X, BookOpen, Trash2, UploadCloud, RefreshCw, ThumbsUp, ThumbsDown, History } from '@lucide/vue'
 import { useDossierStore } from '../stores/dossier'
+import { useAuthStore } from '../stores/auth'
 import { createAppraisalSocket } from '../services/ws'
-import { getDossierPdfUrl, submitFeedback, getPendingClarifications, answerClarification } from '../services/api'
+import { getDossierPdfUrl, submitFeedback, getPendingClarifications, answerClarification, transitionDossierStatus, getDossierStatusHistory } from '../services/api'
 
 const route = useRoute()
 const router = useRouter()
 const store = useDossierStore()
+const authStore = useAuthStore()
 const activeTab = ref('ai')
 const leftTab = ref('main')
 
@@ -17,7 +19,142 @@ const goBack = () => router.push('/dossiers')
 const dossierId = computed(() => route.params.id || '1')
 const dossierDetail = ref(null)
 const pdfViewUrl = ref(null)
+const isLoadingPdf = ref(false)
 const isHighRisk = computed(() => dossierDetail.value?.risk_level === 'high' || dossierId.value === '1' || dossierId.value === '3')
+const statusHistory = ref([])
+const isTransitioning = ref(false)
+
+// ─── Status Labels and Transitions ───────────────────────────────────────
+const STATUS_LABELS = {
+  'draft': 'Nháp',
+  'pending': 'Chờ duyệt',
+  'appraising': 'Đang thẩm định',
+  'submitted_to_dept': 'Đã trình lên Ban',
+  'dept_approved': 'Ban đã duyệt',
+  'dept_rejected': 'Ban từ chối',
+  'submitted_to_board': 'Đã trình lên HĐTV',
+  'board_reviewed': 'HĐTV đã xem xét',
+  'approved': 'Đã phê duyệt',
+  'rejected': 'Đã từ chối',
+  'needs_revision': 'Cần chỉnh sửa',
+}
+
+const getStatusBadgeClass = (status) => {
+  switch (status) {
+    case 'draft':
+    case 'needs_revision':
+      return 'badge-secondary'
+    case 'pending':
+    case 'submitted_to_dept':
+    case 'submitted_to_board':
+      return 'badge-info'
+    case 'appraising':
+    case 'dept_approved':
+    case 'board_reviewed':
+      return 'badge-warning'
+    case 'dept_rejected':
+    case 'rejected':
+      return 'badge-danger'
+    case 'approved':
+      return 'badge-success'
+    default:
+      return 'badge-secondary'
+  }
+}
+
+const getAvailableActions = (status, userRole) => {
+  const actions = []
+  switch (status) {
+    case 'draft':
+      if (userRole === 'specialist' || userRole === 'admin') {
+        actions.push({ action: 'pending', label: 'Gửi chờ duyệt', variant: 'primary' })
+        actions.push({ action: 'submitted_to_dept', label: 'Trình lên Ban', variant: 'primary' })
+      }
+      break
+    case 'pending':
+      if (userRole === 'specialist' || userRole === 'admin') {
+        actions.push({ action: 'appraising', label: 'Bắt đầu thẩm định', variant: 'primary' })
+        actions.push({ action: 'submitted_to_dept', label: 'Trình lên Ban', variant: 'primary' })
+        actions.push({ action: 'draft', label: 'Hủy chờ duyệt', variant: 'outline' })
+      }
+      break
+    case 'appraising':
+      if (userRole === 'specialist' || userRole === 'admin') {
+        actions.push({ action: 'pending', label: 'Đưa về chờ', variant: 'outline' })
+        actions.push({ action: 'submitted_to_dept', label: 'Trình lên Ban', variant: 'primary' })
+        actions.push({ action: 'needs_revision', label: 'Yêu cầu chỉnh sửa', variant: 'outline' })
+        actions.push({ action: 'approved', label: 'Phê duyệt', variant: 'success' })
+      }
+      break
+    case 'submitted_to_dept':
+      if (userRole === 'dept_head' || userRole === 'admin') {
+        actions.push({ action: 'dept_approved', label: 'Ban duyệt', variant: 'primary' })
+        actions.push({ action: 'dept_rejected', label: 'Ban từ chối', variant: 'danger' })
+        actions.push({ action: 'draft', label: 'Đưa về nháp', variant: 'outline' })
+      }
+      break
+    case 'dept_approved':
+      if (userRole === 'dept_head' || userRole === 'admin') {
+        actions.push({ action: 'submitted_to_board', label: 'Trình lên HĐTV', variant: 'primary' })
+        actions.push({ action: 'draft', label: 'Đưa về nháp', variant: 'outline' })
+      }
+      break
+    case 'dept_rejected':
+      if (userRole === 'specialist' || userRole === 'admin') {
+        actions.push({ action: 'draft', label: 'Sửa lại', variant: 'primary' })
+      }
+      break
+    case 'submitted_to_board':
+      if (userRole === 'hdtv_leader' || userRole === 'admin') {
+        actions.push({ action: 'board_reviewed', label: 'HĐTV xem xét', variant: 'primary' })
+        actions.push({ action: 'dept_approved', label: 'Đưa về Ban', variant: 'outline' })
+      }
+      break
+    case 'board_reviewed':
+      if (userRole === 'hdtv_leader' || userRole === 'admin') {
+        actions.push({ action: 'approved', label: 'Phê duyệt cuối', variant: 'success' })
+        actions.push({ action: 'rejected', label: 'Từ chối cuối', variant: 'danger' })
+        actions.push({ action: 'needs_revision', label: 'Yêu cầu chỉnh sửa', variant: 'outline' })
+      }
+      break
+    case 'needs_revision':
+      if (userRole === 'specialist' || userRole === 'admin') {
+        actions.push({ action: 'draft', label: 'Sửa lại', variant: 'primary' })
+      }
+      break
+    case 'rejected':
+      if (userRole === 'specialist' || userRole === 'admin') {
+        actions.push({ action: 'draft', label: 'Sửa lại', variant: 'primary' })
+      }
+      break
+  }
+  return actions
+}
+
+const handleStatusTransition = async (action) => {
+  isTransitioning.value = true
+  try {
+    await transitionDossierStatus(dossierId.value, {
+      new_status: action,
+      user_id: authStore.currentUser?.id
+    })
+    await loadDossier()
+    await loadStatusHistory()
+  } catch (err) {
+    console.error('Status transition failed:', err)
+  } finally {
+    isTransitioning.value = false
+  }
+}
+
+const loadStatusHistory = async () => {
+  try {
+    const { data } = await getDossierStatusHistory(dossierId.value)
+    statusHistory.value = data
+  } catch (err) {
+    console.error('Failed to load status history:', err)
+  }
+}
 
 const defaultChecks = [
   { id: 1, label: 'Kiểm tra căn cứ pháp lý', status: 'pass', desc: 'Chờ thẩm định AI...', details: '' },
@@ -45,11 +182,14 @@ async function loadDossier() {
   dossierDetail.value = data
   pdfViewUrl.value = null
   if (data?.pdf_url) {
+    isLoadingPdf.value = true
     try {
       const { data: pdfData } = await getDossierPdfUrl(dossierId.value)
       pdfViewUrl.value = pdfData.pdf_url
     } catch {
       pdfViewUrl.value = null
+    } finally {
+      isLoadingPdf.value = false
     }
   }
   if (data?.appraisal) {
@@ -58,6 +198,7 @@ async function loadDossier() {
     feedbackSubmitted.value = null
     feedbackComment.value = ''
   }
+  await loadStatusHistory()
 }
 
 let wsHandle = null
@@ -249,15 +390,26 @@ const sendRefMsg = () => {
     <header class="ws-header glass-panel">
       <button class="btn-icon" @click="goBack"><ArrowLeft /></button>
       <div class="header-info">
-        <h2 class="doc-title">Tờ trình 124/TTr-B02: Phê duyệt Kế hoạch đấu thầu Dự án Cáp ngầm Ba Đình</h2>
+        <h2 class="doc-title">{{ dossierDetail?.title || `Tờ trình ${dossierDetail?.doc_no || 'N/A'}` }}</h2>
         <div class="tags">
-          <span class="badge warning">Rủi ro cao</span>
-          <span class="badge info">Ban Kế hoạch</span>
+          <span v-if="dossierDetail?.risk_level === 'high'" class="badge warning">Rủi ro cao</span>
+          <span v-else-if="dossierDetail?.risk_level === 'medium'" class="badge info">Rủi ro trung bình</span>
+          <span v-else class="badge-success">Rủi ro thấp</span>
+          <span :class="['badge', getStatusBadgeClass(dossierDetail?.status)]">
+            {{ STATUS_LABELS[dossierDetail?.status] || dossierDetail?.status }}
+          </span>
         </div>
       </div>
       <div class="header-actions">
-        <button class="btn btn-outline">Lưu Nháp</button>
-        <button class="btn btn-primary">Chốt Duyệt</button>
+        <button 
+          v-for="action in getAvailableActions(dossierDetail?.status, authStore.currentUser?.role)" 
+          :key="action.action"
+          :class="['btn', action.variant === 'outline' ? 'btn-outline' : '', action.variant === 'success' ? 'btn-success' : '', action.variant === 'danger' ? 'btn-danger' : '', !action.variant || action.variant === 'primary' ? 'btn-primary' : '']"
+          @click="handleStatusTransition(action.action)"
+          :disabled="isTransitioning"
+        >
+          {{ isTransitioning ? 'Đang xử lý...' : action.label }}
+        </button>
       </div>
     </header>
 
@@ -303,7 +455,11 @@ const sendRefMsg = () => {
         
         <div class="pdf-viewer">
           <!-- Tờ trình -->
-          <div v-if="leftTab === 'main' && pdfViewUrl" class="pdf-embed-wrap">
+          <div v-if="leftTab === 'main' && isLoadingPdf" class="pdf-loading">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Đang tải PDF...</p>
+          </div>
+          <div v-else-if="leftTab === 'main' && pdfViewUrl" class="pdf-embed-wrap">
             <iframe :src="pdfViewUrl" class="pdf-embed" title="Tờ trình PDF" />
           </div>
           <div v-else-if="leftTab === 'main'" class="pdf-page">
@@ -403,16 +559,19 @@ const sendRefMsg = () => {
       <div class="ws-right glass-panel">
         <div class="ai-tabs">
           <button class="tab-btn" :class="{ active: activeTab === 'ai' }" @click="activeTab = 'ai'">
-            <FileCheck size="16"/> Kết quả Thẩm định
+            <FileCheck size="16" /> Kết quả Thẩm định
           </button>
           <button class="tab-btn" :class="{ active: activeTab === 'chat' }" @click="activeTab = 'chat'">
-            <MessageSquare size="16"/> Ý kiến Thành viên (2)
+            <MessageSquare size="16" /> Ý kiến Thành viên (2)
           </button>
           <button class="tab-btn" :class="{ active: activeTab === 'report' }" @click="activeTab = 'report'">
-            <FileBadge size="16"/> Lập Báo cáo Thẩm định
+            <FileBadge size="16" /> Lập Báo cáo Thẩm định
           </button>
           <button class="tab-btn" :class="{ active: activeTab === 'resolution' }" @click="activeTab = 'resolution'">
-            <FileOutput size="16"/> Lập Nghị quyết
+            <FileOutput size="16" /> Lập Nghị quyết
+          </button>
+          <button class="tab-btn" :class="{ active: activeTab === 'history' }" @click="activeTab = 'history'">
+            <History size="16" /> Lịch sử Trạng thái
           </button>
         </div>
 
@@ -599,6 +758,35 @@ const sendRefMsg = () => {
               <button class="btn btn-primary">Gửi</button>
             </div>
           </div>
+
+          <!-- Status History Tab -->
+          <div v-if="activeTab === 'history'" class="ai-analysis-panel">
+            <div class="ai-content-scroll">
+              <h4 class="section-title">Lịch sử thay đổi trạng thái</h4>
+              <div class="version-list">
+                <div 
+                  v-for="(entry, index) in statusHistory.slice().reverse()" 
+                  :key="entry.id || index" 
+                  class="version-card"
+                >
+                  <div class="v-header">
+                    <span class="v-name">
+                      <span :class="['badge', getStatusBadgeClass(entry.new_status)]">
+                        {{ STATUS_LABELS[entry.new_status] || entry.new_status }}
+                      </span>
+                    </span>
+                    <span class="time">{{ new Date(entry.created_at).toLocaleString('vi-VN') }}</span>
+                  </div>
+                  <div class="v-desc">
+                    Người thay đổi: {{ entry.changed_by_name || 'N/A' }}
+                  </div>
+                  <div v-if="entry.old_status" class="v-desc text-xs">
+                    Từ: {{ STATUS_LABELS[entry.old_status] || entry.old_status }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -679,6 +867,9 @@ const sendRefMsg = () => {
 .badge { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; }
 .badge.warning { background: var(--color-danger); color: white; }
 .badge.info { background: var(--color-primary); color: white; }
+.badge-success { background: rgba(34,197,94,0.15); color: #22c55e; }
+.badge-danger { background: rgba(239,68,68,0.15); color: #ef4444; }
+.badge-secondary { background: rgba(107,114,128,0.15); color: #6b7280; }
 
 .header-actions { display: flex; gap: 1rem; }
 
@@ -710,6 +901,31 @@ const sendRefMsg = () => {
   padding: 2rem;
   display: flex;
   justify-content: center;
+  align-items: flex-start;
+}
+.pdf-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  gap: 1rem;
+}
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--color-border);
+  border-top: 4px solid var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.loading-text {
+  color: var(--color-text-secondary);
+  font-weight: 500;
 }
 .pdf-embed-wrap {
   width: 100%;
