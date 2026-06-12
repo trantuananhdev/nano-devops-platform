@@ -161,9 +161,10 @@
 - **priority**: P1
 - **files**:
   - `hdtv-ai-prototype/src/views/SplitViewWorkspace.vue` — cập nhật tab "Tài liệu Khác" để thực sự upload/xem file
+  - `hdtv-ai-prototype/src/services/api.js` — thêm các API calls cho reference documents
 - **acceptance**: Người dùng có thể upload file, xem list, xóa file
 - **verify_cmd**:
-- **status**: PENDING
+- **status**: DONE ✅
 
 ---
 

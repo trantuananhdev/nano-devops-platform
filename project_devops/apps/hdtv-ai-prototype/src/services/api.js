@@ -74,4 +74,15 @@ export const getMcpAuditLogs = (params) => api.get('/mcp/audit-logs', { params }
 export const transitionDossierStatus = (dossierId, body) => api.post(`/dossiers/${dossierId}/transition-status`, body)
 export const getDossierStatusHistory = (dossierId) => api.get(`/dossiers/${dossierId}/status-history`)
 
+// T-52: Reference Document Management
+export const getReferenceDocuments = (dossierId) => api.get(`/dossiers/${dossierId}/reference-documents`)
+export const uploadReferenceDocument = (dossierId, formData, uploadedBy) =>
+  api.post(`/dossiers/${dossierId}/reference-documents`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    params: { uploaded_by: uploadedBy },
+    timeout: 60000,
+  })
+export const deleteReferenceDocument = (dossierId, documentId) =>
+  api.delete(`/dossiers/${dossierId}/reference-documents/${documentId}`)
+
 export default api

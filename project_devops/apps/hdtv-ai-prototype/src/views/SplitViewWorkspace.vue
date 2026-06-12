@@ -5,7 +5,7 @@ import { ArrowLeft, CheckCircle2, AlertTriangle, FileCheck, MessageSquare, FileO
 import { useDossierStore } from '../stores/dossier'
 import { useAuthStore } from '../stores/auth'
 import { createAppraisalSocket } from '../services/ws'
-import { getDossierPdfUrl, submitFeedback, getPendingClarifications, answerClarification, transitionDossierStatus, getDossierStatusHistory } from '../services/api'
+import { getDossierPdfUrl, submitFeedback, getPendingClarifications, answerClarification, transitionDossierStatus, getDossierStatusHistory, getReferenceDocuments, uploadReferenceDocument, deleteReferenceDocument } from '../services/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -23,6 +23,8 @@ const isLoadingPdf = ref(false)
 const isHighRisk = computed(() => dossierDetail.value?.risk_level === 'high' || dossierId.value === '1' || dossierId.value === '3')
 const statusHistory = ref([])
 const isTransitioning = ref(false)
+const referenceDocs = ref([])
+const isUploadingRefDoc = ref(false)
 
 // ─── Status Labels and Transitions ───────────────────────────────────────
 const STATUS_LABELS = {
@@ -156,6 +158,15 @@ const loadStatusHistory = async () => {
   }
 }
 
+const loadReferenceDocs = async () => {
+  try {
+    const { data } = await getReferenceDocuments(dossierId.value)
+    referenceDocs.value = data
+  } catch (err) {
+    console.error('Failed to load reference documents:', err)
+  }
+}
+
 const defaultChecks = [
   { id: 1, label: 'Kiểm tra căn cứ pháp lý', status: 'pass', desc: 'Chờ thẩm định AI...', details: '' },
   { id: 2, label: 'Đối chiếu Tổng mức đầu tư (ERP)', status: 'pass', desc: 'Chờ thẩm định AI...', details: '' },
@@ -199,6 +210,7 @@ async function loadDossier() {
     feedbackComment.value = ''
   }
   await loadStatusHistory()
+  await loadReferenceDocs()
 }
 
 let wsHandle = null
@@ -302,14 +314,32 @@ const resolutionVersions = ref([
   { id: 1, name: 'Phiên bản 1.0', time: '10:20', desc: 'Dự thảo ban đầu' }
 ])
 
-const referenceDocs = ref([
-  { id: 1, name: 'Quy chế mua sắm nội bộ EVN 2026.pdf', size: '2.4 MB' }
-])
-const removeRefDoc = (id) => {
-  referenceDocs.value = referenceDocs.value.filter(d => d.id !== id)
+const removeRefDoc = async (id) => {
+  try {
+    await deleteReferenceDocument(dossierId.value, id)
+    await loadReferenceDocs()
+  } catch (err) {
+    console.error('Failed to remove reference document:', err)
+  }
 }
-const addRefDoc = () => {
-  referenceDocs.value.push({ id: Date.now(), name: 'Nghị định 24_2024_ND-CP.pdf', size: '5.1 MB' })
+const addRefDoc = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+  isUploadingRefDoc.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    await uploadReferenceDocument(dossierId.value, formData, authStore.currentUser?.id)
+    await loadReferenceDocs()
+  } catch (err) {
+    console.error('Failed to upload reference document:', err)
+  } finally {
+    isUploadingRefDoc.value = false
+  }
+}
+const handleFileSelect = (event) => {
+  addRefDoc(event)
+  event.target.value = '' // Reset input
 }
 
 const feedbackComment = ref('')
@@ -506,8 +536,8 @@ const sendRefMsg = () => {
                   <div class="flex items-center gap-3">
                     <FileText size="18" class="text-primary"/>
                     <div>
-                      <div class="font-medium">{{ doc.name }}</div>
-                      <div class="text-xs text-muted">{{ doc.size }}</div>
+                      <div class="font-medium">{{ doc.file_name }}</div>
+                      <div class="text-xs text-muted">{{ doc.file_size ? (doc.file_size / (1024 * 1024)).toFixed(1) + ' MB' : 'N/A' }}</div>
                     </div>
                   </div>
                   <button class="btn-icon text-danger" @click="removeRefDoc(doc.id)" title="Xóa tài liệu"><Trash2 size="16"/></button>
@@ -515,7 +545,17 @@ const sendRefMsg = () => {
               </div>
 
               <div class="flex items-center justify-between mt-4">
-                <button class="btn btn-outline flex-center gap-2" @click="addRefDoc"><UploadCloud size="16"/> Tải thêm tài liệu</button>
+                <label class="btn btn-outline flex-center gap-2 cursor-pointer">
+                  <UploadCloud size="16"/>
+                  {{ isUploadingRefDoc ? 'Đang tải lên...' : 'Tải thêm tài liệu' }}
+                  <input 
+                    type="file" 
+                    class="hidden" 
+                    @change="handleFileSelect" 
+                    :disabled="isUploadingRefDoc"
+                    multiple
+                  />
+                </label>
               </div>
             </div>
 
