@@ -14,7 +14,7 @@ export const getDossierUnits = () => api.get('/dossiers/units')  // distinct uni
 export const appraiseDossier = (id) => api.post(`/dossiers/${id}/appraise`)
 export const getAlerts = (params) => api.get('/alerts', { params })
 export const resolveAlert = (id) => api.patch(`/alerts/${id}/resolve`)
-export const getAuditLogs = (limit = 50) => api.get('/audit-logs', { params: { limit } })
+export const getAiAuditLogs = (limit = 50) => api.get('/audit-logs', { params: { limit } })
 export const getTools = () => api.get('/tools')
 export const getKnowledgeGraph = (dossierId) => api.get('/knowledge-graph', { params: { dossier_id: dossierId } })
 export const getDashboardSummary = () => api.get('/dashboard/summary')

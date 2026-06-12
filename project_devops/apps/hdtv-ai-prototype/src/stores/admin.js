@@ -16,7 +16,7 @@ export const useAdminStore = defineStore('admin', () => {
   async function fetchAuditLogs() {
     loading.value = true
     try {
-      const { data } = await api.getAuditLogs(50)
+      const { data } = await api.getAiAuditLogs(50)
       toolAudits.value = data.map((log) => ({
         id: `TA-${log.id}`,
         timestamp: log.created_at ? new Date(log.created_at).toLocaleString('vi-VN') : '',

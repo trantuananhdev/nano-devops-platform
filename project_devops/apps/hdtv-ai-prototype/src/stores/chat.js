@@ -83,7 +83,7 @@ export const useChatStore = defineStore('chat', () => {
       const detail = await dossierStore.fetchDossier(dossierId)
 
       // Initial page: most-recent AUDIT_PAGE rows
-      const { data: allLogs } = await api.getAuditLogs(AUDIT_PAGE)
+      const { data: allLogs } = await api.getAiAuditLogs(AUDIT_PAGE)
       const relevant = _filterRelevant(allLogs, dossierId)
 
       const msgs = [
@@ -131,7 +131,7 @@ export const useChatStore = defineStore('chat', () => {
     loadingHistory.value = true
     try {
       const nextLimit  = _auditFetchedCount.value + AUDIT_PAGE
-      const { data: allLogs } = await api.getAuditLogs(nextLimit)
+      const { data: allLogs } = await api.getAiAuditLogs(nextLimit)
 
       // The new rows are the ones we haven't seen yet (beyond current fetch)
       const newLogs = allLogs.slice(_auditFetchedCount.value)
