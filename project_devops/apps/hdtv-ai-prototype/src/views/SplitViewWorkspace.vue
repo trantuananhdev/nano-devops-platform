@@ -980,6 +980,9 @@ const sendRefMsg = () => {
                   <div class="v-desc">
                     {{ log.description || 'Không có mô tả' }}
                   </div>
+                  <div v-if="log.user" class="v-desc text-xs">
+                    Người thực hiện: {{ log.user.name }}
+                  </div>
                   <div v-if="log.ip_address" class="v-desc text-xs text-muted">
                     IP: {{ log.ip_address }}
                   </div>
@@ -993,10 +996,10 @@ const sendRefMsg = () => {
                 <p class="text-sm text-muted mb-1">Thời gian: {{ new Date(selectedAuditLog.created_at).toLocaleString('vi-VN') }}</p>
                 <p class="text-sm text-muted mb-1">Action: {{ selectedAuditLog.action }}</p>
                 <p v-if="selectedAuditLog.description" class="text-sm mb-2">{{ selectedAuditLog.description }}</p>
-                <p v-if="selectedAuditLog.metadata" class="text-sm">
+                <p v-if="selectedAuditLog.extra_data" class="text-sm">
                   <strong>Metadata:</strong>
                   <br>
-                  <code class="whitespace-pre-wrap">{{ JSON.stringify(selectedAuditLog.metadata, null, 2) }}</code>
+                  <code class="whitespace-pre-wrap">{{ JSON.stringify(selectedAuditLog.extra_data, null, 2) }}</code>
                 </p>
               </div>
             </div>

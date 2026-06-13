@@ -128,15 +128,18 @@ class AuditLogOut(BaseModel):
     created_at: datetime | None = None
 
 
+from app.schemas.meta import UserOut
+
 class GeneralAuditLogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     dossier_id: int | None
     user_id: int | None
+    user: UserOut | None = None
     action: str
     description: str | None
-    metadata: dict[str, Any]
+    extra_data: dict[str, Any]
     ip_address: str | None
     created_at: datetime
 
@@ -194,7 +197,7 @@ class NotificationCreate(BaseModel):
     type: str
     title: str
     message: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    extra_data: dict[str, Any] = Field(default_factory=dict)
 
 
 class NotificationOut(BaseModel):
@@ -207,7 +210,7 @@ class NotificationOut(BaseModel):
     title: str
     message: str
     is_read: bool
-    metadata: dict[str, Any]
+    extra_data: dict[str, Any]
     created_at: datetime
 
 

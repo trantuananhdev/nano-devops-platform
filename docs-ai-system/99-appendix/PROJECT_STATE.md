@@ -1,7 +1,7 @@
 # Project State — EVN HDTV AI
 
-**Phase**: 12 — EVN Production Feature Complete (IN PROGRESS ✨)
-**Last updated**: 2026-06-12 (session 21 — Phase 11 complete, Phase 12 T-43 done)
+**Phase**: 12 — EVN Production Feature Complete (Complete ✅)
+**Last updated**: 2026-06-13 (session 22 — Phase 12 complete)
 **Demo ready**: yes (with real dossier 198/TTr-EVNHANOI data)
 
 ## Verified Endpoints
@@ -382,7 +382,7 @@ Dossier **198/TTr-EVNHANOI** includes:
 
 ---
 
-## Phase 12 — EVN Production Feature Complete (In Progress)
+## Phase 12 — EVN Production Feature Complete (Complete ✅)
 
 ### What's New
 - **T-43**: User Roles & Permissions (BE)
@@ -401,47 +401,73 @@ Dossier **198/TTr-EVNHANOI** includes:
   - Added status history endpoint GET /dossiers/{id}/status-history
   - Added migration 013_add_status_history.py
   - Updated seed.py to use new status values
+- **T-46**: Formal Status Transitions & Workflow (FE)
+  - Updated DossierListView.vue with status badges
+  - Updated SplitViewWorkspace.vue with status action buttons and history tab
+  - Added status transition API calls in api.js
+  - Added btn-success/btn-danger styles
+- **T-47**: Document Version Control (BE)
+  - Added DocumentVersion entity
+  - Added migration 016_add_document_versions.py
+  - Added document version schemas
+  - Created document_version_service.py
+  - Added document version endpoints
+- **T-48**: Document Version Control (FE)
+  - Added document version API calls to api.js
+  - Added version tab in SplitViewWorkspace.vue
+- **T-49**: Audit Trail (BE)
+  - Added AuditLog entity
+  - Added migration 014_add_audit_logs.py
+  - Created audit_service.py
+  - Added audit endpoints
+- **T-50**: Audit Trail (FE)
+  - Added audit log API calls to api.js
+  - Added audit tab in SplitViewWorkspace.vue
+  - Updated GeneralAuditLogOut schema to include User information
+  - Updated audit logs UI to display user who performed the action
+- **T-51**: Reference Document Management (BE)
+  - Added ReferenceDocument entity
+  - Added migration 015_add_reference_documents.py
+  - Created reference_document_service.py
+  - Added reference document endpoints
+- **T-52**: Reference Document Management (FE)
+  - Updated "Tài liệu Khác" tab in SplitViewWorkspace.vue for real uploads
+  - Added reference document API calls
+- **T-53**: Notification System (BE)
+  - Added Notification entity and NotificationType enum
+  - Added migration 017_add_notifications.py
+  - Created notification_service.py
+  - Added notification endpoints
+  - Updated workflow_service.py to trigger notifications on status change
+- **T-54**: Notification System (FE)
+  - Created NotificationBell.vue component with unread badge and dropdown
+  - Created NotificationsView.vue page with pagination
+  - Created notifications.js Pinia store
+  - Added notification API calls
+  - Added notifications route
+  - Integrated notification bell in App.vue
+- **Session 22 Additions**:
+  - Fixed minio_service.py to accept custom keys (preserve filenames in MinIO)
+  - Fixed seed.py to correctly upload dossier 198 PDFs with proper directory structure
+  - Fixed seed.py to check existing data before seeding (avoid duplicates)
+  - Added endpoint to get presigned URL for reference documents in dossiers.py
+  - Updated GeneralAuditLogOut to include User data for better audit trail visibility
+  - Updated FE to show user info in audit logs
 
 ### New Files
 - `project_devops/apps/hdtv-ai-platform/app/core/permissions.py`: NEW role-based permission checks
 - `project_devops/apps/hdtv-ai-platform/app/services/workflow_service.py`: NEW workflow and status transition service
 - `project_devops/apps/hdtv-ai-platform/alembic/versions/013_add_status_history.py`: NEW migration
-- `project_devops/apps/hdtv-ai-prototype/src/stores/auth.js`: NEW — auth store with current user state
-
-### Updated Files
-- `project_devops/apps/hdtv-ai-platform/app/models/entities.py
-- `project_devops/apps/hdtv-ai-platform/app/schemas/meta.py
-- `project_devops/apps/hdtv-ai-platform/app/schemas/dossier.py
-- `project_devops/apps/hdtv-ai-platform/app/services/meta_service.py
-- `project_devops/apps/hdtv-ai-platform/app/routers/meta.py
-- `project_devops/apps/hdtv-ai-platform/app/routers/dossiers.py
-- `project_devops/apps/hdtv-ai-platform/scripts/seed.py
-- `project_devops/apps/hdtv-ai-prototype/src/views/SystemAdminView.vue
-
----
-
-## Phase 12 — EVN Production Feature Complete (Planned)
-
-### Mục tiêu
-Hoàn thiện đầy đủ các tính năng cho quy trình nghiệp vụ thực tế của EVN:
-- User roles & permissions (Chuyên viên, Trưởng Ban, Thành viên HĐTV, Lãnh đạo HĐTV, Admin)
-- Formal status transitions workflow with audit trail
-- Document version control
-- Reference document management
-- Notification system
-
-### Tasks (T-43 to T-54)
-| Task | Priority | Description | Status |
-|------|----------|-------------|--------|
-| T-43 | P1 | User Roles & Permissions (BE) | ✅ DONE |
-| T-44 | P1 | User Roles & Permissions (FE) | ✅ DONE |
-| T-45 | P1 | Formal Status Transitions & Workflow (BE) | ✅ DONE |
-| T-46 | P1 | Formal Status Transitions & Workflow (FE) | ✅ DONE |
-| T-47 | P2 | Document Version Control (BE) | ✅ DONE |
-| T-48 | P2 | Document Version Control (FE) | ✅ DONE |
-| T-49 | P1 | Audit Trail (BE) | ✅ DONE |
-| T-50 | P2 | Audit Trail (FE) | ✅ DONE |
-| T-51 | P1 | Reference Document Management (BE) | ✅ DONE |
-| T-52 | P1 | Reference Document Management (FE) | ✅ DONE |
-| T-53 | P2 | Notification System (BE) | ✅ DONE |
-| T-54 | P2 | Notification System (FE) | ⏳ PENDING |
+- `project_devops/apps/hdtv-ai-platform/alembic/versions/014_add_audit_logs.py`: NEW migration
+- `project_devops/apps/hdtv-ai-platform/alembic/versions/015_add_reference_documents.py`: NEW migration
+- `project_devops/apps/hdtv-ai-platform/alembic/versions/016_add_document_versions.py`: NEW migration
+- `project_devops/apps/hdtv-ai-platform/alembic/versions/017_add_notifications.py`: NEW migration
+- `project_devops/apps/hdtv-ai-platform/app/services/audit_service.py`: NEW audit service
+- `project_devops/apps/hdtv-ai-platform/app/services/reference_document_service.py`: NEW reference doc service
+- `project_devops/apps/hdtv-ai-platform/app/services/document_version_service.py`: NEW document version service
+- `project_devops/apps/hdtv-ai-platform/app/services/notification_service.py`: NEW notification service
+- `project_devops/apps/hdtv-ai-platform/app/routers/notifications.py`: NEW notifications router
+- `project_devops/apps/hdtv-ai-prototype/src/stores/auth.js`: NEW auth store
+- `project_devops/apps/hdtv-ai-prototype/src/stores/notifications.js`: NEW notifications store
+- `project_devops/apps/hdtv-ai-prototype/src/components/NotificationBell.vue`: NEW notification bell
+- `project_devops/apps/hdtv-ai-prototype/src/views/NotificationsView.vue`: NEW notifications page

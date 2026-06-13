@@ -74,7 +74,7 @@
   - `hdtv-ai-platform/app/services/workflow_service.py` — NEW: quản lý transitions
 - **acceptance**: Status chỉ được thay đổi theo đúng luồng và role; status history được lưu lại
 - **verify_cmd**:
-- **status**: PENDING
+- **status**: DONE ✅
 
 ---
 
@@ -141,7 +141,7 @@
   - `hdtv-ai-prototype/src/views/SplitViewWorkspace.vue` — thêm tab "Lịch sử"
 - **acceptance**: Người dùng có thể xem toàn bộ lịch sử hoạt động trên dossier
 - **verify_cmd**:
-- **status**: PENDING
+- **status**: DONE ✅
 
 ---
 
@@ -195,10 +195,13 @@
 - **files**:
   - `hdtv-ai-prototype/src/components/NotificationBell.vue` — NEW: notification bell component
   - `hdtv-ai-prototype/src/views/NotificationsView.vue` — NEW: notifications page
-  - `hdtv-ai-prototype/src/router/index.js` — thêm route notifications
+  - `hdtv-ai-prototype/src/stores/notifications.js` — NEW: Pinia store for notifications state
+  - `hdtv-ai-prototype/src/services/api.js` — added notification API calls
+  - `hdtv-ai-prototype/src/router/index.js` — added notifications route
+  - `hdtv-ai-prototype/src/App.vue` — integrated notification bell in sidebar
 - **acceptance**: Người dùng thấy số thông báo mới, xem danh sách thông báo
 - **verify_cmd**:
-- **status**: PENDING
+- **status**: DONE ✅
 
 ---
 
