@@ -367,6 +367,28 @@ async def upload_reference_document(
     return ReferenceDocumentOut.model_validate(doc)
 
 
+@router.get("/{dossier_id}/reference-documents/{document_id}/download-url")
+async def get_reference_document_download_url(
+    dossier_id: int,
+    document_id: int,
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, str | int]:
+    """Get a presigned download URL for a reference document."""
+    doc = await get_reference_document(session, document_id)
+    if not doc or doc.dossier_id != dossier_id:
+        raise HTTPException(status_code=404, detail="Reference document not found")
+    
+    url = await minio_service.get_presigned_url(doc.file_key)
+    if not url:
+        raise HTTPException(status_code=503, detail="Object storage unavailable")
+    
+    return {
+        "document_id": document_id,
+        "download_url": url,
+        "expires_in": 3600
+    }
+
+
 @router.delete("/{dossier_id}/reference-documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_reference_document(
     dossier_id: int,

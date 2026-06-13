@@ -44,19 +44,20 @@ def _ensure_bucket(client: Minio, bucket: str) -> None:
         logger.info("MinIO bucket '%s' created", bucket)
 
 
-def _put_object_sync(data: bytes, filename: str) -> str:
+def _put_object_sync(data: bytes, filename: str, key: str | None = None) -> str:
     """Sync MinIO upload. Returns internal key."""
     s = get_settings()
     client = _get_client()
     _ensure_bucket(client, s.minio_bucket)
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
-    key = f"dossiers/{uuid.uuid4().hex}.{ext}"
+    if key is None:
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+        key = f"dossiers/{uuid.uuid4().hex}.{ext}"
     client.put_object(
         s.minio_bucket,
         key,
         io.BytesIO(data),
         length=len(data),
-        content_type="application/pdf" if ext == "pdf" else "application/octet-stream",
+        content_type="application/pdf" if (filename.lower().endswith(".pdf") or key.lower().endswith(".pdf")) else "application/octet-stream",
     )
     return key
 
@@ -69,10 +70,10 @@ def _presigned_url_sync(key: str) -> str:
     return url
 
 
-async def upload_pdf(data: bytes, filename: str) -> dict[str, Any]:
+async def upload_pdf(data: bytes, filename: str, key: str | None = None) -> dict[str, Any]:
     """Async wrapper: upload PDF bytes to MinIO, return {key, url}."""
     try:
-        key = await asyncio.to_thread(_put_object_sync, data, filename)
+        key = await asyncio.to_thread(_put_object_sync, data, filename, key)
         url = await asyncio.to_thread(_presigned_url_sync, key)
         logger.info("MinIO upload OK: key=%s size=%d", key, len(data))
         return {"key": key, "url": url, "ok": True}

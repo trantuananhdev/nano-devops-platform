@@ -19,6 +19,7 @@ from app.models.entities import (
     User,
     UserPreference,
     UserRole,
+    ReferenceDocument,
 )
 from app.services.minio_service import MinioService
 from app.services.rag.pdf_extractor import extract_text_from_pdf, chunk_text
@@ -237,6 +238,15 @@ async def seed_chroma() -> None:
             )
             resp.raise_for_status()
             coll_id = resp.json().get("id", "legal_docs")
+            
+            # Check if there are already docs in the collection
+            resp = await client.get(f"{base}/api/v1/collections/{coll_id}/count")
+            resp.raise_for_status()
+            count = resp.json()
+            if count > 0:
+                print("Legal docs already in Chroma, skipping seed_chroma()")
+                return
+                
             docs = [d[1] for d in LEGAL_DOCS]
             metadatas = [{"title": d[0], "status": d[2]} for d in LEGAL_DOCS]
             ids = [f"legal-{i}" for i in range(len(LEGAL_DOCS))]
@@ -266,8 +276,34 @@ async def seed_meilisearch() -> None:
 async def seed_agent_memories() -> None:
     """T-15: Seed a handful of demo agent memories into Chroma for demo retrieval."""
     from app.services.memory import vector_store as mem_store  # local import
-
+    from app.core.config import get_settings
+    import httpx
+    
     print("Seeding demo agent memories into Chroma...")
+    
+    # Check if we already have agent memories
+    s = get_settings()
+    base = f"http://{s.chroma_host}:{s.chroma_port}"
+    coll_id = None
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Replicate _get_or_create_collection logic
+            resp = await client.post(
+                f"{base}/api/v1/collections",
+                json={"name": s.chroma_collection_memories, "get_or_create": True},
+            )
+            resp.raise_for_status()
+            coll_id = resp.json().get("id") or s.chroma_collection_memories
+            
+            resp = await client.get(f"{base}/api/v1/collections/{coll_id}/count")
+            resp.raise_for_status()
+            count = resp.json()
+            if count > 0:
+                print("Agent memories already seeded into Chroma, skipping")
+                return
+    except Exception as exc:
+        print(f"Checking existing agent memories skipped: {exc}")
+    
     demo_memories = [
         {
             "dossier_id": 1,
@@ -340,14 +376,16 @@ async def seed_user_preferences() -> None:
 
 
 async def seed_dossier_198_pdfs() -> None:
-    """T-39: Upload dossier 198 real PDFs to MinIO and update dossier."""
+    """T-39: Upload dossier 198 real PDFs/files to MinIO and create ReferenceDocuments."""
     import os
     from pathlib import Path
+    import mimetypes
     from app.services import minio_service
+    from app.services.reference_document_service import create_reference_document
+    from app.schemas.dossier import ReferenceDocumentCreate
 
     # Get dossier 198 from DB
     dossier_id = None
-    dossier_pdf_key = None
     async with async_session_factory() as session:
         result = await session.execute(select(Dossier).where(Dossier.doc_no == "198/TTr-EVNHANOI"))
         dossier = result.scalar_one_or_none()
@@ -355,6 +393,12 @@ async def seed_dossier_198_pdfs() -> None:
             print("Dossier 198 not found, skipping PDF upload")
             return
         dossier_id = dossier.id
+        
+        # Check if we already have reference documents for this dossier
+        existing_refs = await session.execute(select(ReferenceDocument).where(ReferenceDocument.dossier_id == dossier_id))
+        if existing_refs.scalars().first():
+            print(f"Reference documents for dossier {dossier_id} already exist, skipping")
+            return
 
     # Data folder path
     data_root = Path(__file__).parent.parent / "data" / "seed" / "dossier_198_uav"
@@ -363,38 +407,70 @@ async def seed_dossier_198_pdfs() -> None:
         return
 
     try:
-        # Upload main dossier PDF
-        main_pdf = data_root / "01_to_trinh_198_TTr_EVNHANOI.pdf"
-        if main_pdf.exists():
-            with open(main_pdf, "rb") as f:
+        main_pdf_found = False
+        # Recursively find all files in data_root
+        all_files = list(data_root.rglob("*"))
+        for file_path in all_files:
+            if file_path.is_dir():
+                continue
+                
+            # Skip hidden files
+            if file_path.name.startswith("."):
+                continue
+                
+            # Get relative path to show folder structure
+            rel_path = file_path.relative_to(data_root)
+            print(f"Processing file: {rel_path}")
+            
+            # Determine MIME type
+            mime_type, _ = mimetypes.guess_type(file_path)
+            if not mime_type:
+                # Default to binary stream if we can't guess
+                mime_type = "application/octet-stream"
+                
+            # Upload file to MinIO
+            with open(file_path, "rb") as f:
                 data_bytes = f.read()
-                result = await minio_service.upload_pdf(data_bytes, main_pdf.name)
+                file_size = len(data_bytes)
+                
+                # Create a unique key that preserves folder structure
+                minio_key = f"dossier-198/{rel_path.as_posix()}"
+                result = await minio_service.upload_pdf(data_bytes, file_path.name, minio_key)
+                
                 if result["ok"]:
-                    dossier_pdf_key = result["key"]
-                    # Update dossier with PDF URL (store the key, not the presigned URL)
+                    print(f"Uploaded: {rel_path} (key={result['key']}, size={file_size} bytes)")
+                    
+                    # Create ReferenceDocument in DB
+                    ref_doc_data = ReferenceDocumentCreate(
+                        file_name=file_path.name,
+                        file_key=result["key"],
+                        file_size=file_size,
+                        content_type=mime_type,
+                    )
+                    
                     async with async_session_factory() as session:
-                        dossier = (await session.execute(select(Dossier).where(Dossier.id == dossier_id))).scalar_one()
-                        dossier.pdf_url = result["key"]  # Store internal key, not presigned URL
-                        await session.commit()
-                    print(f"Uploaded main PDF: key={result['key']}")
+                        await create_reference_document(
+                            session=session,
+                            dossier_id=dossier_id,
+                            data=ref_doc_data,
+                            uploaded_by=1,  # Admin user
+                        )
+                        
+                    # Set as main dossier PDF if it's one of the main files
+                    if not main_pdf_found and ("tờ trình" in file_path.name.lower() or "ttr" in file_path.name.lower()):
+                        async with async_session_factory() as session:
+                            dossier = (await session.execute(select(Dossier).where(Dossier.id == dossier_id))).scalar_one()
+                            dossier.pdf_url = result["key"]
+                            await session.commit()
+                        main_pdf_found = True
+                        print(f"Set as main dossier PDF: {file_path.name}")
                 else:
-                    print(f"Failed to upload main PDF: {result.get('error')}")
-
-        # Upload all other PDFs to MinIO (reference docs) - just log, don't store
-        ref_files = list(data_root.glob("*.pdf")) + list(data_root.glob("ref/*.pdf"))
-        for pdf_path in ref_files:
-            if pdf_path.name == "01_to_trinh_198_TTr_EVNHANOI.pdf":
-                continue  # already uploaded as main
-            with open(pdf_path, "rb") as f:
-                data_bytes = f.read()
-                result = await minio_service.upload_pdf(data_bytes, pdf_path.name)
-                if result["ok"]:
-                    print(f"Uploaded reference: {pdf_path.name} (key={result['key']})")
-                else:
-                    print(f"Failed to upload reference {pdf_path.name}: {result.get('error')}")
+                    print(f"Failed to upload {rel_path}: {result.get('error')}")
 
     except Exception as exc:
         print(f"MinIO upload skipped: {exc}")
+        import traceback
+        traceback.print_exc()
 
 
 async def seed_real_legal_docs() -> None:
@@ -402,7 +478,7 @@ async def seed_real_legal_docs() -> None:
     import os
     from pathlib import Path
 
-    data_root = Path(__file__).parent.parent / "data" / "seed" / "dossier_198_uav" / "ref"
+    data_root = Path(__file__).parent.parent / "data" / "seed" / "dossier_198_uav" / "Tài liệu căn cứ tham khảo" / "8594_QĐ-EVNHANOI"
     if not data_root.exists():
         print(f"Reference folder not found: {data_root}")
         return
@@ -411,6 +487,34 @@ async def seed_real_legal_docs() -> None:
     if not legal_pdfs:
         print("No legal PDFs found to ingest")
         return
+
+    # Check if we already have legal docs in Chroma
+    from app.core.config import get_settings
+    import httpx
+    s = get_settings()
+    base = f"http://{s.chroma_host}:{s.chroma_port}"
+    already_seeded = False
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # First get or create the collection
+            resp = await client.post(
+                f"{base}/api/v1/collections",
+                json={"name": s.rag_legal_collection, "get_or_create": True},
+            )
+            resp.raise_for_status()
+            coll_id = resp.json().get("id") or s.rag_legal_collection
+            
+            # Check if there are any documents in the collection
+            resp = await client.get(
+                f"{base}/api/v1/collections/{coll_id}/count",
+            )
+            resp.raise_for_status()
+            count = resp.json()
+            if count > 0:
+                print("Legal docs already seeded into Chroma, skipping")
+                return
+    except Exception as exc:
+        print(f"Checking existing legal docs skipped: {exc}")
 
     print(f"Ingesting {len(legal_pdfs)} real legal docs into Chroma...")
     
