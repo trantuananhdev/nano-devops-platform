@@ -210,19 +210,19 @@ const loadMore = () => {
 }
 .notification-icon.status_change {
   background: rgba(245, 158, 11, 0.2);
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 .notification-icon.appraisal_complete {
   background: rgba(16, 185, 129, 0.2);
-  color: #10b981;
+  color: var(--color-success);
 }
 .notification-icon.feedback_submitted {
   background: rgba(59, 130, 246, 0.2);
-  color: #3b82f6;
+  color: var(--color-primary-light);
 }
 .notification-icon.clarification_requested {
   background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  color: var(--color-danger);
 }
 
 .notification-content {

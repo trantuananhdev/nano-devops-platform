@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.core.database import async_session_factory
 from app.models.entities import AgentPlan, AppraisalResult, Dossier
-from app.services.pubsub import subscribe_events
+from app.services.pubsub import subscribe_events, subscribe_user_notifications
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -61,6 +61,51 @@ async def _get_dossier_snapshot(dossier_id: int) -> dict | None:
     except Exception as exc:
         logger.warning("WS snapshot failed for dossier %d: %s", dossier_id, exc)
         return None
+
+
+def _decode_token_user_id(token: str | None) -> int | None:
+    """Decode JWT token from WS query param and return user_id (sub), or None."""
+    if not token:
+        return None
+    try:
+        from jose import jwt as jose_jwt
+        from app.core.config import get_settings
+        s = get_settings()
+        payload = jose_jwt.decode(token, s.jwt_secret, algorithms=[s.jwt_algorithm])
+        return int(payload.get("sub", 0)) or None
+    except Exception:
+        return None
+
+
+@router.websocket("/ws")
+async def general_ws(websocket: WebSocket, token: str | None = None) -> None:
+    """General-purpose WebSocket for per-user notifications and system events."""
+    user_id = _decode_token_user_id(token)
+    if not user_id:
+        await websocket.close(code=1008)  # Policy Violation — no valid token
+        return
+
+    await websocket.accept()
+    client, pubsub = await subscribe_user_notifications(user_id)
+    try:
+        last_ping = asyncio.get_event_loop().time()
+        while True:
+            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.1)
+            if message and message.get("type") == "message":
+                await websocket.send_text(message["data"])
+
+            now = asyncio.get_event_loop().time()
+            if now - last_ping >= 30.0:
+                await websocket.send_text(json.dumps({"type": "ping"}))
+                last_ping = now
+
+            await asyncio.sleep(0.05)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await pubsub.unsubscribe()
+        await pubsub.close()
+        await client.aclose()
 
 
 @router.websocket("/ws/appraisal/{dossier_id}")

@@ -10,7 +10,8 @@
   --color-bg-panel-solid: #ffffff;
   --color-text-primary: #1e293b;
   --color-text-secondary: #64748b;
-  
+  --color-text-tertiary: #94a3b8;
+
   --color-border: #e2e8f0;
   --color-shadow: rgba(0, 0, 0, 0.05);
   
@@ -34,7 +35,8 @@
   --color-bg-panel-solid: #1e293b;
   --color-text-primary: #f8fafc;
   --color-text-secondary: #94a3b8;
-  
+  --color-text-tertiary: #64748b;
+
   --color-border: #334155;
   --color-shadow: rgba(0, 0, 0, 0.5);
 }

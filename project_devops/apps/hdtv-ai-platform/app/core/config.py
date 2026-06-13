@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     cors_origins: str = "*"  # comma-separated list, or * for all (reads CORS_ORIGINS)
 
+    # JWT auth
+    jwt_secret: str = "hdtv-dev-secret-change-in-production"  # reads JWT_SECRET
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 480  # 8 hours
+
     # Public field — Pydantic reads DATABASE_URL env var (set by docker-compose).
     # Default uses 'postgres' hostname (standalone dev compose).
     # Platform compose overrides this with platform-postgres hostname.

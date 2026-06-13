@@ -1203,9 +1203,9 @@ const sendRefMsg = () => {
 .badge { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; }
 .badge.warning { background: var(--color-danger); color: white; }
 .badge.info { background: var(--color-primary); color: white; }
-.badge-success { background: rgba(34,197,94,0.15); color: #22c55e; }
-.badge-danger { background: rgba(239,68,68,0.15); color: #ef4444; }
-.badge-secondary { background: rgba(107,114,128,0.15); color: #6b7280; }
+.badge-success { background: rgba(34,197,94,0.15); color: var(--color-success); }
+.badge-danger { background: rgba(239,68,68,0.15); color: var(--color-danger); }
+.badge-secondary { background: rgba(107,114,128,0.15); color: var(--color-text-secondary); }
 
 .header-actions { display: flex; gap: 1rem; }
 
@@ -1511,7 +1511,7 @@ const sendRefMsg = () => {
 .warning-banner {
   background: rgba(245, 158, 11, 0.1);
   border: 1px solid rgba(245, 158, 11, 0.2);
-  color: #d97706;
+  color: var(--color-warning);
   padding: 1rem;
   border-radius: 8px;
   display: flex;
@@ -1522,7 +1522,7 @@ const sendRefMsg = () => {
 [data-theme='dark'] .warning-banner {
   background: rgba(245, 158, 11, 0.15);
   border-color: rgba(245, 158, 11, 0.3);
-  color: #fbbf24;
+  color: var(--color-warning);
 }
 .banner-icon {
   flex-shrink: 0;

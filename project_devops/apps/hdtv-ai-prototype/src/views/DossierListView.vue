@@ -517,11 +517,11 @@ const STEPS = ['Thông tin', 'Đính kèm PDF', 'Hoàn tất']
 
 /* Badges */
 .badge        { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-.badge-danger  { background: rgba(239,68,68,0.15);  color: #ef4444; }
-.badge-warning { background: rgba(245,158,11,0.15); color: #f59e0b; }
-.badge-success { background: rgba(34,197,94,0.15);  color: #22c55e; }
-.badge-info { background: rgba(59,130,246,0.15); color: #3b82f6; }
-.badge-secondary { background: rgba(107,114,128,0.15); color: #6b7280; }
+.badge-danger  { background: rgba(239,68,68,0.15);  color: var(--color-danger); }
+.badge-warning { background: rgba(245,158,11,0.15); color: var(--color-warning); }
+.badge-success { background: rgba(34,197,94,0.15);  color: var(--color-success); }
+.badge-info { background: rgba(59,130,246,0.15); color: var(--color-primary-light); }
+.badge-secondary { background: rgba(107,114,128,0.15); color: var(--color-text-secondary); }
 
 /* ─── Modal ──────────────────────────────────────────────────────────────── */
 .modal-overlay {
@@ -546,7 +546,7 @@ const STEPS = ['Thông tin', 'Đính kèm PDF', 'Hoàn tất']
 }
 .step-item { display: flex; align-items: center; gap: 0.4rem; flex: 1; color: var(--color-text-secondary); font-size: 0.8rem; }
 .step-item.active { color: var(--color-primary); }
-.step-item.done   { color: #22c55e; }
+.step-item.done   { color: var(--color-success); }
 .step-circle {
   width: 22px; height: 22px; border-radius: 50%;
   border: 1.5px solid currentColor;
@@ -554,14 +554,14 @@ const STEPS = ['Thông tin', 'Đính kèm PDF', 'Hoàn tất']
   font-size: 0.72rem; font-weight: 700; flex-shrink: 0;
 }
 .step-item.active .step-circle { background: var(--color-primary); color: white; border-color: var(--color-primary); }
-.step-item.done   .step-circle { background: #22c55e; color: white; border-color: #22c55e; }
+.step-item.done   .step-circle { background: var(--color-success); color: white; border-color: var(--color-success); }
 .step-label { font-weight: 500; }
 
 .modal-body   { padding: 1.5rem; }
 .step-desc    { color: var(--color-text-secondary); margin-bottom: 1.25rem; font-size: 0.9rem; }
 .form-group   { margin-bottom: 1rem; }
 .form-label   { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem; }
-.required     { color: #ef4444; }
+.required     { color: var(--color-danger); }
 .form-input {
   width: 100%; padding: 0.6rem 0.875rem; border-radius: 8px;
   border: 1px solid var(--color-border); background: transparent;
@@ -571,7 +571,7 @@ const STEPS = ['Thông tin', 'Đính kèm PDF', 'Hoàn tất']
 .form-input:focus    { outline: none; border-color: var(--color-primary); }
 .form-textarea       { resize: vertical; min-height: 72px; font-family: inherit; }
 .form-hint           { font-size: 0.75rem; color: var(--color-text-secondary); margin-top: 0.25rem; }
-.form-error          { display: flex; align-items: center; gap: 0.4rem; color: #ef4444; font-size: 0.83rem; margin-top: 0.5rem; }
+.form-error          { display: flex; align-items: center; gap: 0.4rem; color: var(--color-danger); font-size: 0.83rem; margin-top: 0.5rem; }
 .p-4.text-muted      { padding: 1rem; color: var(--color-text-secondary); }
 
 .drop-zone {
@@ -581,7 +581,7 @@ const STEPS = ['Thông tin', 'Đính kèm PDF', 'Hoàn tất']
   display: flex; align-items: center; justify-content: center;
 }
 .drop-zone.drag-active { border-color: var(--color-primary); background: rgba(0, 86, 179, 0.04); }
-.drop-zone.has-file    { border-style: solid; border-color: #22c55e; }
+.drop-zone.has-file    { border-style: solid; border-color: var(--color-success); }
 .file-input-hidden { position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 0; }
 .drop-content   { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
 .drop-icon      { color: var(--color-text-secondary); }
@@ -597,12 +597,12 @@ const STEPS = ['Thông tin', 'Đính kèm PDF', 'Hoàn tất']
 .modal-actions--center  { justify-content: center; }
 
 .modal-done  { text-align: center; }
-.done-icon   { color: #22c55e; margin: 0 auto 1rem; display: block; }
+.done-icon   { color: var(--color-success); margin: 0 auto 1rem; display: block; }
 .done-title  { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; }
 .done-desc   { color: var(--color-text-secondary); margin-bottom: 1rem; }
 .upload-success {
   display: inline-flex; align-items: center; gap: 0.4rem;
-  font-size: 0.82rem; color: #22c55e; margin-bottom: 1rem;
+  font-size: 0.82rem; color: var(--color-success); margin-bottom: 1rem;
 }
 
 .modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.18s ease; }

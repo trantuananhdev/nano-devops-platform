@@ -3,6 +3,7 @@ import { useAuthStore } from '../stores/auth'
 
 // T-39: Lazy load all views — each chunk only loads when the route is visited.
 // This reduces initial bundle size significantly (bpmn-js alone is ~2MB).
+const LoginView          = () => import('../views/LoginView.vue')
 const DashboardView      = () => import('../views/DashboardView.vue')
 const DossierListView    = () => import('../views/DossierListView.vue')
 const WorkflowManager    = () => import('../views/WorkflowManager.vue')
@@ -21,7 +22,8 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', redirect: '/dashboard' },
-    { path: '/dashboard',  name: 'dashboard',  component: DashboardView },
+    { path: '/login', name: 'login', component: LoginView },
+    { path: '/dashboard',  name: 'dashboard',  component: DashboardView, meta: { requiresAuth: true } },
     { path: '/dossiers',   name: 'dossiers',   component: DossierListView },
     { path: '/workflow',   name: 'workflow',   component: WorkflowManager },
     { path: '/workspace/:id?', name: 'workspace', component: SplitViewWorkspace },
@@ -37,19 +39,26 @@ const router = createRouter({
   ],
 })
 
-// T-44: Route guards for role-based access control
+// Route guards — auth + RBAC
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
 
-  // If route requires auth and user is not authenticated, redirect to dashboard
-  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    next('/dashboard')
+  // Routes không cần auth
+  if (to.name === 'login') {
+    if (authStore.isAuthenticated) {
+      next('/dashboard')
+    } else {
+      next()
+    }
     return
   }
 
-  // If route requires specific roles and user doesn't have any of them, redirect to dashboard
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    next({ name: 'login', query: { redirect: to.fullPath } })
+    return
+  }
+
   if (to.meta.requiresRole && !authStore.hasRole(to.meta.requiresRole)) {
-    alert("Không đủ quyền, vui lòng chuyển sang vai trò Admin")
     next('/dashboard')
     return
   }

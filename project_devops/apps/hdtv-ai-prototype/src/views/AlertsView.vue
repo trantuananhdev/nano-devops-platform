@@ -314,7 +314,7 @@ const getAssignedUserName = (userId) => {
 .severity-low { border-left-color: var(--color-primary); }
 
 .icon-high { color: var(--color-danger); }
-.icon-medium { color: #f59e0b; }
+.icon-medium { color: var(--color-warning); }
 .icon-low { color: var(--color-primary); }
 
 .alert-card.is-resolved {
@@ -522,7 +522,8 @@ const getAssignedUserName = (userId) => {
 }
 
 .send-btn:hover {
-  background: #1d4ed8;
+  background: var(--color-primary);
+  filter: brightness(0.85);
 }
 
 /* Loading spinner styling */

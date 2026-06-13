@@ -1,9 +1,10 @@
 from fastapi import APIRouter
 
-from app.routers import alerts, api_keys, audit, clarifications, dossiers, feedback, health, mcp, meta, notifications, search, workflow
+from app.routers import alerts, api_keys, audit, auth, clarifications, dossiers, feedback, health, mcp, meta, notifications, search, workflow
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(dossiers.router, prefix="/dossiers", tags=["dossiers"])
 api_router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
 api_router.include_router(audit.router, prefix="/audit-logs", tags=["audit"])

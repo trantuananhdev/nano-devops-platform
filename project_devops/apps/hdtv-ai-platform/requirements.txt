@@ -30,6 +30,7 @@ PyMuPDF==1.24.13           # PDF text extraction
 
 # Auth
 passlib[bcrypt]==1.7.4     # T-33: bcrypt key hashing; pinned — passlib 2.x breaks bcrypt compat
+python-jose[cryptography]==3.3.0  # JWT token creation and verification
 
 # T-28: OpenTelemetry — opt-in, disabled by default (TRACING_ENABLED=false)
 # Pinned together — these three must match versions

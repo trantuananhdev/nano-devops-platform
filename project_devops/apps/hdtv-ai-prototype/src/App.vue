@@ -7,6 +7,7 @@ import GlobalSearch from './components/GlobalSearch.vue'
 import NotificationBell from './components/NotificationBell.vue'
 import { useAuthStore } from './stores/auth'
 import { useNotificationsStore } from './stores/notifications'
+import { mainWs } from './services/ws'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -27,16 +28,24 @@ const toggleTheme = () => {
   document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light')
 }
 
-// Watch for user changes and load notifications
+// Watch for user changes — load notifications + connect/disconnect mainWs
 watch(
   () => authStore.currentUser?.id,
-  () => {
-    if (authStore.currentUser) {
+  (userId) => {
+    if (userId) {
       notificationStore.loadNotifications()
+      mainWs.connect()
+    } else {
+      mainWs.disconnect()
     }
   },
   { immediate: true }
 )
+
+// Handle realtime notification push from mainWs
+const _offNotif = mainWs.on('notification_new', (data) => {
+  notificationStore.addNotification(data)
+})
 
 // Auto-detect system theme on mount
 onMounted(() => {
@@ -55,6 +64,8 @@ onUnmounted(() => {
   document.removeEventListener('click', () => {
     showUserMenu.value = false
   })
+  _offNotif()
+  mainWs.disconnect()
 })
 
 const navItems = [

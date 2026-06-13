@@ -67,6 +67,30 @@ const openDossier = (d) => {
       </div>
     </div>
     
+    <!-- Loading Skeleton -->
+    <template v-if="store.loading">
+      <div class="dashboard-grid">
+        <div v-for="i in 3" :key="i" class="stat-card glass-panel skeleton-card">
+          <div class="skeleton-icon"></div>
+          <div class="skeleton-content">
+            <div class="skeleton-line short"></div>
+            <div class="skeleton-line long"></div>
+          </div>
+        </div>
+      </div>
+      <div class="charts-area">
+        <div class="chart-card glass-panel skeleton-card" style="min-height:300px;">
+          <div class="skeleton-line short" style="margin-bottom:1.5rem;"></div>
+          <div class="skeleton-circle"></div>
+        </div>
+        <div class="chart-card glass-panel skeleton-card" style="min-height:300px;">
+          <div class="skeleton-line short" style="margin-bottom:1.5rem;"></div>
+          <div v-for="j in 4" :key="j" class="skeleton-line long" style="margin-bottom:0.75rem;"></div>
+        </div>
+      </div>
+    </template>
+
+    <template v-else>
     <div class="dashboard-grid">
       <!-- Stats Cards -->
       <div class="stat-card glass-panel">
@@ -231,6 +255,7 @@ const openDossier = (d) => {
         </div>
       </div>
     </div>
+    </template><!-- end v-else -->
   </div>
 </template>
 
@@ -470,6 +495,34 @@ const openDossier = (d) => {
 }
 .error-icon {
   flex-shrink: 0;
+}
+
+/* Skeleton shimmer */
+.skeleton-card { pointer-events: none; }
+.skeleton-icon {
+  width: 56px; height: 56px; border-radius: 16px;
+  background: var(--color-border);
+  animation: shimmer 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.skeleton-content { flex: 1; display: flex; flex-direction: column; gap: 0.6rem; }
+.skeleton-line {
+  height: 14px; border-radius: 6px;
+  background: var(--color-border);
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-line.short { width: 55%; }
+.skeleton-line.long { width: 80%; height: 28px; }
+.skeleton-circle {
+  width: 150px; height: 150px; border-radius: 50%;
+  background: var(--color-border);
+  animation: shimmer 1.4s ease-in-out infinite;
+  margin: 0 auto;
+}
+@keyframes shimmer {
+  0% { opacity: 1; }
+  50% { opacity: 0.45; }
+  100% { opacity: 1; }
 }
 
 @media (max-width: 768px) {
