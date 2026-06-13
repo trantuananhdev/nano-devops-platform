@@ -1,6 +1,6 @@
-"""Seed dossiers — 12 hồ sơ EVNHANOI cover đủ 11 trạng thái.
+﻿"""Seed dossiers — 12 hồ sơ EVNHANOI cover đủ 11 trạng thái.
 
-Hồ sơ 1 (EVNHANOI-UAV-198-2024): dữ liệu thật từ data/seed/dossier_198_uav/
+Hồ sơ 1 (198/TTr-EVNHANOI): trích dẫn thật từ Tờ trình ngày 08/01/2025 — TGĐ Nguyễn Anh Tuấn ký.
 Idempotent: kiểm tra doc_no trước khi insert.
 """
 import logging
@@ -12,25 +12,43 @@ from app.models.entities import Dossier, DossierStatus, RiskLevel
 
 logger = logging.getLogger(__name__)
 
+_UAV_PDF_TEXT = (
+    "Số: 198/TTr-EVNHANOI, Hà Nội ngày 08 tháng 01 năm 2025\n\n"
+    "TỜ TRÌNH — Về việc phê duyệt tiêu chuẩn kỹ thuật thiết bị bay không người lái (UAV)\n"
+    "Kính gửi: Hội đồng Thành viên Tổng Công ty Điện lực TP Hà Nội\n\n"
+    "Căn cứ QĐ 8594/QĐ-EVNHANOI ngày 06/12/2023 (giao danh mục mua sắm 2024 đợt 2 cho Công ty "
+    "Lưới điện Cao thế TP HN); Xét Tờ trình 07/KT ngày 07/01/2025 của Ban Kỹ thuật (đã được "
+    "Phó TGĐ Kỹ thuật Nguyễn Anh Dũng phê duyệt).\n\n"
+    "MỤC ĐÍCH: Mua sắm và vận hành thí điểm 04 bộ UAV phục vụ kiểm tra đường dây 220/110kV, "
+    "giao Công ty Lưới điện Cao thế TP HN thực hiện (NQ 180/NQ-HĐTV, QĐ 8594/QĐ-EVNHANOI).\n\n"
+    "YÊU CẦU KỸ THUẬT (Phụ lục I — 07/KT):\n"
+    "1. THIẾT BỊ BAY: Trọng lượng ≤16kg (không camera), tối đa ≤31kg. "
+    "Kích thước ≤1100×1150×800mm. Động cơ không chổi than ≥4 cái. Tín hiệu ≥15km.\n"
+    "2. HIỆU NĂNG: Bay ≥40 phút; quãng đường ≥35km; tốc độ ≥15m/s; "
+    "kháng gió ≥12m/s (cấp 5); IP45+.\n"
+    "3. ĐỊNH VỊ: RTK tích hợp; GNSS ≥4 hệ thống (GPS+GLONASS+BeiDou+Galileo); "
+    "độ chính xác ≤1cm+1ppm RTK.\n"
+    "4. CAMERA: Màu zoom quang ≥15×; Nhiệt (FLIR/tương đương) ≥640×512px, đo ±2°C.\n"
+    "5. LIDAR: ≥480.000 điểm/giây; tầm ≥450m; độ chính xác ±5cm.\n"
+    "6. TẢI TRỌNG: Phụ ≥1.5kg; cảm biến chướng ngại vật ≥4 hướng.\n"
+    "7. CHUNG: Nhà sản xuất ISO; thiết bị mới 100%, sản xuất ≤2 năm; nhiệt đới hóa phù hợp VN.\n\n"
+    "KHẢO SÁT GIÁ: Hỏi 4 đơn vị (VJO Việt Nam, Apex Tech VN, MAJ, Thiết bị Thắng Lợi). "
+    "2 đơn vị phúc đáp: Apex Tech Việt Nam và MAJ.\n"
+    "TGĐ EVNHANOI: Nguyễn Anh Tuấn"
+)
+
 DOSSIERS_DATA = [
-    # === HỒ SƠ CHÍNH — dữ liệu thật UAV EVNHANOI ===
     {
-        "doc_no": "EVNHANOI-UAV-198-2024",
-        "title": "Mua sắm máy bay không người lái (UAV) phục vụ kiểm tra, giám sát đường dây và trạm biến áp",
-        "unit": "Ban Kỹ thuật - Sản xuất / EVNHANOI",
+        "doc_no": "198/TTr-EVNHANOI",
+        "title": (
+            "Phê duyệt tiêu chuẩn kỹ thuật thiết bị bay không người lái (UAV) "
+            "phục vụ kiểm tra đường dây 220/110kV"
+        ),
+        "unit": "Ban Kỹ thuật / EVNHANOI (đề xuất từ Công ty Lưới điện Cao thế TP HN)",
         "risk_level": RiskLevel.medium,
         "status": DossierStatus.appraising,
-        "pdf_text": (
-            "Căn cứ Quyết định số 8594/QĐ-EVNHANOI về việc giao danh mục mua sắm thường xuyên "
-            "X06 đợt 2 năm 2024, Ban Kỹ thuật - Sản xuất đề nghị phê duyệt mua sắm 03 máy bay "
-            "không người lái (UAV) loại đa rotor phục vụ kiểm tra, giám sát đường dây 110kV và "
-            "trạm biến áp. Tổng dự toán: 1.855.000.000 VNĐ (một tỷ tám trăm năm mươi lăm triệu "
-            "đồng). Nhà cung cấp đề xuất: Công ty CP Công nghệ Thiên Vũ và DJI Enterprise Vietnam. "
-            "Tiêu chí kỹ thuật: tải trọng ≥1kg, thời gian bay ≥45 phút, camera nhiệt độ phân giải "
-            "cao, chứng nhận ICAO Annex 8, kháng gió cấp 7."
-        ),
+        "pdf_text": _UAV_PDF_TEXT,
     },
-    # === 11 HỒ SƠ KHÁC — cover đủ trạng thái ===
     {
         "doc_no": "EVNHANOI-MBA-2024-021",
         "title": "Mua sắm máy biến áp phân phối 3 pha 22/0.4kV — 250kVA (50 bộ)",

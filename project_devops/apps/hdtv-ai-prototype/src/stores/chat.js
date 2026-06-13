@@ -172,6 +172,90 @@ export const useChatStore = defineStore('chat', () => {
     _sessionCache.delete(dossierId)
   }
 
+  // ─── pushWsEvent (T-05) ───────────────────────────────────────────────
+  /**
+   * Handle a realtime WS event from the appraisal socket.
+   * Pushes incremental messages instead of doing full session reloads.
+   */
+  function pushWsEvent(evt) {
+    const time = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+
+    if (evt.type === 'started') {
+      messages.value.push({
+        id: `ws_started_${evt.task_id || Date.now()}`,
+        sender: 'ai', text: 'Agent khởi động phân tích...', time, isStatus: true,
+      })
+
+    } else if (evt.type === 'task_started') {
+      messages.value.push({
+        id: `ws_task_${evt.task_id || Date.now()}`,
+        sender: 'ai', text: 'Đã nhận yêu cầu — agent đang chạy...', time, isStatus: true,
+      })
+
+    } else if (evt.type === 'tool_executing') {
+      messages.value.push({
+        id: `tool_exec_${evt.tool_name}_${Date.now()}`,
+        sender: 'ai', text: '', time,
+        isTool: true, toolName: evt.tool_name, toolStatus: 'running', toolResult: '...',
+        _execKey: evt.tool_name,
+      })
+
+    } else if (evt.type === 'tool_result') {
+      // Update matching "running" tool message, or append a new one
+      const running = messages.value.find(m => m._execKey === evt.tool_name && m.toolStatus === 'running')
+      if (running) {
+        running.toolStatus = evt.outputs?.error ? 'failed' : 'success'
+        running.toolResult = JSON.stringify(evt.outputs, null, 2)
+      } else {
+        messages.value.push({
+          id: `tool_res_${evt.tool_name}_${Date.now()}`,
+          sender: 'ai', text: '', time,
+          isTool: true, toolName: evt.tool_name,
+          toolStatus: evt.outputs?.error ? 'failed' : 'success',
+          toolResult: JSON.stringify(evt.outputs, null, 2),
+        })
+      }
+
+    } else if (evt.type === 'risk_flagged') {
+      messages.value.push({
+        id: `ws_risk_${Date.now()}`,
+        sender: 'ai',
+        text: `⚠️ Phát hiện rủi ro: ${evt.risk === 'high' ? 'CAO' : evt.risk === 'medium' ? 'TRUNG BÌNH' : 'THẤP'}`,
+        time, isStatus: true,
+      })
+
+    } else if (evt.type === 'completed') {
+      const riskLabel = { high: 'CAO 🔴', medium: 'TRUNG BÌNH 🟡', low: 'THẤP 🟢' }[evt.overall_risk] || evt.overall_risk
+      messages.value.push({
+        id: `ws_done_${Date.now()}`,
+        sender: 'ai',
+        text: `✅ Thẩm định hoàn tất. Mức rủi ro tổng thể: **${riskLabel}**`,
+        time, hasActions: true,
+      })
+      // Reload session from API to get the full markdown report
+      invalidateSession(activeDossierId.value)
+      selectSession(activeDossierId.value)
+
+    } else if (evt.type === 'clarification_requested') {
+      messages.value.push({
+        id: `ws_clar_${Date.now()}`,
+        sender: 'ai',
+        text: evt.question || 'Agent cần thêm thông tin để tiếp tục.',
+        time,
+        isClarification: true,
+        clarificationId: evt.clarification_id,
+      })
+
+    } else if (evt.type === 'timeout') {
+      messages.value.push({
+        id: `ws_timeout_${Date.now()}`,
+        sender: 'ai',
+        text: '⏱️ Quá thời gian xử lý. Vui lòng kiểm tra lại hồ sơ hoặc thử lại.',
+        time, isError: true,
+      })
+    }
+  }
+
   // ─── sendAndAppraise ──────────────────────────────────────────────────
   async function sendAndAppraise(text) {
     if (!activeDossierId.value) return
@@ -204,5 +288,6 @@ export const useChatStore = defineStore('chat', () => {
     selectSession,
     sendAndAppraise,
     invalidateSession,
+    pushWsEvent,
   }
 })

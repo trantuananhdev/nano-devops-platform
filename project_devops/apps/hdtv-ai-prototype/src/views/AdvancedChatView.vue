@@ -3,11 +3,13 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Bot, Send, Paperclip, Mic, Image as ImageIcon, Plus, Settings, MessageSquare, MoreVertical, FileText, Database, Copy, GitPullRequest, ThumbsUp, ThumbsDown } from '@lucide/vue'
 import { useChatStore } from '../stores/chat'
 import { createAppraisalSocket } from '../services/ws'
+import * as api from '../services/api'
 
 const chatStore = useChatStore()
 const inputText = ref('')
 const isTyping = ref(false)
 const chatBodyRef = ref(null)
+const clarificationAnswers = ref({})  // clarificationId → answer text
 let wsHandle = null
 
 const chatHistory = computed(() => chatStore.sessions)
@@ -46,18 +48,22 @@ const onChatScroll = (e) => {
   }, 150)
 }
 
+function _makeWsHandler(dossierId) {
+  return {
+    onMessage: (evt) => {
+      chatStore.pushWsEvent(evt)
+      scrollToBottom()
+    },
+    onReconnect: () => {
+      chatStore.pushWsEvent({ type: 'started', task_id: null })
+    },
+  }
+}
+
 onMounted(async () => {
   await chatStore.loadSessions()
   if (chatStore.activeDossierId) {
-    wsHandle = createAppraisalSocket(chatStore.activeDossierId, {
-      onMessage: async (evt) => {
-        if (evt.type === 'tool_result' || evt.type === 'completed') {
-          chatStore.invalidateSession(chatStore.activeDossierId)
-          await chatStore.selectSession(chatStore.activeDossierId)
-          scrollToBottom()
-        }
-      },
-    })
+    wsHandle = createAppraisalSocket(chatStore.activeDossierId, _makeWsHandler(chatStore.activeDossierId))
   }
 })
 
@@ -70,15 +76,7 @@ onUnmounted(() => {
 const selectSession = async (session) => {
   wsHandle?.close()
   await chatStore.selectSession(session.id)
-  wsHandle = createAppraisalSocket(session.id, {
-    onMessage: async (evt) => {
-      if (evt.type === 'tool_result' || evt.type === 'completed') {
-        chatStore.invalidateSession(session.id)
-        await chatStore.selectSession(session.id)
-        scrollToBottom()
-      }
-    },
-  })
+  wsHandle = createAppraisalSocket(session.id, _makeWsHandler(session.id))
   scrollToBottom()
 }
 
@@ -95,6 +93,29 @@ const sendMessage = async () => {
 
 const copyText = (text) => {
   navigator.clipboard.writeText(text)
+}
+
+const submitClarification = async (clarificationId) => {
+  const answer = clarificationAnswers.value[clarificationId]?.trim()
+  if (!answer) return
+  try {
+    await api.answerClarification(clarificationId, { answer_id: answer })
+    clarificationAnswers.value[clarificationId] = ''
+    chatStore.pushWsEvent({
+      type: 'started',
+      task_id: null,
+    })
+    // Optimistic: show user's answer as a message
+    chatStore.messages.push({
+      id: Date.now(),
+      sender: 'user',
+      text: answer,
+      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+    })
+    scrollToBottom()
+  } catch (e) {
+    console.error('Failed to submit clarification:', e)
+  }
 }
 </script>
 
@@ -172,18 +193,47 @@ const copyText = (text) => {
           <div class="message-content-wrapper">
             <div class="sender-name">{{ msg.sender === 'user' ? 'Lãnh đạo HĐTV' : 'Trợ lý AI' }} <span class="msg-time">{{ msg.time }}</span></div>
             
-            <div v-if="msg.isTool" class="tool-execution glass-panel">
+            <!-- Tool execution block -->
+            <div v-if="msg.isTool" class="tool-execution glass-panel" :class="{ 'tool-running': msg.toolStatus === 'running' }">
               <div class="tool-header flex items-center gap-2">
                 <Database size="14" class="text-primary"/>
-                <span class="font-medium text-sm">Đã gọi công cụ: {{ msg.toolName }}</span>
-                <span class="badge-success ml-auto">Hoàn tất</span>
+                <span class="font-medium text-sm">{{ msg.toolStatus === 'running' ? 'Đang gọi:' : 'Đã gọi:' }} {{ msg.toolName }}</span>
+                <span v-if="msg.toolStatus === 'running'" class="badge-running ml-auto">
+                  <span class="pulse-dot"></span> Đang chạy...
+                </span>
+                <span v-else-if="msg.toolStatus === 'success'" class="badge-success ml-auto">Hoàn tất</span>
+                <span v-else class="badge-error ml-auto">Lỗi</span>
               </div>
-              <div class="tool-body code-font">
+              <div v-if="msg.toolResult && msg.toolResult !== '...'" class="tool-body code-font">
                 {{ msg.toolResult }}
               </div>
             </div>
-            
-            <div v-if="msg.text" class="message-bubble" :class="{ 'user-bubble': msg.sender === 'user', 'ai-bubble glass-panel': msg.sender === 'ai' }">
+
+            <!-- Status / system message (isStatus, isError) -->
+            <div v-else-if="msg.isStatus || msg.isError"
+              class="status-message"
+              :class="{ 'status-error': msg.isError }"
+            >
+              {{ msg.text }}
+            </div>
+
+            <!-- Clarification request -->
+            <div v-else-if="msg.isClarification" class="clarification-block glass-panel">
+              <div class="clarification-label">❓ Agent cần làm rõ</div>
+              <p class="clarification-question">{{ msg.text }}</p>
+              <div class="clarification-input-row">
+                <input
+                  v-model="clarificationAnswers[msg.clarificationId]"
+                  class="clarification-input"
+                  placeholder="Nhập câu trả lời..."
+                  @keyup.enter="submitClarification(msg.clarificationId)"
+                />
+                <button class="btn btn-primary btn-sm" @click="submitClarification(msg.clarificationId)">Gửi</button>
+              </div>
+            </div>
+
+            <!-- Normal text message -->
+            <div v-else-if="msg.text" class="message-bubble" :class="{ 'user-bubble': msg.sender === 'user', 'ai-bubble glass-panel': msg.sender === 'ai' }">
               {{ msg.text }}
             </div>
             
@@ -334,11 +384,53 @@ const copyText = (text) => {
 
 /* Tool Execution */
 .tool-execution { border-radius: 12px; border: 1px solid var(--color-primary); overflow: hidden; margin-bottom: 0.5rem; max-width: 600px; }
+.tool-execution.tool-running { border-color: var(--color-warning); animation: border-pulse 1.5s ease-in-out infinite; }
+@keyframes border-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 .tool-header { background: rgba(0, 86, 179, 0.05); padding: 0.5rem 1rem; border-bottom: 1px solid var(--color-border); }
 [data-theme='dark'] .tool-header { background: rgba(59, 130, 246, 0.1); }
 .badge-success { background: rgba(16, 185, 129, 0.15); color: var(--color-success); padding: 0.1rem 0.5rem; border-radius: 12px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+.badge-running { background: rgba(245, 158, 11, 0.15); color: var(--color-warning); padding: 0.1rem 0.5rem; border-radius: 12px; font-size: 0.7rem; font-weight: 600; display: flex; align-items: center; gap: 0.3rem; }
+.badge-error { background: rgba(239, 68, 68, 0.15); color: var(--color-danger); padding: 0.1rem 0.5rem; border-radius: 12px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+.pulse-dot { width: 6px; height: 6px; background: var(--color-warning); border-radius: 50%; animation: pulse-dot 1s ease-in-out infinite; }
+@keyframes pulse-dot { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.6; } }
 .tool-body { padding: 1rem; font-size: 0.85rem; color: var(--color-text-primary); white-space: pre-wrap; }
 .code-font { font-family: 'Consolas', 'Courier New', Courier, monospace; }
+
+/* Status / system messages */
+.status-message {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.03);
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  font-style: italic;
+}
+.status-message.status-error { color: var(--color-danger); background: rgba(239, 68, 68, 0.06); }
+[data-theme='dark'] .status-message { background: rgba(255,255,255,0.04); }
+
+/* Clarification block */
+.clarification-block {
+  padding: 1rem;
+  border-radius: 12px;
+  border-left: 4px solid var(--color-warning);
+  max-width: 500px;
+  margin-bottom: 0.5rem;
+}
+.clarification-label { font-size: 0.75rem; font-weight: 700; color: var(--color-warning); text-transform: uppercase; margin-bottom: 0.4rem; }
+.clarification-question { font-size: 0.95rem; margin-bottom: 0.75rem; color: var(--color-text-primary); }
+.clarification-input-row { display: flex; gap: 0.5rem; }
+.clarification-input {
+  flex: 1;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-panel-solid);
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+}
+.clarification-input:focus { outline: none; border-color: var(--color-primary); }
 
 /* Typing Indicator */
 .typing-indicator { padding: 1rem; border-radius: 16px; border-bottom-left-radius: 4px; display: flex; gap: 0.4rem; align-items: center; border: 1px solid var(--color-border); }
