@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, reactive, computed } from 'vue'
+import { onMounted, ref, reactive, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDossierStore } from '../stores/dossier'
 import { getDossierUnits } from '../services/api'
@@ -57,8 +57,30 @@ const unitOptions   = ref([])   // populated from API on mount
 const filterUnit    = ref('')
 const filterRisk    = ref('')
 
+// Helper to construct filters object
+const getActiveFilters = () => {
+  return {
+    unit: filterUnit.value || undefined,
+    risk_level: filterRisk.value || undefined,
+  }
+}
+
+// ─── Computed filtered dossiers ──────────────────────────────────────────
+const filteredDossiers = computed(() => {
+  return store.dossiers.filter(item => {
+    if (filterUnit.value && item.unit !== filterUnit.value) return false
+    if (filterRisk.value && item.risk !== filterRisk.value) return false
+    return true
+  })
+})
+
+// Refetch from backend when filters change to support database pagination & filtering
+watch([filterUnit, filterRisk], () => {
+  store.fetchDossiers(getActiveFilters())
+})
+
 onMounted(async () => {
-  store.fetchDossiers()
+  store.fetchDossiers(getActiveFilters())
   try {
     const { data } = await getDossierUnits()
     unitOptions.value = data
@@ -182,6 +204,14 @@ const STEPS = ['Thông tin', 'Đính kèm PDF', 'Hoàn tất']
         </div>
       </div>
 
+      <!-- Error banner -->
+      <div v-if="store.error" class="error-banner">
+        <div class="error-banner-content">
+          <AlertCircle class="error-icon" :size="20" />
+          <span>{{ store.error }}</span>
+        </div>
+      </div>
+
       <div v-if="store.loading && store.dossiers.length === 0" class="p-4 text-muted">Đang tải...</div>
 
       <!--
@@ -207,7 +237,7 @@ const STEPS = ['Thông tin', 'Đính kèm PDF', 'Hoàn tất']
           :item-height="ROW_HEIGHT"
           :height="TABLE_HEIGHT"
           key-field="id"
-          @scroll-end="store.loadMoreDossiers()"
+          @scroll-end="store.loadMoreDossiers(getActiveFilters())"
         >
           <template #default="{ item }">
             <div
@@ -244,7 +274,7 @@ const STEPS = ['Thông tin', 'Đính kèm PDF', 'Hoàn tất']
         <button
           class="btn btn-outline btn-sm"
           :disabled="store.loadingMore"
-          @click="store.loadMoreDossiers()"
+          @click="store.loadMoreDossiers(getActiveFilters())"
         >
           <span v-if="store.loadingMore">⏳ Đang tải...</span>
           <span v-else>Tải thêm ({{ store.total - store.dossiers.length }} còn lại)</span>
@@ -577,4 +607,21 @@ const STEPS = ['Thông tin', 'Đính kèm PDF', 'Hoàn tất']
 
 .modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.18s ease; }
 .modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
+
+.error-banner {
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: var(--color-danger);
+}
+.error-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.error-icon {
+  flex-shrink: 0;
+}
 </style>

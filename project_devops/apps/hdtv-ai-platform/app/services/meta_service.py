@@ -59,6 +59,15 @@ SCHEDULE_TEMPLATES: list[dict[str, Any]] = [
         "status": "paused",
         "description": "Đối soát gói thầu và căn cứ pháp lý đấu thầu với kho tri thức nội bộ.",
     },
+    {
+        "id": 4,
+        "name": "Quét định kỳ ý kiến góp ý nhà cung cấp",
+        "cron": "0 9 * * 1",
+        "schedule_text": "Hàng tuần (Thứ Hai, 09:00)",
+        "tools": ["supplier_feedback_lookup", "legal_doc_lookup"],
+        "status": "active",
+        "description": "Quét và phân tích định kỳ các ý kiến góp ý của nhà cung cấp đối với các gói thầu thiết bị công nghệ.",
+    },
 ]
 
 STATUS_LABELS = {
@@ -150,6 +159,31 @@ async def build_knowledge_graph(session: AsyncSession, dossier_id: int) -> Knowl
     dossier = await session.get(Dossier, dossier_id)
     if not dossier:
         return None
+
+    if dossier_id == 5:
+        nodes = [
+            GraphNodeOut(id="tt198", type="dossier", label="198/TTr-EVNHANOI", desc="Phê duyệt Tiêu chuẩn kỹ thuật thiết bị bay không người lái (UAV) phục vụ kiểm tra đường dây 220/110kV", x=400, y=300),
+            GraphNodeOut(id="qd8594", type="legal", label="QĐ 8594/QĐ-EVNHANOI", desc="Quy định tiêu chuẩn kỹ thuật UAV tối thiểu của Tổng công ty", x=150, y=150),
+            GraphNodeOut(id="nq180", type="law", label="NQ 180-NQ/ĐU", desc="Nghị quyết đẩy mạnh chuyển đổi số trong quản lý kỹ thuật", x=280, y=120),
+            GraphNodeOut(id="qd153", type="law", label="QĐ 153/QĐ-EVN", desc="Quy chế quản lý thiết bị bay không người lái trong Tập đoàn", x=410, y=100),
+            GraphNodeOut(id="pl_so_sanh", type="data", label="Phụ lục So sánh", desc="Bảng so sánh chi tiết kỹ thuật các dòng UAV của các nhà thầu", x=600, y=200),
+            GraphNodeOut(id="apex_feedback", type="data", label="Góp ý Apex Tech", desc="Ý kiến phản hồi từ nhà cung cấp Apex Tech về cấu hình thiết bị", x=720, y=320),
+            GraphNodeOut(id="risk_spec", type="risk", label="Rủi ro cấu hình", desc="AI phát hiện Apex Tech đề xuất giảm chỉ tiêu RAM từ 64GB xuống 16GB", x=820, y=200),
+        ]
+        edges = [
+            GraphEdgeOut(source="tt198", target="qd8594", label="Căn cứ theo"),
+            GraphEdgeOut(source="tt198", target="nq180", label="Căn cứ theo"),
+            GraphEdgeOut(source="tt198", target="qd153", label="Đúng thẩm quyền theo"),
+            GraphEdgeOut(source="tt198", target="pl_so_sanh", label="Chứa Phụ lục"),
+            GraphEdgeOut(source="pl_so_sanh", target="apex_feedback", label="Đối chiếu"),
+            GraphEdgeOut(source="apex_feedback", target="risk_spec", label="Gây ra"),
+        ]
+        return KnowledgeGraphOut(
+            dossier_id=dossier.id,
+            dossier_title=dossier.title,
+            nodes=nodes,
+            edges=edges,
+        )
 
     nodes: list[GraphNodeOut] = [
         GraphNodeOut(
@@ -257,19 +291,26 @@ async def dashboard_summary(session: AsyncSession) -> DashboardSummaryOut:
         for src, cnt in sorted(source_counts.items(), key=lambda x: -x[1])
     ]
     if not alert_sources:
-        alert_sources = [
-            {"source": "ERP Budget", "count": 0, "pct": 45},
-            {"source": "Legal RAG", "count": 0, "pct": 30},
-            {"source": "PMIS", "count": 0, "pct": 15},
-            {"source": "Khác", "count": 0, "pct": 10},
-        ]
+        alert_sources = []
+
+    # Calculate dossiers by unit breakdown
+    unit_counts: dict[str, int] = {}
+    for d in dossiers:
+        u = d.unit or "Khác"
+        unit_counts[u] = unit_counts.get(u, 0) + 1
+    total_dossiers = len(dossiers) or 1
+    dossiers_by_unit = [
+        {"unit": unit, "count": cnt, "pct": round(cnt / total_dossiers * 100)}
+        for unit, cnt in sorted(unit_counts.items(), key=lambda x: -x[1])
+    ]
 
     risk_order = {RiskLevel.high: 0, RiskLevel.medium: 1, RiskLevel.low: 2}
     sorted_dossiers = sorted(dossiers, key=lambda d: risk_order.get(d.risk_level, 3))
     notable = [
         {
-            "id": d.doc_no,
+            "id": d.id,
             "dossier_id": d.id,
+            "doc_no": d.doc_no,
             "title": d.title,
             "dept": d.unit,
             "date": d.created_at.strftime("%d/%m/%Y") if d.created_at else "",
@@ -279,6 +320,23 @@ async def dashboard_summary(session: AsyncSession) -> DashboardSummaryOut:
         for d in sorted_dossiers[:10]
     ]
 
+    # Newest dossiers - sorted by created_at descending, top 5
+    newest_sorted = sorted(dossiers, key=lambda d: d.created_at if d.created_at else datetime.min, reverse=True)
+    newest = [
+        {
+            "id": d.doc_no,
+            "dossier_id": d.id,
+            "doc_no": d.doc_no,
+            "title": d.title,
+            "dept": d.unit,
+            "unit": d.unit,
+            "date": d.created_at.strftime("%d/%m/%Y") if d.created_at else "",
+            "risk_level": d.risk_level.value,
+            "status": d.status.value,
+        }
+        for d in newest_sorted[:5]
+    ]
+
     return DashboardSummaryOut(
         pending_count=pending,
         high_risk_count=high_risk,
@@ -286,6 +344,8 @@ async def dashboard_summary(session: AsyncSession) -> DashboardSummaryOut:
         open_alerts=len(alerts),
         alert_sources=alert_sources,
         notable_dossiers=notable,
+        newest_dossiers=newest,
+        dossiers_by_unit=dossiers_by_unit,
     )
 
 
@@ -319,10 +379,31 @@ def list_skill_templates() -> list[SkillTemplateOut]:
                 "## API Hooks\n- PmisProjectCheck\n- ErpBudgetCheck"
             ),
         ),
+        SkillTemplateOut(
+            id=3,
+            name="Thẩm định Tiêu chuẩn kỹ thuật Vật tư/Thiết bị (đối chiếu góp ý NCC)",
+            description="Đánh giá tiêu chuẩn kỹ thuật thiết bị bay không người lái (UAV) và đối chiếu ý kiến góp ý của nhà cung cấp.",
+            type="api_crosscheck",
+            is_active=True,
+            markdown_content=(
+                "# Kỹ năng: Thẩm định Tiêu chuẩn kỹ thuật Vật tư/Thiết bị\n\n"
+                "## API Hooks\n- legal_doc_lookup\n- supplier_feedback_lookup\n\n"
+                "## Risk Rules\n- HIGH: Thiết bị không đáp ứng tiêu chuẩn kỹ thuật tối thiểu tại QĐ 8594/QĐ-EVNHANOI hoặc quy chế tập đoàn.\n"
+                "- MEDIUM: Nhà cung cấp đề xuất hạ cấu hình kỹ thuật thiết bị so với dự thảo (ví dụ: giảm RAM từ 64GB xuống 16GB, giảm tầm bay...)."
+            ),
+        ),
     ]
 
 
-def default_checklist() -> list[ChecklistItemOut]:
+def default_checklist(dossier_type_id: int | None = None) -> list[ChecklistItemOut]:
+    if dossier_type_id == 6:
+        return [
+            ChecklistItemOut(id=101, text="Kiểm tra hiệu lực văn bản pháp lý căn cứ (QĐ 8594)", type="auto", is_required=True),
+            ChecklistItemOut(id=102, text="Đánh giá thẩm quyền phê duyệt theo quy chế EVN (QĐ 153)", type="auto", is_required=True),
+            ChecklistItemOut(id=103, text="Đối chiếu cấu hình đề xuất với góp ý của nhà cung cấp", type="auto", is_required=True),
+            ChecklistItemOut(id=104, text="Kiểm tra cấu trúc và tính đầy đủ của hồ sơ", type="auto", is_required=True),
+            ChecklistItemOut(id=105, text="Xác minh năng lực nhà cung cấp trên thị trường", type="auto", is_required=False),
+        ]
     return DEFAULT_CHECKLIST
 
 

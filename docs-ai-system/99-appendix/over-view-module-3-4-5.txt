@@ -1,0 +1,168 @@
+## Module 3 — Dashboard
+
+### FE hiện trạng
+- `views/DashboardView.vue` + `stores/dashboard.js`. `fetchSummary()` gọi song song
+  `GET /dashboard/summary` và `GET /agent/models`.
+- Hiển thị 3 stat card (`pending_count`, `high_risk_count`, `approved_count`), 2 chart card
+  (1 pie-chart **placeholder** rỗng `.pie-mock`, 1 list `alert_sources`), bảng "Tờ trình mới nhất"
+  (`newest_dossiers`), bảng "10 Tờ trình đáng chú ý" (`notable_dossiers`), bảng "Cấu hình Mô hình
+  AI" (`agentModels`).
+
+### BE hiện trạng
+- `routers/meta.py` → `/dashboard/summary` (`DashboardSummaryOut`), `/agent/models`
+  (`get_model_registry()`).
+- `services/meta_service.dashboard_summary()`: tính `pending_count`, `high_risk_count`,
+  `approved_count`, `alert_sources` (group theo `Alert.source`, **fallback hardcode** 4 dòng nếu
+  chưa có alert nào), `notable_dossiers` (top 10 theo risk), `newest_dossiers` (top 5 theo
+  `created_at`).
+
+### Vấn đề phát hiện
+
+- **G3.1 (P2 — UI chưa hoàn chỉnh)**: "Tỷ lệ Tờ trình theo Ban nghiệp vụ" là 1 `<div class="pie-mock">`
+  trống — không có chart thật, không bind dữ liệu (`store.summary` hiện không có field nào kiểu
+  "theo Ban" để vẽ pie chart này — cần BE bổ sung nếu muốn làm thật).
+- **G3.2 (P2 — dữ liệu fallback gây hiểu nhầm)**: `alert_sources` ở BE có **fallback hardcode**
+  (`ERP Budget 45%`, `Legal RAG 30%`, `PMIS 15%`, `Khác 10%`) khi không có alert `open` nào. FE
+  hiển thị y nguyên → người xem dashboard sẽ thấy số liệu "ảo" trông như dữ liệu thật khi hệ thống
+  trống. Cần phân biệt rõ "không có dữ liệu" vs "có dữ liệu thật bằng 0%".
+- **G3.3 (P2)**: `openDossier(d)` dùng `d.dossier_id` — khớp với cả `notable_dossiers` và
+  `newest_dossiers` (BE đã set `dossier_id` cho cả 2). OK, không phải bug, chỉ ghi nhận đã kiểm
+  tra khớp.
+
+### Task cho Cursor
+
+- **T-REV-3.1 (FE, P2)** — Thay `.pie-mock` bằng 1 chart thật khi có dữ liệu nguồn phù hợp. **Phụ
+  thuộc T-REV-3.2** (cần BE trả về breakdown theo Ban trước). Nếu chưa có ngân sách làm chart,
+  tối thiểu: ẩn card "Tỷ lệ Tờ trình theo Ban nghiệp vụ" hoặc thay bằng 1 bảng số liệu đơn giản từ
+  `notable_dossiers`/`newest_dossiers` (group theo `unit` ngay trên FE) để tránh hiển thị khung
+  trống.
+- **T-REV-3.2 (BE, P2 — tuỳ chọn)** — Nếu muốn pie chart "theo Ban" thật: thêm field
+  `dossiers_by_unit: list[dict]` (`{unit, count, pct}`) vào `DashboardSummaryOut` +
+  `dashboard_summary()`, tính từ toàn bộ `dossiers` (group theo `unit`).
+- **T-REV-3.3 (BE, P1)** — Sửa `dashboard_summary()`: khi `alerts` rỗng, trả `alert_sources = []`
+  thay vì fallback hardcode 4 dòng giả. File: `app/services/meta_service.py`.
+- **T-REV-3.4 (FE, P1)** — `DashboardView.vue`: khi `alertSources.length === 0`, hiển thị
+  "Chưa có cảnh báo nào được ghi nhận" thay vì danh sách rỗng/giả.
+
+---
+
+## Module 4 — Alerts
+
+### FE hiện trạng
+- `views/AlertsView.vue` + `stores/alerts.js`. `fetchAlerts()` → `GET /alerts` (không filter theo
+  status khi mount), map sang object có thêm `comments: []`, `assignedTo: null`.
+- `filteredAlerts` lọc client-side theo `searchQuery`, `selectedSeverity`, `selectedStatus`
+  (default `'open'`).
+- `resolveAlert(id)` → nếu có `rawId` gọi `alertsStore.resolve(rawId)` → `PATCH
+  /alerts/{id}/resolve` rồi refetch.
+- **Bình luận** (`addComment`) và **phân công** (`assignUser`, danh sách `availableUsers` 3 user
+  hardcode) — chỉ mutate state local trong component, **không gọi API nào**.
+
+### BE hiện trạng
+- `routers/alerts.py`: `GET /alerts?status=`, `PATCH /alerts/{id}/resolve`.
+- `models.entities.Alert`: chỉ có `id, dossier_id, title, severity, source, description, status,
+  created_at`. **Không có** cột cho comment hay assignee.
+- `AlertOut` (schema) cũng không có `comments`/`assigned_to`.
+
+### Vấn đề phát hiện
+
+- **G4.1 (P1 — mất dữ liệu)**: Toàn bộ tính năng "Thêm bình luận" và "Phân công xử lý" trong
+  AlertsView **không được lưu** — reload trang là mất hết. `availableUsers` là 3 user giả định
+  (`u1/u2/u3`), không liên kết với bảng `users` thật ở BE (vốn đã có `meta.py /users`).
+- **G4.2 (P2)**: `resolveAlert` gọi `alertsStore.resolve()` → `await fetchAlerts()` (refetch toàn
+  bộ, **không filter**) — sau khi resolve, alert chuyển sang status `resolved` vẫn nằm trong
+  `alerts.value`, và vì `selectedStatus` default `'open'`, alert đó tự động biến mất khỏi danh
+  sách hiển thị (đúng ý đồ UX, nhưng cần xác nhận không có flicker/giật do refetch toàn bộ).
+
+### Task cho Cursor
+
+- **T-REV-4.1 (BE, P1)** — Thêm bảng `alert_comments` (id, alert_id FK, user_id FK, content,
+  created_at) trong `app/models/entities.py` + migration. Schema `AlertCommentCreate/Out` trong
+  `app/schemas/dossier.py` (hoặc file schema mới `alert.py`). Endpoints trong `routers/alerts.py`:
+  `GET /alerts/{id}/comments`, `POST /alerts/{id}/comments`.
+- **T-REV-4.2 (BE, P1)** — Thêm cột `assigned_to: int | None` (FK `users.id`) vào `Alert` +
+  migration; thêm vào `AlertOut`. Endpoint `PATCH /alerts/{id}/assign` body `{user_id}` trong
+  `routers/alerts.py`, service `assign_alert()` trong `dossier_service.py` (hoặc tách file
+  `alert_service.py` nếu muốn gọn).
+- **T-REV-4.3 (FE, P1)** — Sau T-REV-4.1/4.2:
+  - `services/api.js`: thêm `getAlertComments`, `addAlertComment`, `assignAlert`.
+  - `stores/alerts.js`: `fetchAlerts` map thêm `comments`/`assigned_to` từ response thật (bỏ
+    `comments: [], assignedTo: null` hardcode).
+  - `AlertsView.vue`: `addComment`/`assignUser` gọi API thật; thay `availableUsers` hardcode bằng
+    fetch từ `GET /users` (đã có sẵn ở `meta.py`, có thể dùng lại `adminStore.fetchUsers()` hoặc
+    tạo 1 store nhỏ `users.js` chung).
+
+---
+
+## Module 5 — Advanced Chat & Floating Chat
+
+### FE hiện trạng
+
+**`AdvancedChatView.vue` + `stores/chat.js`** (module "chính"):
+- `loadSessions()`: lấy `dossierStore.dossiers` (qua `fetchDossiers`) → mỗi dossier = 1 "session
+  chat".
+- `selectSession(dossierId)`: load `dossier detail` + `GET /audit-logs` (limit 10, gọi
+  `getAiAuditLogs`) → biến mỗi `AiAuditLog` thành 1 "message" loại `isTool` (hiển thị tool đã
+  chạy + kết quả). Nếu có `appraisal.report_md` thì thêm 1 message cuối là 400 ký tự đầu của
+  report.
+- `loadMoreMessages()`: infinite-scroll lên trên, tăng `limit` của `getAiAuditLogs` để lấy thêm
+  log cũ hơn — cơ chế khá tinh tế (T-40).
+- `sendAndAppraise(text)`: push message người dùng (`text`) vào UI, rồi gọi
+  `POST /dossiers/{id}/appraise` — **endpoint này không nhận bất kỳ nội dung text nào**, nó chỉ
+  re-trigger pipeline thẩm định cố định 5 bước (Legal/ERP/Inventory/DOffice/PMIS).
+- WS: dùng đúng `createAppraisalSocket` từ `services/ws.js` (khác với SplitViewWorkspace) — khi có
+  `tool_result`/`completed` thì invalidate cache & reload session.
+
+**`components/FloatingChat.vue`** (chat nổi ở mọi trang trừ `/chat` và `/workspace/*`):
+- 100% mock: `messages` seed cứng, `sendMsg()` push tin người dùng rồi `setTimeout(1500ms)` trả về
+  **một câu trả lời cố định duy nhất** ("Đây là dữ liệu nội bộ bảo mật..."), không phân biệt nội
+  dung hỏi. Có nút "Mở rộng" → `router.push('/chat')`.
+
+### BE hiện trạng
+- Không có endpoint "chat"/"ask"/"query" nào. Chỉ có:
+  - `GET /audit-logs` (lịch sử các lần gọi tool của AI — không phải hội thoại).
+  - `POST /dossiers/{id}/appraise` (re-run pipeline 5 bước cố định, **không nhận input tự do**).
+
+### Vấn đề phát hiện
+
+- **G5.1 (P1 — kỳ vọng UX sai lệch nghiêm trọng)**: `AdvancedChatView` được thiết kế/marketing như
+  một **giao diện chat tự do với AI** ("Nhập câu lệnh chuyên sâu, yêu cầu phân tích số liệu hoặc
+  gõ @ để gọi Tool..."), nhưng:
+  - Nội dung người dùng nhập (`inputText`) **bị bỏ qua hoàn toàn** ở backend — chỉ dùng để hiển
+    thị trong UI, hành động thật luôn là "chạy lại toàn bộ pipeline thẩm định 5 bước".
+  - Không có cách nào để AI trả lời 1 câu hỏi cụ thể, không có khái niệm "gọi Tool theo `@`" ở
+    backend.
+  - Đây thực chất là 1 "audit log viewer" được tạo hình thành "chat", không phải chatbot thật.
+- **G5.2 (P1)**: `FloatingChat.vue` hoàn toàn là giao diện demo tĩnh — câu trả lời AI cố định bất
+  kể câu hỏi, không gọi API. Trùng lặp về mặt UX với G2.12/G2.13 (khung chat trong Workspace).
+- **G5.3 (P2)**: Vì `sendAndAppraise` gọi `/appraise` mỗi lần người dùng "chat", nếu người dùng gõ
+  nhiều câu hỏi liên tiếp → **kích hoạt nhiều lần chạy lại pipeline AI tốn kém** (Celery task) một
+  cách không cần thiết — rủi ro về chi phí/hiệu năng nếu nhiều người dùng đồng thời "chat".
+
+### Task cho Cursor
+
+- **T-REV-5.1 (Quyết định kiến trúc — KHÔNG code ngay, P1)**: Đây là gap kiến trúc lớn nhất của
+  toàn bộ review. Đề xuất hướng giải quyết (cần PM/Tech Lead chốt phạm vi trước khi giao Cursor
+  code chi tiết):
+  1. Thêm 1 endpoint chat thật, ví dụ `POST /dossiers/{id}/chat` nhận `{message, user_id}`,
+     dùng `llm_client`/`llm_router` (đã có sẵn ở `app/services/`) để trả lời dựa trên context =
+     `report_md` + `audit logs` gần nhất + `reference_documents`. Có thể tái dùng cơ chế
+     `orchestrator/react_agent.py` ở mức "read-only Q&A" (không trigger lại toàn bộ pipeline ghi
+     DB).
+  2. Lưu lịch sử hội thoại vào 1 bảng mới `chat_messages` (dossier_id, role, content, created_at)
+     để `loadMoreMessages`/cache hoạt động với dữ liệu thật thay vì suy ra từ `AiAuditLog`.
+  3. `sendAndAppraise` tách thành 2 hành động riêng trên UI: nút **"Chạy lại thẩm định"**
+     (gọi `/appraise` như hiện tại, rõ ràng là hành động nặng) và ô nhập **"Hỏi AI"** (gọi
+     `/chat`, nhẹ, không trigger Celery).
+
+- **T-REV-5.2 (FE, P2 — làm ngay, không cần chờ T-REV-5.1)**: Tách rõ 2 hành động ở UI hiện tại để
+  giảm nhầm lẫn ngay cả khi BE chưa có `/chat`:
+  - File `AdvancedChatView.vue`: đổi placeholder input thành rõ nghĩa hơn, ví dụ
+    *"Gõ ghi chú/yêu cầu, hoặc bấm 'Chạy lại thẩm định' để AI phân tích lại"*; thêm 1 nút riêng
+    **"Chạy lại thẩm định"** tách biệt khỏi nút Send, để Send (nếu chưa có `/chat`) chỉ lưu ghi
+    chú local / disable tạm với tooltip "Tính năng hỏi-đáp AI sắp ra mắt".
+
+- **T-REV-5.3 (FE, P2)** — `FloatingChat.vue`: đổi câu trả lời cố định hiện tại thành thông báo rõ
+  ràng "Tính năng trợ lý AI nổi đang ở giai đoạn demo — vào trang **Chat** hoặc **Hồ sơ** để xem
+  dữ liệu thật", tránh người dùng tin nhầm là AI đang phân tích thật. (Việc nối FloatingChat vào
+  `/chat` thật sẽ làm sau khi có T-REV-5.1).

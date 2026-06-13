@@ -1,5 +1,11 @@
-# HDTV AI Platform — App stack on Alpine VM
-# LLM runs separately on Ubuntu (llama-server)
+# HDTV AI Platform — Standalone App Stack (dev / WSL / direct docker compose)
+# LLM chạy riêng trên Ubuntu (llama-server)
+#
+# Passwords đọc từ Docker secrets → /run/secrets/<name>  (KHÔNG hardcode trong env)
+# Secret files: project_devops/platform/secrets/*.txt  (gitignored)
+#
+# Chạy từ repo root:
+#   docker compose --env-file .env -f project_devops/apps/hdtv-ai-platform/docker-compose.hdtv.yml up -d
 
 x-logging: &default-logging
   driver: json-file
@@ -8,6 +14,9 @@ x-logging: &default-logging
     max-file: "3"
 
 services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
   postgres:
     image: postgres:15-alpine
     container_name: hdtv-postgres
@@ -15,7 +24,9 @@ services:
     environment:
       POSTGRES_DB: ${HDTV_POSTGRES_DB:-hdtv_db}
       POSTGRES_USER: ${HDTV_POSTGRES_USER:-hdtv_user}
-      POSTGRES_PASSWORD: ${HDTV_POSTGRES_PASSWORD:-changeme_hdtv}
+      POSTGRES_PASSWORD_FILE: /run/secrets/hdtv_postgres_password
+    secrets:
+      - hdtv_postgres_password
     volumes:
       - hdtv_pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -72,7 +83,6 @@ services:
     networks:
       - hdtv-net
 
-  # T-11: Meilisearch full-text search
   meilisearch:
     image: getmeili/meilisearch:v1.8
     container_name: hdtv-meilisearch
@@ -80,11 +90,18 @@ services:
     environment:
       MEILI_NO_ANALYTICS: "true"
       MEILI_ENV: development
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-changeme_meili}
+      # Meilisearch không hỗ trợ _FILE suffix — đọc key từ entrypoint wrapper
+      MEILI_MASTER_KEY_FILE: /run/secrets/meili_master_key
+    entrypoint: >
+      sh -c "
+        export MEILI_MASTER_KEY=$$(cat /run/secrets/meili_master_key | tr -d '[:space:]');
+        exec meilisearch
+      "
+    secrets:
+      - meili_master_key
     volumes:
       - hdtv_meili_data:/meili_data
     healthcheck:
-      # Meilisearch v1.8 image (Debian slim) has curl available
       test: ["CMD-SHELL", "curl -sf http://localhost:7700/health || exit 1"]
       interval: 10s
       timeout: 5s
@@ -105,7 +122,9 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-hdtv_minio}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme_minio}
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+    secrets:
+      - minio_root_password
     volumes:
       - hdtv_minio_data:/data
     healthcheck:
@@ -122,6 +141,9 @@ services:
     networks:
       - hdtv-net
 
+  # ---------------------------------------------------------------------------
+  # Application
+  # ---------------------------------------------------------------------------
   api:
     build:
       context: .
@@ -131,18 +153,25 @@ services:
     env_file:
       - ../../../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${HDTV_POSTGRES_USER:-hdtv_user}:${HDTV_POSTGRES_PASSWORD:-changeme_hdtv}@postgres:5432/${HDTV_POSTGRES_DB:-hdtv_db}
+      # Connection strings — password được inject từ secret file bởi config.py
+      DATABASE_URL: postgresql+asyncpg://${HDTV_POSTGRES_USER:-hdtv_user}:placeholder@postgres:5432/${HDTV_POSTGRES_DB:-hdtv_db}
+      HDTV_POSTGRES_PASSWORD_FILE: /run/secrets/hdtv_postgres_password
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       CHROMA_HOST: chroma
       CHROMA_PORT: 8000
       MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-hdtv_minio}
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
       MEILI_URL: http://meilisearch:7700
-      MEILI_API_KEY: ${MEILI_MASTER_KEY:-changeme_meili}
+      MEILI_MASTER_KEY_FILE: /run/secrets/meili_master_key
+      LLM_BASE_URL: "http://${ACER_HOST:-192.168.1.248}:8080/v1"
+    secrets:
+      - hdtv_postgres_password
+      - minio_root_password
+      - meili_master_key
     labels:
-      # T-28: Prometheus Docker SD — auto-discovered by prometheus docker_sd job
-      # (Standalone dev compose — Traefik labels removed; use platform compose for Traefik routing)
       prometheus.scrape: "true"
       prometheus.job: "hdtv-ai"
       prometheus.port: "8000"
@@ -173,8 +202,6 @@ services:
     logging: *default-logging
     networks:
       - hdtv-net
-      # Uncomment khi chạy cùng platform stack để Prometheus có thể scrape /metrics:
-      # - platform-network
 
   worker:
     build:
@@ -185,21 +212,25 @@ services:
     env_file:
       - ../../../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${HDTV_POSTGRES_USER:-hdtv_user}:${HDTV_POSTGRES_PASSWORD:-changeme_hdtv}@postgres:5432/${HDTV_POSTGRES_DB:-hdtv_db}
+      DATABASE_URL: postgresql+asyncpg://${HDTV_POSTGRES_USER:-hdtv_user}:placeholder@postgres:5432/${HDTV_POSTGRES_DB:-hdtv_db}
+      HDTV_POSTGRES_PASSWORD_FILE: /run/secrets/hdtv_postgres_password
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       CHROMA_HOST: chroma
       CHROMA_PORT: 8000
       MEILI_URL: http://meilisearch:7700
-      MEILI_API_KEY: ${MEILI_MASTER_KEY:-changeme_meili}
+      MEILI_MASTER_KEY_FILE: /run/secrets/meili_master_key
       MINIO_ENDPOINT: minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-hdtv_minio}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme_minio}
-      # T-26: Docker sandbox — set SANDBOX_USE_DOCKER=true in .env to enable
-      # volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"]
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+      LLM_BASE_URL: "http://${ACER_HOST:-192.168.1.248}:8080/v1"
+    secrets:
+      - hdtv_postgres_password
+      - minio_root_password
+      - meili_master_key
     volumes:
-      - hdtv_rag_docs:/opt/rag-docs        # T-27: shared RAG docs volume
+      - hdtv_rag_docs:/opt/rag-docs
     depends_on:
       postgres:
         condition: service_healthy
@@ -215,7 +246,6 @@ services:
     networks:
       - hdtv-net
 
-  # T-27: Celery Beat — RAG pipeline scheduler (ingest every 6h, cleanup daily 02:00)
   beat:
     build:
       context: .
@@ -226,21 +256,25 @@ services:
     env_file:
       - ../../../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${HDTV_POSTGRES_USER:-hdtv_user}:${HDTV_POSTGRES_PASSWORD:-changeme_hdtv}@postgres:5432/${HDTV_POSTGRES_DB:-hdtv_db}
+      DATABASE_URL: postgresql+asyncpg://${HDTV_POSTGRES_USER:-hdtv_user}:placeholder@postgres:5432/${HDTV_POSTGRES_DB:-hdtv_db}
+      HDTV_POSTGRES_PASSWORD_FILE: /run/secrets/hdtv_postgres_password
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       CHROMA_HOST: chroma
       CHROMA_PORT: 8000
+      LLM_BASE_URL: "http://${ACER_HOST:-192.168.1.248}:8080/v1"
+    secrets:
+      - hdtv_postgres_password
     volumes:
-      - hdtv_rag_docs:/opt/rag-docs        # T-27: shared RAG docs volume
+      - hdtv_rag_docs:/opt/rag-docs
     depends_on:
       redis:
         condition: service_healthy
     deploy:
       resources:
         limits:
-          memory: 64m                      # Beat is lightweight — just a scheduler
+          memory: 64m
     logging: *default-logging
     networks:
       - hdtv-net
@@ -257,7 +291,8 @@ services:
     ports:
       - "3080:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -266,17 +301,25 @@ services:
     networks:
       - hdtv-net
 
+# ---------------------------------------------------------------------------
+# Secrets — đọc từ project_devops/platform/secrets/*.txt  (gitignored)
+# Path relative to this file's directory
+# ---------------------------------------------------------------------------
+secrets:
+  hdtv_postgres_password:
+    file: ../../platform/secrets/hdtv_postgres_password.txt
+  minio_root_password:
+    file: ../../platform/secrets/minio_root_password.txt
+  meili_master_key:
+    file: ../../platform/secrets/meili_master_key.txt
+
 volumes:
   hdtv_pg_data:
   hdtv_chroma_data:
   hdtv_minio_data:
   hdtv_meili_data:
-  hdtv_rag_docs:           # T-27: shared volume — agent worker + beat scheduler + RAG pipeline
+  hdtv_rag_docs:
 
 networks:
   hdtv-net:
     driver: bridge
-  # platform-network: uncomment khi chạy cùng platform stack (cli.sh hdtv-up)
-  # platform-network:
-  #   external: true
-  #   name: platform-network

@@ -237,6 +237,7 @@ async def _run_plan_execute_reflect(
             "plan_id": plan_row.id,
             "goal": plan.get("goal"),
             "step_count": len(plan.get("steps", [])),
+            "steps": plan.get("steps", []),
         },
     )
 
@@ -437,6 +438,7 @@ async def _complete_appraisal_from_checks(
     if overall_risk == RiskLevel.high:
         alert = Alert(
             dossier_id=dossier_id,
+            title=f"Rủi ro cao: {dossier.doc_no}",
             severity="high",
             source="AI Appraisal",
             description=f"Cảnh báo rủi ro cao cho {dossier.doc_no}: vượt ngưỡng kiểm tra ERP/pháp lý",

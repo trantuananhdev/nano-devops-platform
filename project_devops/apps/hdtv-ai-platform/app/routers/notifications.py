@@ -102,6 +102,6 @@ async def create_new_notification(
         title=body.title,
         message=body.message,
         dossier_id=body.dossier_id,
-        metadata=body.metadata,
+        extra_data=body.extra_data,
     )
     return NotificationOut.model_validate(notification)

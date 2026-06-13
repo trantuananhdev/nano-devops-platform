@@ -47,6 +47,7 @@ from app.services.document_version_service import (
     get_latest_document_version,
 )
 from app.services import minio_service, search_service
+from app.services.pubsub import publish_event
 from app.workers.tasks import run_appraisal_task
 
 router = APIRouter()
@@ -58,6 +59,8 @@ _MAX_PDF_BYTES = 20 * 1024 * 1024  # 20MB
 async def get_dossiers(
     offset: int = Query(default=0, ge=0, description="Skip N rows"),
     limit: int = Query(default=20, ge=1, le=200, description="Max rows (default 20, max 200)"),
+    unit: str | None = Query(default=None, description="Filter by unit"),
+    risk_level: str | None = Query(default=None, description="Filter by risk_level"),
     session: AsyncSession = Depends(get_db),
 ) -> DossierPage:
     """T-40: Paginated dossier list.
@@ -66,8 +69,8 @@ async def get_dossiers(
     FE stores use offset-based pagination: load first page on mount,
     then append pages on demand (infinite scroll / load-more).
     """
-    items = await list_dossiers(session, offset=offset, limit=limit)
-    total = await count_dossiers(session)
+    items = await list_dossiers(session, offset=offset, limit=limit, unit=unit, risk_level=risk_level)
+    total = await count_dossiers(session, unit=unit, risk_level=risk_level)
     return DossierPage(
         items=items,
         total=total,
@@ -107,6 +110,21 @@ async def create_new_dossier(
     await search_service.index_dossier(search_service.dossier_to_doc(dossier))
 
     return DossierOut.model_validate(dossier)
+
+
+@router.get("/units", response_model=list[str])
+async def get_dossier_units(
+    session: AsyncSession = Depends(get_db),
+) -> list[str]:
+    """Return distinct unit values from all dossiers for FE filter dropdowns.
+
+    Returns a sorted list of unique unit strings so the filter select is always
+    up-to-date without requiring FE code changes when new units are added.
+    """
+    result = await session.execute(
+        select(Dossier.unit).distinct().order_by(Dossier.unit)
+    )
+    return [row[0] for row in result.all() if row[0]]
 
 
 @router.get("/{dossier_id}", response_model=DossierDetail)
@@ -225,22 +243,19 @@ async def appraise_dossier(
         raise HTTPException(status_code=404, detail="Dossier not found")
     effective_user_id = body.user_id if body and body.user_id is not None else user_id
     task = run_appraisal_task.delay(dossier_id, effective_user_id)
+    
+    # T-57: Emit task_started event to WebSocket immediately before returning 202
+    await publish_event(dossier_id, {
+        "type": "task_started",
+        "task_id": task.id,
+        "dossier_id": dossier_id
+    })
+    
     return AppraiseResponse(task_id=task.id, dossier_id=dossier_id, status="queued")
 
 
-@router.get("/units", response_model=list[str])
-async def get_dossier_units(
-    session: AsyncSession = Depends(get_db),
-) -> list[str]:
-    """Return distinct unit values from all dossiers for FE filter dropdowns.
 
-    Returns a sorted list of unique unit strings so the filter select is always
-    up-to-date without requiring FE code changes when new units are added.
-    """
-    result = await session.execute(
-        select(Dossier.unit).distinct().order_by(Dossier.unit)
-    )
-    return [row[0] for row in result.all() if row[0]]
+
 
 
 @router.post("/{dossier_id}/transition-status", response_model=DossierOut)

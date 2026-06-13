@@ -2,14 +2,25 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.entities import AiAuditLog, Alert, AlertStatus, AppraisalResult, Dossier, DossierStatus, RiskLevel
-from app.schemas.dossier import AppraisalOut, DossierCreate, DossierDetail, DossierOut
+from app.models.entities import (
+    AgentPlan,
+    AiAuditLog,
+    Alert,
+    AlertStatus,
+    AppraisalResult,
+    Dossier,
+    DossierStatus,
+    RiskLevel,
+)
+from app.schemas.dossier import AppraisalOut, AppraisalSummary, DossierCreate, DossierDetail, DossierOut
 
 
 async def list_dossiers(
     session: AsyncSession,
     offset: int = 0,
     limit: int = 50,
+    unit: str | None = None,
+    risk_level: str | None = None,
 ) -> list[DossierOut]:
     """T-40: Return a paginated slice of dossiers ordered by id desc.
 
@@ -17,15 +28,33 @@ async def list_dossiers(
     limit  — max rows to return (capped at 200 to prevent accidental full-dumps)
     """
     limit = min(limit, 200)
-    result = await session.execute(
-        select(Dossier).order_by(Dossier.id.desc()).offset(offset).limit(limit)
-    )
+    q = select(Dossier).order_by(Dossier.id.desc())
+    if unit:
+        q = q.where(Dossier.unit == unit)
+    if risk_level:
+        try:
+            q = q.where(Dossier.risk_level == RiskLevel(risk_level))
+        except ValueError:
+            q = q.where(Dossier.risk_level == None)
+    result = await session.execute(q.offset(offset).limit(limit))
     return [DossierOut.model_validate(d) for d in result.scalars().all()]
 
 
-async def count_dossiers(session: AsyncSession) -> int:
+async def count_dossiers(
+    session: AsyncSession,
+    unit: str | None = None,
+    risk_level: str | None = None,
+) -> int:
     """T-40: Total count for pagination metadata."""
-    result = await session.execute(select(func.count()).select_from(Dossier))
+    q = select(func.count()).select_from(Dossier)
+    if unit:
+        q = q.where(Dossier.unit == unit)
+    if risk_level:
+        try:
+            q = q.where(Dossier.risk_level == RiskLevel(risk_level))
+        except ValueError:
+            q = q.where(Dossier.risk_level == None)
+    result = await session.execute(q)
     return result.scalar_one()
 
 
@@ -42,10 +71,32 @@ async def get_dossier_detail(session: AsyncSession, dossier_id: int) -> DossierD
     if dossier.appraisals:
         latest = sorted(dossier.appraisals, key=lambda a: a.created_at or 0, reverse=True)[0]
         appraisal = AppraisalOut.model_validate(latest)
+
+    plan_result = await session.execute(
+        select(AgentPlan)
+        .where(AgentPlan.dossier_id == dossier_id)
+        .order_by(AgentPlan.id.desc())
+        .limit(1)
+    )
+    latest_plan = plan_result.scalar_one_or_none()
+    latest_appraisal = None
+    if latest_plan and latest_plan.plan_json:
+        steps = latest_plan.plan_json.get("steps", [])
+        plan_steps = []
+        for step in steps:
+            plan_steps.append({
+                "tool": step.get("tool"),
+                "status": "pass",
+                "desc": "Chờ thẩm định AI...",
+                "label": step.get("tool"),
+            })
+        latest_appraisal = AppraisalSummary(plan_steps=plan_steps)
+
     return DossierDetail(
         **DossierOut.model_validate(dossier).model_dump(),
         pdf_url=dossier.pdf_url,
         appraisal=appraisal,
+        latest_appraisal=latest_appraisal,
     )
 
 

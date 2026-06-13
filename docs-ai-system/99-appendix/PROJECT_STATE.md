@@ -1,7 +1,7 @@
 # Project State — EVN HDTV AI
 
-**Phase**: 12 — EVN Production Feature Complete (Complete ✅)
-**Last updated**: 2026-06-13 (session 22 — Phase 12 complete)
+**Phase**: 13 — System-wide Module Audit & Optimization (IN PROGRESS ✨)
+**Last updated**: 2026-06-13 (session 29 — T-63 completed)
 **Demo ready**: yes (with real dossier 198/TTr-EVNHANOI data)
 
 ## Verified Endpoints
@@ -453,6 +453,9 @@ Dossier **198/TTr-EVNHANOI** includes:
   - Added endpoint to get presigned URL for reference documents in dossiers.py
   - Updated GeneralAuditLogOut to include User data for better audit trail visibility
   - Updated FE to show user info in audit logs
+- **Session 23 Additions**:
+  - T-55: Fixed Notable Dossier routing by returning integer dossier_id, added AI Models widget, error banner, and try-catch handling.
+  - T-56: Fixed route ordering of /dossiers/units to resolve HTTP 422, added title column to Alert entity and AlertOut schema, populated alert title in react_agent.py, mapped title in frontend alerts store, and added error state banner in DossierListView.vue.
 
 ### New Files
 - `project_devops/apps/hdtv-ai-platform/app/core/permissions.py`: NEW role-based permission checks
@@ -462,6 +465,7 @@ Dossier **198/TTr-EVNHANOI** includes:
 - `project_devops/apps/hdtv-ai-platform/alembic/versions/015_add_reference_documents.py`: NEW migration
 - `project_devops/apps/hdtv-ai-platform/alembic/versions/016_add_document_versions.py`: NEW migration
 - `project_devops/apps/hdtv-ai-platform/alembic/versions/017_add_notifications.py`: NEW migration
+- `project_devops/apps/hdtv-ai-platform/alembic/versions/018_add_alert_title.py`: NEW migration
 - `project_devops/apps/hdtv-ai-platform/app/services/audit_service.py`: NEW audit service
 - `project_devops/apps/hdtv-ai-platform/app/services/reference_document_service.py`: NEW reference doc service
 - `project_devops/apps/hdtv-ai-platform/app/services/document_version_service.py`: NEW document version service

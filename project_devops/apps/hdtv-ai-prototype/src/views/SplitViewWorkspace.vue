@@ -182,6 +182,21 @@ const loadDocumentVersions = async () => {
     if (data.length > 0) {
       selectedDocVersion.value = data[0] // select latest by default
     }
+    
+    // Map to reportVersions and resolutionVersions
+    reportVersions.value = data.map(v => ({
+      id: v.id,
+      name: `Phiên bản ${v.version_number}`,
+      time: new Date(v.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      desc: v.change_description || 'Cập nhật tài liệu'
+    }))
+    
+    resolutionVersions.value = data.map(v => ({
+      id: v.id,
+      name: `Phiên bản ${v.version_number}`,
+      time: new Date(v.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      desc: v.change_description || 'Dự thảo Nghị quyết'
+    }))
   } catch (err) {
     console.error('Failed to load document versions:', err)
   }
@@ -197,23 +212,24 @@ const loadAuditLogs = async () => {
 }
 
 const defaultChecks = [
-  { id: 1, label: 'Kiểm tra căn cứ pháp lý', status: 'pass', desc: 'Chờ thẩm định AI...', details: '' },
-  { id: 2, label: 'Đối chiếu Tổng mức đầu tư (ERP)', status: 'pass', desc: 'Chờ thẩm định AI...', details: '' },
-  { id: 3, label: 'Kiểm tra Vật tư tồn kho (ERP INV)', status: 'pass', desc: 'Chờ thẩm định AI...', details: '' },
-  { id: 4, label: 'Đối chiếu DOffice', status: 'pass', desc: 'Chờ thẩm định AI...', details: '' },
-  { id: 5, label: 'Checklist PMIS', status: 'pass', desc: 'Chờ thẩm định AI...', details: '' },
+  { id: 1, label: 'Kiểm tra căn cứ pháp lý', status: 'pass', desc: 'Chờ thẩm định AI...', details: '', tool: 'LegalGraphRAG' },
+  { id: 2, label: 'Đối chiếu Tổng mức đầu tư (ERP)', status: 'pass', desc: 'Chờ thẩm định AI...', details: '', tool: 'ErpBudgetCheck' },
+  { id: 3, label: 'Kiểm tra Vật tư tồn kho (ERP INV)', status: 'pass', desc: 'Chờ thẩm định AI...', details: '', tool: 'ErpInventoryCheck' },
+  { id: 4, label: 'Đối chiếu DOffice', status: 'pass', desc: 'Chờ thẩm định AI...', details: '', tool: 'DOfficeLookup' },
+  { id: 5, label: 'Checklist PMIS', status: 'pass', desc: 'Chờ thẩm định AI...', details: '', tool: 'PmisProjectCheck' },
 ]
 
-const aiChecks = ref([...defaultChecks])
+const aiChecks = ref([])
 
 function mapChecksFromAppraisal(appraisal) {
-  if (!appraisal?.checks?.items) return
-  aiChecks.value = appraisal.checks.items.map((c, i) => ({
+  const steps = appraisal.plan_steps || appraisal.checks?.items || []
+  aiChecks.value = steps.map((c, i) => ({
     id: i + 1,
-    label: c.label,
+    label: c.label || toolLabels[c.tool] || c.tool,
     status: c.status,
-    desc: c.desc,
+    desc: c.desc || 'Chờ thẩm định AI...',
     details: c.details || '',
+    tool: c.tool,
   }))
 }
 
@@ -234,7 +250,10 @@ async function loadDossier() {
   }
   if (data?.appraisal) {
     mapChecksFromAppraisal(data.appraisal)
+  } else if (data?.latest_appraisal) {
+    mapChecksFromAppraisal(data.latest_appraisal)
   } else {
+    aiChecks.value = []
     feedbackSubmitted.value = null
     feedbackComment.value = ''
   }
@@ -254,7 +273,7 @@ const toolLabels = {
 }
 
 function updateCheckFromTool(toolName, result) {
-  const checkIndex = aiChecks.value.findIndex(c => c.label === toolLabels[toolName])
+  const checkIndex = aiChecks.value.findIndex(c => c.tool === toolName)
   if (checkIndex !== -1) {
     const check = aiChecks.value[checkIndex]
     const templates = {
@@ -272,15 +291,65 @@ function updateCheckFromTool(toolName, result) {
   }
 }
 
-onMounted(async () => {
-  await loadDossier()
-  await loadPendingClarification()
-  wsHandle = createAppraisalSocket(dossierId.value, {
-    onMessage: (evt) => {
-      if (evt.type === 'started') {
-        aiChecks.value = defaultChecks.map(c => ({ ...c, desc: 'Đang xử lý...' }))
+const showRevisionBanner = ref(false)
+const revisionBannerDetails = ref(null)
+
+const WS_BASE = import.meta.env.VITE_WS_BASE_URL || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
+let ws = null
+let reconnectCount = 0
+const maxReconnectRetries = 3
+const reconnectDelays = [2000, 5000, 10000]
+
+function connectWebSocket() {
+  if (ws) {
+    try {
+      ws.close()
+    } catch (e) {}
+  }
+
+  const url = `${WS_BASE}/ws/appraisal/${dossierId.value}`
+  ws = new WebSocket(url)
+
+  ws.onopen = () => {
+    console.log('WS connection opened')
+    reconnectCount = 0
+  }
+
+  ws.onmessage = (event) => {
+    try {
+      const evt = JSON.parse(event.data)
+      if (evt.type === 'snapshot') {
+        if (evt.latest_plan_steps) {
+          aiChecks.value = evt.latest_plan_steps.map((step, i) => ({
+            id: i + 1,
+            label: toolLabels[step.tool] || step.tool,
+            status: step.status || 'pending',
+            desc: step.desc || 'Chờ thẩm định AI...',
+            details: step.details || '',
+            tool: step.tool
+          }))
+        }
+        if (evt.completed) {
+          loadDossier()
+        }
+      } else if (evt.type === 'task_started' || evt.type === 'started') {
+        showRevisionBanner.value = false
+        if (aiChecks.value.length > 0) {
+          aiChecks.value = aiChecks.value.map(c => ({ ...c, status: 'pending', desc: 'Đang xử lý...' }))
+        }
+      } else if (evt.type === 'plan_created') {
+        if (evt.steps) {
+          aiChecks.value = evt.steps.map((step, i) => ({
+            id: i + 1,
+            label: toolLabels[step.tool] || step.tool,
+            status: 'pending',
+            desc: 'Chờ thẩm định AI...',
+            details: '',
+            tool: step.tool
+          }))
+        }
       } else if (evt.type === 'tool_executing') {
-        const checkIndex = aiChecks.value.findIndex(c => c.label === toolLabels[evt.tool_name])
+        const checkIndex = aiChecks.value.findIndex(c => c.tool === evt.tool_name)
         if (checkIndex !== -1) {
           aiChecks.value[checkIndex].desc = 'Đang chạy...'
         }
@@ -295,15 +364,49 @@ onMounted(async () => {
         }
       } else if (evt.type === 'clarification_answered') {
         clarificationModal.value = null
+      } else if (evt.type === 'revision_requested') {
+        showRevisionBanner.value = true
+        revisionBannerDetails.value = evt.details || {}
       } else if (evt.type === 'completed') {
         loadDossier()
       }
-    },
-    onReconnect: () => loadDossier(),
-  })
+    } catch (e) {
+      console.error('Error parsing WS message', e)
+    }
+  }
+
+  ws.onclose = () => {
+    console.log('WS connection closed')
+    if (reconnectCount < maxReconnectRetries) {
+      const delay = reconnectDelays[reconnectCount]
+      reconnectCount++
+      console.log(`WS reconnecting in ${delay}ms (attempt ${reconnectCount}/${maxReconnectRetries})...`)
+      setTimeout(() => {
+        loadDossier()
+        connectWebSocket()
+      }, delay)
+    } else {
+      console.warn('WS reconnect failed after max retries.')
+    }
+  }
+
+  ws.onerror = (err) => {
+    console.error('WS error', err)
+    ws.close()
+  }
+}
+
+onMounted(async () => {
+  await loadDossier()
+  await loadPendingClarification()
+  connectWebSocket()
 })
 
-onUnmounted(() => wsHandle?.close())
+onUnmounted(() => {
+  if (ws) {
+    ws.close()
+  }
+})
 
 const selectedCheck = ref(null)
 
@@ -336,14 +439,9 @@ const sendClarifyMsg = () => {
   }, 1000)
 }
 
-const reportVersions = ref([
-  { id: 1, name: 'Phiên bản 1.0', time: '10:15', desc: 'Dự thảo ban đầu' },
-  { id: 2, name: 'Phiên bản 1.1', time: '10:45', desc: 'Đã bổ sung rủi ro về vốn theo chỉ đạo' }
-])
+const reportVersions = ref([])
 
-const resolutionVersions = ref([
-  { id: 1, name: 'Phiên bản 1.0', time: '10:20', desc: 'Dự thảo ban đầu' }
-])
+const resolutionVersions = ref([])
 
 const removeRefDoc = async (id) => {
   try {
@@ -762,6 +860,27 @@ const sendRefMsg = () => {
               </div>
               
               <h4 class="section-title">Kết quả Thẩm định chéo</h4>
+              
+              <!-- T-69 Revision requested banner -->
+              <div v-if="showRevisionBanner" class="warning-banner">
+                <div class="banner-icon">
+                  <AlertTriangle size="20"/>
+                </div>
+                <div class="banner-body">
+                  <div class="banner-title">Ban Kỹ thuật cần giải trình bổ sung</div>
+                  <div class="banner-text">
+                    {{ revisionBannerDetails?.issues?.join(', ') || 'Đề xuất hạ chỉ tiêu kỹ thuật thiết bị.' }}
+                  </div>
+                </div>
+                <button class="btn-icon" @click="showRevisionBanner = false" style="background:transparent; border:none; color:inherit; cursor:pointer;">
+                  <X size="16"/>
+                </button>
+              </div>
+
+              <div v-if="aiChecks.length === 0" class="text-muted text-center py-4">
+                Chưa có tiến trình/kết quả thẩm định.
+              </div>
+
               <div class="check-list">
                 <div v-for="check in aiChecks" :key="check.id" class="check-item" :class="check.status">
                   <div class="check-icon">
@@ -1387,4 +1506,37 @@ const sendRefMsg = () => {
 .border-border { border-color: var(--color-border); }
 .mb-4 { margin-bottom: 1rem; }
 .text-xs { font-size: 0.75rem; }
+
+/* T-69 Revision Banner Styles */
+.warning-banner {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: #d97706;
+  padding: 1rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+[data-theme='dark'] .warning-banner {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+.banner-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.banner-body {
+  flex: 1;
+}
+.banner-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.banner-text {
+  font-size: 0.875rem;
+}
 </style>

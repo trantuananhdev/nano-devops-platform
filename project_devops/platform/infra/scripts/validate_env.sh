@@ -81,11 +81,14 @@ fi
 
 _require_var ACER_HOST
 _require_var LLM_BASE_URL
+# Passwords phải ở trong secret files — không chấp nhận plaintext trong .env
 _require_var_or_secret HDTV_POSTGRES_PASSWORD HDTV_POSTGRES_PASSWORD_FILE \
   "${SECRETS_DIR}/hdtv_postgres_password.txt"
 _require_var MINIO_ROOT_USER
 _require_var_or_secret MINIO_ROOT_PASSWORD MINIO_ROOT_PASSWORD_FILE \
   "${SECRETS_DIR}/minio_root_password.txt"
+_require_var_or_secret MEILI_MASTER_KEY MEILI_MASTER_KEY_FILE \
+  "${SECRETS_DIR}/meili_master_key.txt"
 _require_var VM_IP
 
 _warn_if_empty GEMINI_API_KEY

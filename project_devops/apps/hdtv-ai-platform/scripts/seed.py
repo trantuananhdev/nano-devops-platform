@@ -9,7 +9,8 @@ from sqlalchemy import select
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.database import async_session_factory
-from app.core.config import settings
+from app.core.config import get_settings
+settings = get_settings()
 from app.models.entities import (
     Dossier,
     DossierStatus,
@@ -21,7 +22,7 @@ from app.models.entities import (
     UserRole,
     ReferenceDocument,
 )
-from app.services.minio_service import MinioService
+from app.services import minio_service
 from app.services.rag.pdf_extractor import extract_text_from_pdf, chunk_text
 from app.services.memory import vector_store
 
@@ -544,9 +545,130 @@ async def seed_real_legal_docs() -> None:
             print(f"    Failed: {exc}")
 
 
+async def seed_alerts() -> None:
+    """Seed demo alerts, especially alert AL-1043 for Dossier 198 (ID=5)."""
+    from app.models.entities import Alert, AlertStatus
+    print("Seeding alerts...")
+    async with async_session_factory() as session:
+        # Find dossier 198
+        result = await session.execute(select(Dossier).where(Dossier.doc_no == "198/TTr-EVNHANOI"))
+        dossier = result.scalar_one_or_none()
+        if not dossier:
+            print("  Dossier 198 not found, skipping alert seeding")
+            return
+        dossier_id = dossier.id
+        
+        # Check if alert AL-1043 (which has id=1043 in DB) already exists
+        existing = await session.execute(
+            select(Alert).where(Alert.dossier_id == dossier_id, Alert.source == "AI Spec Cross-Check")
+        )
+        if existing.scalar_one_or_none():
+            print("  Alert for dossier 198 already exists, skipping")
+            return
+
+        # Seed alert
+        alert = Alert(
+            id=1043,  # Set ID to 1043 explicitly to match AL-1043!
+            dossier_id=dossier_id,
+            title="Độ phân giải camera UAV chưa đạt chuẩn tối thiểu",
+            severity="medium",
+            source="AI Spec Cross-Check",
+            description="Độ phân giải camera hồng ngoại đề xuất là 640x512, thấp hơn tiêu chuẩn tối thiểu quy định tại Quyết định 8594/QĐ-EVNHANOI (yêu cầu tối thiểu 800x600).",
+            status=AlertStatus.open,
+        )
+        session.add(alert)
+        await session.commit()
+        print("  Seeded alert AL-1043 successfully")
+
+
+async def seed_mcp_logs() -> None:
+    """Seed demo MCP call logs for the admin panel."""
+    from app.models.entities import McpCallLog
+    print("Seeding MCP call logs...")
+    async with async_session_factory() as session:
+        # Check if logs already exist
+        result = await session.execute(select(McpCallLog).limit(1))
+        if result.scalar_one_or_none():
+            print("  MCP logs already exist, skipping")
+            return
+
+        # Insert 2 logs
+        log1 = McpCallLog(
+            api_key_prefix="gemini-p",
+            tool_name="legal_doc_lookup",
+            inputs={"doc_no": "8594/QĐ-EVNHANOI"},
+            outputs={"doc_no": "8594/QĐ-EVNHANOI", "title": "Quyết định 8594/QĐ-EVNHANOI", "still_effective": True},
+            is_error=False,
+            is_streaming=False,
+            execution_ms=250,
+        )
+        log2 = McpCallLog(
+            api_key_prefix="gemini-p",
+            tool_name="supplier_feedback_lookup",
+            inputs={"spec_item": "dung lượng bộ nhớ"},
+            outputs={"spec_item": "dung lượng bộ nhớ", "suppliers": ["Apex Tech"], "risk_detected": True},
+            is_error=False,
+            is_streaming=False,
+            execution_ms=380,
+        )
+        session.add_all([log1, log2])
+        await session.commit()
+        print("  Seeded 2 MCP call logs successfully")
+
+
+async def seed_notifications() -> None:
+    """Seed demo notifications for user_id=1."""
+    from app.models.entities import Notification, NotificationType
+    print("Seeding notifications...")
+    async with async_session_factory() as session:
+        # Check if notifications already exist for user 1
+        result = await session.execute(
+            select(Notification).where(Notification.user_id == 1).limit(1)
+        )
+        if result.scalar_one_or_none():
+            print("  Notifications for user 1 already exist, skipping")
+            return
+
+        # Seed 3 notifications:
+        # 1 unread appraisal_complete, 1 unread status_change, 1 read version_created
+        n1 = Notification(
+            user_id=1,
+            type=NotificationType.appraisal_complete,
+            title="Thẩm định hoàn tất",
+            message="Yêu cầu phê duyệt Tiêu chuẩn kỹ thuật thiết bị bay không người lái (UAV) đã được thẩm định tự động bởi AI.",
+            dossier_id=5,
+            is_read=False,
+            extra_data={"risk_level": "medium"},
+        )
+        n2 = Notification(
+            user_id=1,
+            type=NotificationType.status_change,
+            title="Cập nhật trạng thái tờ trình",
+            message="Tờ trình 198/TTr-EVNHANOI thay đổi trạng thái từ nháp sang đã trình duyệt bộ phận.",
+            dossier_id=5,
+            is_read=False,
+            extra_data={"old_status": "draft", "new_status": "submitted_to_dept"},
+        )
+        n3 = Notification(
+            user_id=1,
+            type=NotificationType.version_created,
+            title="Phiên bản tài liệu mới",
+            message="Phiên bản V2 của tài liệu Phụ lục kỹ thuật đã được khởi tạo bởi chuyên viên.",
+            dossier_id=5,
+            is_read=True,
+            extra_data={"version": 2},
+        )
+        session.add_all([n1, n2, n3])
+        await session.commit()
+        print("  Seeded 3 notifications for user 1 successfully")
+
+
 async def main() -> None:
     await seed_db()
     await seed_tool_chains()
+    await seed_alerts()
+    await seed_mcp_logs()
+    await seed_notifications()
     await seed_chroma()
     await seed_meilisearch()
     await seed_agent_memories()

@@ -19,14 +19,21 @@ const dossierTypes = computed(() =>
 
 const checklists = computed(() => settingsStore.checklists)
 
+const getDossierTypeId = (dossierId) => {
+  // Map dossier ID 5 (198/TTr-EVNHANOI UAV) to dossier_type_id 6
+  return dossierId === 5 ? 6 : null
+}
+
 onMounted(async () => {
   await dossierStore.fetchDossiers()
-  await settingsStore.fetchChecklistTemplate()
-  activeTypeId.value = dossierStore.dossiers[0]?.id || null
+  const firstId = dossierStore.dossiers[0]?.id || null
+  activeTypeId.value = firstId
+  await settingsStore.fetchChecklistTemplate(getDossierTypeId(firstId))
 })
 
-const selectType = (id) => {
+const selectType = async (id) => {
   activeTypeId.value = id
+  await settingsStore.fetchChecklistTemplate(getDossierTypeId(id))
 }
 </script>
 

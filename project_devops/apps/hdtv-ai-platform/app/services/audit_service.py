@@ -12,7 +12,7 @@ async def log_audit_event(
     dossier_id: int | None = None,
     user_id: int | None = None,
     description: str | None = None,
-    metadata: dict[str, Any] | None = None,
+    extra_data: dict[str, Any] | None = None,
     ip_address: str | None = None,
 ) -> AuditLog:
     """Create and persist a new audit log entry."""
@@ -21,7 +21,7 @@ async def log_audit_event(
         dossier_id=dossier_id,
         user_id=user_id,
         description=description,
-        metadata=metadata or {},
+        extra_data=extra_data or {},
         ip_address=ip_address,
     )
     session.add(audit_entry)

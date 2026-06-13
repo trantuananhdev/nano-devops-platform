@@ -181,3 +181,9 @@ const scrollToBottom = () => {
 | DashboardView | `/dashboard/summary` | KPI cards, charts |
 | SystemAdminView | users + roles + agents + keys | 4 tabs: Users, API Keys, MCP Audit, Agent Intelligence |
 | GlobalSearch | `/search?q=` (Meilisearch) | Ctrl+K modal, degraded mode |
+| SkillBuilderView | `/skills` | Drag-and-drop skill configuration |
+| ToolRegistryView | `/tools` | Tool registry management |
+| ScheduleManagerView | `/schedules` | Celery beat schedule viewer |
+| AlertsView | `/alerts` | Alert list + resolve |
+| DossierSettingsView | `/settings` | Per-dossier config |
+| NotificationsView | `/notifications` | User notification feed |

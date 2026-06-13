@@ -11,6 +11,7 @@ export const useAdminStore = defineStore('admin', () => {
   const apiKeys = ref([])        // T-33
   const mcpLogs = ref([])         // T-36
   const mcpToolFilter = ref('')   // T-36
+  const agentModels = ref([])
   const loading = ref(false)
 
   async function fetchAuditLogs() {
@@ -98,10 +99,20 @@ export const useAdminStore = defineStore('admin', () => {
     )
   })
 
+  async function fetchAgentModels() {
+    try {
+      const { data } = await api.getAgentModels()
+      agentModels.value = data
+    } catch (err) {
+      console.error('Failed to fetch agent models:', err)
+      agentModels.value = []
+    }
+  }
+
   async function fetchAll() {
     loading.value = true
     try {
-      await Promise.all([
+      const results = await Promise.allSettled([
         fetchAuditLogs(),
         fetchUsers(),
         fetchRoles(),
@@ -109,7 +120,13 @@ export const useAdminStore = defineStore('admin', () => {
         fetchAgentMetrics(),
         fetchApiKeys(),
         loadMcpLogs(),
+        fetchAgentModels(),
       ])
+      results.forEach((res, idx) => {
+        if (res.status === 'rejected') {
+          console.error(`Promise ${idx} failed:`, res.reason)
+        }
+      })
     } finally {
       loading.value = false
     }
@@ -125,6 +142,7 @@ export const useAdminStore = defineStore('admin', () => {
     mcpLogs,
     mcpLogsFiltered,
     mcpToolFilter,
+    agentModels,
     loading,
     fetchAuditLogs,
     fetchUsers,
@@ -135,6 +153,7 @@ export const useAdminStore = defineStore('admin', () => {
     addApiKey,
     removeApiKey,
     loadMcpLogs,
+    fetchAgentModels,
     fetchAll,
   }
 })

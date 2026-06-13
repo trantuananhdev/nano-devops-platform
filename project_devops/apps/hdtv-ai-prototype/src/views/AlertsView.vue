@@ -21,64 +21,7 @@ const alertsStore = useAlertsStore()
 
 onMounted(() => alertsStore.fetchAlerts())
 
-const alerts = computed(() => alertsStore.alerts.length ? alertsStore.alerts : [
-  {
-    id: 'AL-1042',
-    title: 'Vượt Tổng mức đầu tư dự án (2 Tỷ VNĐ)',
-    severity: 'high',
-    source: 'ERP Integration',
-    dossier: 'Tờ trình phê duyệt dự toán Cáp ngầm Ba Đình',
-    dossierId: 'TT-124',
-    date: '10 phút trước',
-    status: 'open',
-    description: 'AI phát hiện giá trị đề nghị phê duyệt (52 tỷ) vượt quá giới hạn Tổng mức đầu tư được ghi nhận trên hệ thống Oracle ERP (50 tỷ).',
-    comments: [
-      { id: 'c1', author: 'Nguyễn Văn A', text: 'Đã kiểm tra, đề nghị điều chỉnh lại giá trị dự toán', time: '5 phút trước' }
-    ],
-    assignedTo: null,
-  },
-  {
-    id: 'AL-1041',
-    title: 'Căn cứ pháp lý hết hiệu lực',
-    severity: 'medium',
-    source: 'Legal GraphRAG',
-    dossier: 'Tờ trình mua sắm vật tư PCTT',
-    dossierId: 'TT-128',
-    date: '2 giờ trước',
-    status: 'open',
-    description: 'Quyết định 14/QĐ-EVN được trích dẫn làm căn cứ pháp lý đã bị thay thế bởi Quyết định 22/QĐ-EVN có hiệu lực từ ngày 01/01/2026.',
-    comments: [],
-    assignedTo: 'u2',
-  },
-  {
-    id: 'AL-1040',
-    title: 'Phát hiện tồn kho vật tư tương đương',
-    severity: 'medium',
-    source: 'PMIS & ERP',
-    dossier: 'Tờ trình xin mua mới MBA 250kVA',
-    dossierId: 'TT-130',
-    date: '5 giờ trước',
-    status: 'resolved',
-    description: 'AI đối soát ERP và phát hiện trong Kho Công ty vẫn còn 2 MBA 250kVA chưa xuất, đề nghị không mua mới để tránh lãng phí.',
-    comments: [
-      { id: 'c2', author: 'Trần Thị B', text: 'Đã xác nhận, quyết định không mua mới', time: '3 giờ trước' }
-    ],
-    assignedTo: 'u2',
-  },
-  {
-    id: 'AL-1039',
-    title: 'Biên bản thiếu chữ ký Ban Tài chính',
-    severity: 'low',
-    source: 'OCR Engine',
-    dossier: 'Tờ trình phê duyệt Quyết toán',
-    dossierId: 'TT-119',
-    date: '1 ngày trước',
-    status: 'open',
-    description: 'Bản scan Biên bản họp Hội đồng chưa có chữ ký tươi hoặc chữ ký số của đại diện Ban Tài chính Kế toán.',
-    comments: [],
-    assignedTo: null,
-  }
-])
+const alerts = computed(() => alertsStore.alerts)
 
 const filteredAlerts = computed(() => {
   return alerts.value.filter(alert => {
@@ -178,135 +121,142 @@ const getAssignedUserName = (userId) => {
     </div>
 
     <div class="alerts-list">
-      <div 
-        v-for="alert in filteredAlerts" 
-        :key="alert.id" 
-        class="alert-card glass-panel"
-        :class="['severity-' + alert.severity, alert.status === 'resolved' ? 'is-resolved' : '']"
-      >
-        <div class="alert-icon-col">
-          <ShieldAlert v-if="alert.severity === 'high'" size="28" class="icon-high"/>
-          <AlertTriangle v-else-if="alert.severity === 'medium'" size="28" class="icon-medium"/>
-          <AlertCircle v-else size="28" class="icon-low"/>
-        </div>
-        
-        <div class="alert-content-col">
-          <div class="flex justify-between items-start mb-2">
-            <h3 class="alert-title">{{ alert.title }}</h3>
-            <span class="alert-id">{{ alert.id }}</span>
-          </div>
-          <p class="alert-desc">{{ alert.description }}</p>
-          
-          <div class="alert-meta flex gap-4 mt-3">
-            <div class="meta-item">
-              <span class="label">Nguồn phát hiện:</span>
-              <span class="value font-medium">{{ alert.source }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="label">Tờ trình liên quan:</span>
-              <span class="value text-primary flex items-center gap-1 cursor-pointer hover-underline">
-                <FileText size="12"/> {{ alert.dossierId }} - {{ alert.dossier }}
-              </span>
-            </div>
-            <div class="meta-item" v-if="alert.assignedTo">
-              <span class="label">Phân công cho:</span>
-              <span class="value font-medium flex items-center gap-1">
-                <User size="12"/> {{ getAssignedUserName(alert.assignedTo) }}
-              </span>
-            </div>
-            <div class="meta-item ml-auto">
-              <span class="label text-xs">{{ alert.date }}</span>
-            </div>
-          </div>
+      <div v-if="alertsStore.loading" class="loading-state glass-panel text-center py-8">
+        <div class="loading-spinner"></div>
+        <p class="mt-2 text-muted">Đang tải danh sách cảnh báo...</p>
+      </div>
 
-          <!-- Expandable Section -->
-          <div v-if="expandedAlerts.has(alert.id)" class="alert-details-section">
-            <div class="details-grid">
-              <!-- Assignment -->
-              <div class="detail-block">
-                <h4 class="detail-title flex items-center gap-1">
-                  <User size="16"/> Phân công xử lý
-                </h4>
-                <select 
-                  v-if="alert.status !== 'resolved'"
-                  class="detail-select"
-                  :value="alert.assignedTo"
-                  @change="assignUser(alert.id, $event.target.value)"
-                >
-                  <option value="">Chưa phân công</option>
-                  <option v-for="u in availableUsers" :key="u.id" :value="u.id">
-                    {{ u.name }} ({{ u.role }})
-                  </option>
-                </select>
-                <span v-else class="detail-value">
-                  {{ getAssignedUserName(alert.assignedTo) }}
+      <template v-else>
+        <div 
+          v-for="alert in filteredAlerts" 
+          :key="alert.id" 
+          class="alert-card glass-panel"
+          :class="['severity-' + alert.severity, alert.status === 'resolved' ? 'is-resolved' : '']"
+        >
+          <div class="alert-icon-col">
+            <ShieldAlert v-if="alert.severity === 'high'" size="28" class="icon-high"/>
+            <AlertTriangle v-else-if="alert.severity === 'medium'" size="28" class="icon-medium"/>
+            <AlertCircle v-else size="28" class="icon-low"/>
+          </div>
+          
+          <div class="alert-content-col">
+            <div class="flex justify-between items-start mb-2">
+              <h3 class="alert-title">{{ alert.title }}</h3>
+              <span class="alert-id">{{ alert.id }}</span>
+            </div>
+            <p class="alert-desc">{{ alert.description }}</p>
+            
+            <div class="alert-meta flex gap-4 mt-3">
+              <div class="meta-item">
+                <span class="label">Nguồn phát hiện:</span>
+                <span class="value font-medium">{{ alert.source }}</span>
+              </div>
+              <div class="meta-item">
+                <span class="label">Tờ trình liên quan:</span>
+                <span class="value text-primary flex items-center gap-1 cursor-pointer hover-underline">
+                  <FileText size="12"/> {{ alert.dossierId }} - {{ alert.dossier }}
                 </span>
               </div>
+              <div class="meta-item" v-if="alert.assignedTo">
+                <span class="label">Phân công cho:</span>
+                <span class="value font-medium flex items-center gap-1">
+                  <User size="12"/> {{ getAssignedUserName(alert.assignedTo) }}
+                </span>
+              </div>
+              <div class="meta-item ml-auto">
+                <span class="label text-xs">{{ alert.date }}</span>
+              </div>
+            </div>
 
-              <!-- Comments -->
-              <div class="detail-block">
-                <h4 class="detail-title flex items-center gap-1">
-                  <MessageSquare size="16"/> Bình luận & Ghi chú
-                  <span class="count-badge">{{ (alert.comments || []).length }}</span>
-                </h4>
-                <div class="comments-list">
-                  <div v-for="comment in alert.comments" :key="comment.id" class="comment-item">
-                    <div class="comment-header">
-                      <span class="comment-author">{{ comment.author }}</span>
-                      <span class="comment-time">{{ comment.time }}</span>
-                    </div>
-                    <div class="comment-text">{{ comment.text }}</div>
-                  </div>
-                  <div v-if="!alert.comments || alert.comments.length === 0" class="empty-comments">
-                    Chưa có bình luận nào
-                  </div>
+            <!-- Expandable Section -->
+            <div v-if="expandedAlerts.has(alert.id)" class="alert-details-section">
+              <div class="details-grid">
+                <!-- Assignment -->
+                <div class="detail-block">
+                  <h4 class="detail-title flex items-center gap-1">
+                    <User size="16"/> Phân công xử lý
+                  </h4>
+                  <select 
+                    v-if="alert.status !== 'resolved'"
+                    class="detail-select"
+                    :value="alert.assignedTo"
+                    @change="assignUser(alert.id, $event.target.value)"
+                  >
+                    <option value="">Chưa phân công</option>
+                    <option v-for="u in availableUsers" :key="u.id" :value="u.id">
+                      {{ u.name }} ({{ u.role }})
+                    </option>
+                  </select>
+                  <span v-else class="detail-value">
+                    {{ getAssignedUserName(alert.assignedTo) }}
+                  </span>
                 </div>
-                <div v-if="alert.status !== 'resolved'" class="comment-input-wrapper">
-                  <input 
-                    v-model="newComments[alert.id]"
-                    type="text"
-                    placeholder="Thêm bình luận..."
-                    class="comment-input"
-                    @keyup.enter="addComment(alert.id)"
-                  />
-                  <button class="send-btn" @click="addComment(alert.id)">
-                    <Send size="16"/>
-                  </button>
+
+                <!-- Comments -->
+                <div class="detail-block">
+                  <h4 class="detail-title flex items-center gap-1">
+                    <MessageSquare size="16"/> Bình luận & Ghi chú
+                    <span class="count-badge">{{ (alert.comments || []).length }}</span>
+                  </h4>
+                  <div class="comments-list">
+                    <div v-for="comment in alert.comments" :key="comment.id" class="comment-item">
+                      <div class="comment-header">
+                        <span class="comment-author">{{ comment.author }}</span>
+                        <span class="comment-time">{{ comment.time }}</span>
+                      </div>
+                      <div class="comment-text">{{ comment.text }}</div>
+                    </div>
+                    <div v-if="!alert.comments || alert.comments.length === 0" class="empty-comments">
+                      Chưa có bình luận nào
+                    </div>
+                  </div>
+                  <div v-if="alert.status !== 'resolved'" class="comment-input-wrapper">
+                    <input 
+                      v-model="newComments[alert.id]"
+                      type="text"
+                      placeholder="Thêm bình luận..."
+                      class="comment-input"
+                      @keyup.enter="addComment(alert.id)"
+                    />
+                    <button class="send-btn" @click="addComment(alert.id)">
+                      <Send size="16"/>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+          
+          <div class="alert-actions-col">
+            <div v-if="alert.status === 'resolved'" class="status-badge resolved flex items-center gap-1">
+              <CheckCircle size="14"/> Đã xử lý
+            </div>
+            <div v-else class="status-badge open">Chưa xử lý</div>
+            
+            <button 
+              v-if="alert.status === 'open'" 
+              class="btn btn-outline-success btn-sm w-full mt-3"
+              @click="resolveAlert(alert.id)"
+            >
+              <CheckCircle size="14"/> Xác nhận
+            </button>
+            <button 
+              class="btn btn-link btn-sm w-full mt-1 flex items-center justify-center gap-1"
+              @click="toggleExpand(alert.id)"
+            >
+              {{ expandedAlerts.has(alert.id) ? 'Thu gọn' : 'Xem chi tiết' }}
+              <ChevronDown size="14" v-if="!expandedAlerts.has(alert.id)"/>
+              <ChevronUp size="14" v-else/>
+            </button>
+          </div>
         </div>
         
-        <div class="alert-actions-col">
-          <div v-if="alert.status === 'resolved'" class="status-badge resolved flex items-center gap-1">
-            <CheckCircle size="14"/> Đã xử lý
-          </div>
-          <div v-else class="status-badge open">Chưa xử lý</div>
-          
-          <button 
-            v-if="alert.status === 'open'" 
-            class="btn btn-outline-success btn-sm w-full mt-3"
-            @click="resolveAlert(alert.id)"
-          >
-            <CheckCircle size="14"/> Xác nhận
-          </button>
-          <button 
-            class="btn btn-link btn-sm w-full mt-1 flex items-center justify-center gap-1"
-            @click="toggleExpand(alert.id)"
-          >
-            {{ expandedAlerts.has(alert.id) ? 'Thu gọn' : 'Xem chi tiết' }}
-            <ChevronDown size="14" v-if="!expandedAlerts.has(alert.id)"/>
-            <ChevronUp size="14" v-else/>
-          </button>
+        <div v-if="filteredAlerts.length === 0" class="empty-state glass-panel">
+          <CheckCircle size="48" class="text-success mb-3 opacity-50"/>
+          <h3>Hệ thống an toàn</h3>
+          <p>Không có cảnh báo nào khớp với bộ lọc hiện tại.</p>
         </div>
-      </div>
-      
-      <div v-if="filteredAlerts.length === 0" class="empty-state glass-panel">
-        <CheckCircle size="48" class="text-success mb-3 opacity-50"/>
-        <h3>Hệ thống an toàn</h3>
-        <p>Không có cảnh báo nào khớp với bộ lọc hiện tại.</p>
-      </div>
+      </template>
     </div>
   </div>
 </template>
@@ -573,5 +523,31 @@ const getAssignedUserName = (userId) => {
 
 .send-btn:hover {
   background: #1d4ed8;
+}
+
+/* Loading spinner styling */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+}
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.py-8 {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
 }
 </style>

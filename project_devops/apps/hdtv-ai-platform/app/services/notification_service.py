@@ -12,7 +12,7 @@ async def create_notification(
     title: str,
     message: str,
     dossier_id: int | None = None,
-    metadata: dict[str, Any] | None = None,
+    extra_data: dict[str, Any] | None = None,
 ) -> Notification:
     notification = Notification(
         user_id=user_id,
@@ -20,7 +20,7 @@ async def create_notification(
         title=title,
         message=message,
         dossier_id=dossier_id,
-        metadata=metadata or {},
+        extra_data=extra_data or {},
     )
     session.add(notification)
     await session.commit()
@@ -143,5 +143,5 @@ async def notify_on_status_change(
             title="Cập nhật trạng thái tờ trình",
             message=f"Tờ trình {dossier_id} thay đổi trạng thái từ {old_status} sang {new_status}",
             dossier_id=dossier_id,
-            metadata={"old_status": old_status, "new_status": new_status, "changed_by": changed_by},
+            extra_data={"old_status": old_status, "new_status": new_status, "changed_by": changed_by},
         )

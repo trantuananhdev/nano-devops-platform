@@ -1,18 +1,42 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { RouterView, RouterLink, useRoute } from 'vue-router'
-import { LayoutDashboard, FileText, GitPullRequest, Sun, Moon, Menu, X, Bot, Settings2, Wrench, Network, CalendarClock, Bell, CheckCircle, AlertTriangle, MessageSquare, FileCog, ShieldCheck } from '@lucide/vue'
+import { LayoutDashboard, FileText, GitPullRequest, Sun, Moon, Menu, X, Bot, Settings2, Wrench, Network, CalendarClock, Bell, CheckCircle, AlertTriangle, MessageSquare, FileCog, ShieldCheck, Users } from '@lucide/vue'
 import FloatingChat from './components/FloatingChat.vue'
 import GlobalSearch from './components/GlobalSearch.vue'
+import NotificationBell from './components/NotificationBell.vue'
+import { useAuthStore } from './stores/auth'
+import { useNotificationsStore } from './stores/notifications'
 
 const route = useRoute()
+const authStore = useAuthStore()
+const notificationStore = useNotificationsStore()
 const isDark = ref(false)
 const isMobileMenuOpen = ref(false)
+const showUserMenu = ref(false)
+
+const roleLabels = {
+  admin: 'Quản trị viên',
+  specialist: 'Chuyên viên',
+  dept_head: 'Trưởng Ban',
+  hdtv_leader: 'Lãnh đạo HĐTV'
+}
 
 const toggleTheme = () => {
   isDark.value = !isDark.value
   document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light')
 }
+
+// Watch for user changes and load notifications
+watch(
+  () => authStore.currentUser?.id,
+  () => {
+    if (authStore.currentUser) {
+      notificationStore.loadNotifications()
+    }
+  },
+  { immediate: true }
+)
 
 // Auto-detect system theme on mount
 onMounted(() => {
@@ -20,6 +44,17 @@ onMounted(() => {
     isDark.value = true
     document.documentElement.setAttribute('data-theme', 'dark')
   }
+  
+  // Close role menu when clicking outside
+  document.addEventListener('click', () => {
+    showUserMenu.value = false
+  })
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', () => {
+    showUserMenu.value = false
+  })
 })
 
 const navItems = [
@@ -36,14 +71,7 @@ const navItems = [
   { path: '/admin', name: 'Quản trị Hệ thống', icon: ShieldCheck },
 ]
 
-const isNotifOpen = ref(false)
-const notifications = ref([
-  { id: 1, title: 'Nhiệm vụ hoàn tất', message: 'AI đã tổng hợp xong Báo cáo Tồn kho (Cron Job 08:00).', time: '5 phút trước', unread: true },
-  { id: 2, title: 'Cảnh báo đồng bộ ERP', message: 'Mất kết nối với hệ thống HRMS SSO.', time: '1 giờ trước', unread: true },
-  { id: 3, title: 'Tờ trình mới', message: 'Có 3 tờ trình vừa được chuyển qua luồng DOffice.', time: '2 giờ trước', unread: false }
-])
 
-const unreadCount = computed(() => notifications.value.filter(n => n.unread).length)
 </script>
 
 <template>
@@ -112,40 +140,29 @@ const unreadCount = computed(() => notifications.value.filter(n => n.unread).len
         </div>
         
         <div class="user-profile">
-          <div class="avatar">HĐ</div>
+          <div class="avatar">{{ authStore.currentUser?.name?.charAt(0) || 'U' }}</div>
           <div class="user-info">
-            <div class="name">Lãnh đạo HĐTV</div>
-            <div class="role">Quản trị viên</div>
+            <div class="name">{{ authStore.currentUser?.name || 'Người dùng' }}</div>
+            <div class="role">{{ roleLabels[authStore.currentUser?.role] || 'Người dùng' }}</div>
           </div>
           
           <!-- Notification Bell -->
-          <div class="notif-wrapper">
-            <button class="notif-btn" @click="isNotifOpen = !isNotifOpen">
-              <Bell :size="20"/>
-              <span class="notif-badge" v-if="unreadCount > 0">{{ unreadCount }}</span>
-            </button>
-            
-            <!-- Notification Panel -->
-            <div class="notif-panel glass-panel" v-if="isNotifOpen">
-              <div class="notif-header">
-                <h3>Thông báo hệ thống</h3>
-                <span class="text-xs text-primary cursor-pointer">Đánh dấu đã đọc</span>
-              </div>
-              <div class="notif-list">
-                <div v-for="notif in notifications" :key="notif.id" class="notif-item" :class="{ unread: notif.unread }">
-                  <div class="notif-icon">
-                    <CheckCircle v-if="!notif.unread" size="14" class="text-success"/>
-                    <div v-else class="unread-dot"></div>
-                  </div>
-                  <div class="notif-content">
-                    <div class="notif-title">{{ notif.title }}</div>
-                    <div class="notif-msg">{{ notif.message }}</div>
-                    <div class="notif-time">{{ notif.time }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <NotificationBell />
+        </div>
+        
+        <!-- User Role Selector for Demo -->
+        <div class="role-switcher-container">
+          <label class="role-switcher-label">Vai trò Demo:</label>
+          <select 
+            :value="authStore.currentUser?.role" 
+            @change="authStore.loginAs($event.target.value)"
+            class="role-select"
+          >
+            <option value="hdtv_leader">Lê Thị Lãnh đạo HĐTV (hdtv_leader)</option>
+            <option value="dept_head">Trần Văn Trưởng Ban (dept_head)</option>
+            <option value="specialist">Nguyễn Thị Chuyên Viên (specialist)</option>
+            <option value="admin">Admin User (admin)</option>
+          </select>
         </div>
       </div>
     </aside>
@@ -343,6 +360,40 @@ const unreadCount = computed(() => notifications.value.filter(n => n.unread).len
 .user-info .role {
   font-size: 0.8rem;
   color: var(--color-text-secondary);
+}
+
+/* User Role Selector */
+.role-switcher-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border-top: 1px dashed var(--color-border);
+}
+
+.role-switcher-label {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+  font-weight: 600;
+}
+
+.role-select {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+  color: var(--color-text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.role-select:focus {
+  border-color: var(--color-primary);
 }
 
 /* Notifications */

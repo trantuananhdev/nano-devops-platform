@@ -57,8 +57,8 @@ async def get_skills() -> list[SkillTemplateOut]:
 
 
 @router.get("/checklist-template", response_model=list[ChecklistItemOut])
-async def get_checklist_template() -> list[ChecklistItemOut]:
-    return meta_service.default_checklist()
+async def get_checklist_template(dossier_type_id: int | None = Query(None)) -> list[ChecklistItemOut]:
+    return meta_service.default_checklist(dossier_type_id)
 
 
 # T-14: Admin panel endpoints

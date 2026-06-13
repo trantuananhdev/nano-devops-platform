@@ -13,46 +13,39 @@ const pendingCount = computed(() => store.summary?.pending_count ?? '—')
 const highRiskCount = computed(() => store.summary?.high_risk_count ?? '—')
 const approvedCount = computed(() => store.summary?.approved_count ?? '—')
 const alertSources = computed(() => store.summary?.alert_sources || [])
+const newestDossiers = computed(() => store.summary?.newest_dossiers || [])
+const agentModels = computed(() => store.agentModels || [])
 
-// Mock newest dossiers data
-const newestDossiers = computed(() => [
-  { 
-    id: '198/TTr-EVNHANOI', 
-    doc_no: '198/TTr-EVNHANOI', 
-    title: 'Phê duyệt Tiêu chuẩn kỹ thuật thiết bị bay không người lái (UAV) phục vụ kiểm tra đường dây 220/110kV',
-    dept: 'Ban Kỹ thuật (KT)',
-    unit: 'Ban Kỹ thuật (KT)',
-    date: '2026-06-12',
-    risk_level: 'medium',
-    status: 'pending'
-  },
-  { 
-    id: '124/TTr-B02', 
-    doc_no: '124/TTr-B02', 
-    title: 'Phê duyệt Kế hoạch đấu thầu Dự án Cáp ngầm Ba Đình',
-    dept: 'Ban Kế hoạch (B02)',
-    unit: 'Ban Kế hoạch (B02)',
-    date: '2026-06-10',
-    risk_level: 'high',
-    status: 'needs_revision'
-  },
-  { 
-    id: '89/TTr-B08', 
-    doc_no: '89/TTr-B08', 
-    title: 'Phê duyệt Quyết toán Dự án Trạm biến áp 110kV',
-    dept: 'Ban QLDA (B08)',
-    unit: 'Ban QLDA (B08)',
-    date: '2026-06-08',
-    risk_level: 'medium',
-    status: 'approved'
+const dossiersByUnit = computed(() => store.summary?.dossiers_by_unit || [])
+
+const pieChartStyle = computed(() => {
+  if (dossiersByUnit.value.length === 0) {
+    return { background: 'var(--color-border)' }
   }
-])
+  let currentPct = 0
+  const colors = [
+    'var(--color-primary)',
+    'var(--color-accent)',
+    'var(--color-success)',
+    'var(--color-warning)',
+    'var(--color-danger)',
+  ]
+  const stops = []
+  dossiersByUnit.value.forEach((item, idx) => {
+    const nextPct = currentPct + item.pct
+    const color = colors[idx % colors.length]
+    stops.push(`${color} ${currentPct}% ${nextPct}%`)
+    currentPct = nextPct
+  })
+  return {
+    background: `conic-gradient(${stops.join(', ')})`,
+    boxShadow: 'inset 0 0 0 30px var(--color-bg-panel)'
+  }
+})
 
 const openDossier = (d) => {
   if (d.dossier_id) {
     router.push(`/workspace/${d.dossier_id}`)
-  } else if (d.id) {
-    router.push(`/workspace/${d.id}`)
   }
 }
 </script>
@@ -65,6 +58,14 @@ const openDossier = (d) => {
         <p class="page-subtitle">Thống kê dữ liệu tờ trình theo thời gian thực</p>
       </div>
     </header>
+    
+    <!-- Error Banner -->
+    <div v-if="store.error" class="error-banner glass-panel">
+      <div class="error-banner-content">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="error-icon"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>{{ store.error }}</span>
+      </div>
+    </div>
     
     <div class="dashboard-grid">
       <!-- Stats Cards -->
@@ -103,20 +104,32 @@ const openDossier = (d) => {
     <div class="charts-area">
       <div class="chart-card glass-panel">
         <h3 class="card-title">Tỷ lệ Tờ trình theo Ban nghiệp vụ</h3>
-        <div class="chart-placeholder">
+        <div class="chart-placeholder" style="flex-direction: row; justify-content: space-around; gap: 1rem;">
            <!-- Placeholder for pie chart -->
-           <div class="pie-mock"></div>
+           <div class="pie-mock" :style="pieChartStyle"></div>
+           <ul v-if="dossiersByUnit.length > 0" class="error-list" style="max-width: 50%;">
+             <li v-for="(item, i) in dossiersByUnit" :key="item.unit" style="padding: 0.25rem 0; font-size: 0.85rem;">
+               <span class="dot" :class="i === 0 ? 'primary' : i === 1 ? 'accent' : i === 2 ? 'success' : i === 3 ? 'warning' : 'danger'"></span>
+               <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item.unit }}: {{ item.count }} ({{ item.pct }}%)</span>
+             </li>
+           </ul>
+           <div v-else class="no-data-msg">
+             Chưa có dữ liệu thống kê
+           </div>
         </div>
       </div>
       <div class="chart-card glass-panel">
         <h3 class="card-title">Cảnh báo lỗi phổ biến từ AI</h3>
         <div class="chart-placeholder">
-          <ul class="error-list">
+          <ul v-if="alertSources.length > 0" class="error-list">
             <li v-for="(src, i) in alertSources" :key="src.source">
               <span class="dot" :class="i === 0 ? 'danger' : i === 1 ? 'warning' : i === 2 ? 'primary' : 'text'"></span>
               {{ src.source }} ({{ src.pct }}%)
             </li>
           </ul>
+          <div v-else class="no-data-msg">
+            Chưa có cảnh báo nào được ghi nhận
+          </div>
         </div>
       </div>
     </div>
@@ -179,6 +192,39 @@ const openDossier = (d) => {
                   <span class="status-dot" :class="{'pending': d.status === 'Chờ duyệt' || d.status === 'pending', 'processing': d.status === 'Đang thẩm định' || d.status === 'needs_revision', 'approved': d.status === 'Đã thông qua' || d.status === 'approved'}"></span>
                   {{ d.status }}
                 </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Models Widget -->
+    <div v-if="agentModels.length > 0" class="ai-models-area mt-6">
+      <div class="glass-panel" style="padding: 1.5rem;">
+        <h3 class="card-title">Cấu hình Mô hình AI (Agent Roles)</h3>
+        <div class="table-responsive">
+          <table class="dossier-table">
+            <thead>
+              <tr>
+                <th>Vai trò (Role)</th>
+                <th>Tên mô hình (Model Label)</th>
+                <th>Phân hệ (Backend)</th>
+                <th>Nhiệm vụ (Description)</th>
+                <th>Tham số (Temp)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in agentModels" :key="m.role">
+                <td class="font-medium text-primary">{{ m.role }}</td>
+                <td>{{ m.label }}</td>
+                <td>
+                  <span class="risk-badge" :class="m.backend === 'local' ? 'medium' : 'low'">
+                    {{ m.backend === 'local' ? 'Ubuntu Local' : 'Gemini Cloud' }}
+                  </span>
+                </td>
+                <td>{{ m.description }}</td>
+                <td class="font-mono">{{ m.temperature }}</td>
               </tr>
             </tbody>
           </table>
@@ -303,11 +349,20 @@ const openDossier = (d) => {
 }
 .dot {
   width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0;
 }
 .dot.danger { background: var(--color-danger); }
 .dot.warning { background: var(--color-warning); }
 .dot.primary { background: var(--color-primary); }
 .dot.text { background: var(--color-text-secondary); }
+.dot.success { background: var(--color-success); }
+.dot.accent { background: var(--color-accent); }
+
+.no-data-msg {
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  text-align: center;
+}
 
 /* Table Styles */
 .mt-6 { margin-top: 2rem; }
@@ -399,6 +454,23 @@ const openDossier = (d) => {
 }
 .dossier-dept { font-weight: 500; }
 .dossier-date { font-family: monospace; }
+
+.error-banner {
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: var(--color-danger);
+}
+.error-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.error-icon {
+  flex-shrink: 0;
+}
 
 @media (max-width: 768px) {
   .charts-area { grid-template-columns: 1fr; }

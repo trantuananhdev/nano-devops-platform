@@ -151,18 +151,18 @@ EOF
 
     if File.directory?(File.join(repo_root, ".ssh"))
       config.vm.provision "file", run: "always" do |file|
-        file.source      = ".ssh"
+        file.source      = File.join(repo_root, ".ssh")
         file.destination = "/tmp/.ssh_copy"
       end
     end
 
     config.vm.provision "file", run: "always" do |file|
-      file.source      = ".env"
+      file.source      = File.join(repo_root, ".env")
       file.destination = "/tmp/.env_copy"
     end
 
     config.vm.provision "file", run: "always" do |file|
-      file.source      = "cli.sh"
+      file.source      = File.join(repo_root, "cli.sh")
       file.destination = "/tmp/cli_copy"
     end
 
@@ -211,7 +211,7 @@ EOF
   # Copy infra scripts → run main_setup.sh
   # ---------------------------------------------------------------------------
   config.vm.provision "file", run: "always" do |file|
-    file.source      = "project_devops/platform/infra"
+    file.source      = File.join(repo_root, "project_devops/platform/infra")
     file.destination = "/tmp/infra"
   end
 

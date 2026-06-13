@@ -351,7 +351,7 @@ const ROLE_LABELS = {
                 <Filter size="16" class="text-muted"/>
                 <input v-model="mcpToolFilter" type="text" placeholder="Lọc tool_name..."/>
               </div>
-              <button class="btn btn-outline btn-sm" @click="loadMcpLogs">Làm mới</button>
+              <button class="btn btn-outline btn-sm" @click="adminStore.loadMcpLogs()">Làm mới</button>
             </div>
           </div>
           <table class="data-table mt-4">

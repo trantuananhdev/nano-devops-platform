@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class HealthOut(BaseModel):
@@ -39,10 +39,22 @@ class AppraisalOut(BaseModel):
     checks: dict[str, Any]
     created_at: datetime | None = None
 
+    @computed_field
+    @property
+    def plan_steps(self) -> list[dict[str, Any]]:
+        return self.checks.get("items", [])
+
+
+class AppraisalSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    plan_steps: list[dict[str, Any]] = Field(default_factory=list)
+
 
 class DossierDetail(DossierOut):
     pdf_url: str | None = None
     appraisal: AppraisalOut | None = None
+    latest_appraisal: AppraisalSummary | None = None
 
 
 class AppraiseRequest(BaseModel):
@@ -90,6 +102,7 @@ class AlertOut(BaseModel):
 
     id: int
     dossier_id: int | None
+    title: str | None = None
     severity: str
     source: str
     description: str

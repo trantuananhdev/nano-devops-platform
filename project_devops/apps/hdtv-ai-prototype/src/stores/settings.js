@@ -6,10 +6,10 @@ export const useSettingsStore = defineStore('settings', () => {
   const checklists = ref([])
   const loading = ref(false)
 
-  async function fetchChecklistTemplate() {
+  async function fetchChecklistTemplate(dossierTypeId = null) {
     loading.value = true
     try {
-      const { data } = await api.getChecklistTemplate()
+      const { data } = await api.getChecklistTemplate(dossierTypeId)
       checklists.value = data.map((c) => ({
         id: c.id,
         text: c.text,

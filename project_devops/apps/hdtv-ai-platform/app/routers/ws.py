@@ -6,7 +6,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from app.core.database import async_session_factory
-from app.models.entities import AppraisalResult, Dossier
+from app.models.entities import AgentPlan, AppraisalResult, Dossier
 from app.services.pubsub import subscribe_events
 
 router = APIRouter()
@@ -32,12 +32,24 @@ async def _get_dossier_snapshot(dossier_id: int) -> dict | None:
                 .limit(1)
             )
             appraisal = result.scalar_one_or_none()
+
+            # Fetch most recent agent plan if any
+            plan_res = await session.execute(
+                select(AgentPlan)
+                .where(AgentPlan.dossier_id == dossier_id)
+                .order_by(AgentPlan.id.desc())
+                .limit(1)
+            )
+            latest_plan = plan_res.scalar_one_or_none()
+
             snapshot: dict = {
                 "type":       "snapshot",
                 "dossier_id": dossier_id,
                 "status":     dossier.status.value,
                 "risk_level": dossier.risk_level.value,
             }
+            if latest_plan and latest_plan.plan_json:
+                snapshot["latest_plan_steps"] = latest_plan.plan_json.get("steps", [])
             if appraisal:
                 snapshot["appraisal_id"]  = appraisal.id
                 snapshot["overall_risk"]  = appraisal.overall_risk.value
@@ -63,10 +75,17 @@ async def appraisal_ws(websocket: WebSocket, dossier_id: int) -> None:
         if snapshot:
             await websocket.send_text(json.dumps(snapshot, ensure_ascii=False))
 
+        last_ping = asyncio.get_event_loop().time()
         while True:
-            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.1)
             if message and message.get("type") == "message":
                 await websocket.send_text(message["data"])
+            
+            now = asyncio.get_event_loop().time()
+            if now - last_ping >= 30.0:
+                await websocket.send_text(json.dumps({"type": "ping"}))
+                last_ping = now
+
             await asyncio.sleep(0.05)
     except WebSocketDisconnect:
         pass

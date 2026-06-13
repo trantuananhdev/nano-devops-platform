@@ -32,17 +32,39 @@ const nodes = computed(() =>
 
 const edges = computed(() => graphStore.graph?.edges || [])
 
+const validEdges = computed(() => {
+  return edges.value
+    .map((edge) => {
+      const sourceNode = nodes.value.find((n) => n.id === edge.source)
+      const targetNode = nodes.value.find((n) => n.id === edge.target)
+      if (!sourceNode || !targetNode) return null
+      return {
+        label: edge.label,
+        x1: sourceNode.x,
+        y1: sourceNode.y,
+        x2: targetNode.x,
+        y2: targetNode.y,
+      }
+    })
+    .filter(Boolean)
+})
+
 onMounted(async () => {
   await dossierStore.fetchDossiers()
-  if (dossierStore.dossiers.length) {
+  if (dossierStore.dossiers && dossierStore.dossiers.length > 0) {
     selectedDossierId.value = dossierStore.dossiers[0].id
     await loadGraph(selectedDossierId.value)
   }
 })
 
 async function loadGraph(dossierId) {
-  await graphStore.fetchGraph(dossierId)
-  selectedNode.value = nodes.value[0] || null
+  if (!dossierId) return
+  try {
+    await graphStore.fetchGraph(dossierId)
+    selectedNode.value = nodes.value[0] || null
+  } catch (err) {
+    selectedNode.value = null
+  }
 }
 
 const selectNode = (node) => {
@@ -71,6 +93,14 @@ const selectCategory = async (cat) => {
       </div>
     </header>
 
+    <div v-if="graphStore.error" class="error-banner glass-panel flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2 text-danger">
+        <AlertTriangle size="20" />
+        <span>Lỗi: {{ graphStore.error }}</span>
+      </div>
+      <button class="btn btn-outline btn-sm" @click="loadGraph(selectedDossierId)">Thử lại</button>
+    </div>
+
     <div class="main-split-layout">
       <!-- Left Panel: Categories -->
       <div class="sidebar-panel glass-panel">
@@ -95,19 +125,19 @@ const selectCategory = async (cat) => {
         <div class="graph-canvas glass-panel">
           <svg class="edges-layer">
             <line 
-              v-for="(edge, index) in edges" 
+              v-for="(edge, index) in validEdges" 
               :key="index"
-              :x1="nodes.find(n => n.id === edge.source).x"
-              :y1="nodes.find(n => n.id === edge.source).y"
-              :x2="nodes.find(n => n.id === edge.target).x"
-              :y2="nodes.find(n => n.id === edge.target).y"
+              :x1="edge.x1"
+              :y1="edge.y1"
+              :x2="edge.x2"
+              :y2="edge.y2"
               class="edge-line"
             />
             <text 
-              v-for="(edge, index) in edges" 
+              v-for="(edge, index) in validEdges" 
               :key="'text-'+index"
-              :x="(nodes.find(n => n.id === edge.source).x + nodes.find(n => n.id === edge.target).x) / 2"
-              :y="(nodes.find(n => n.id === edge.source).y + nodes.find(n => n.id === edge.target).y) / 2 - 5"
+              :x="(edge.x1 + edge.x2) / 2"
+              :y="(edge.y1 + edge.y2) / 2 - 5"
               class="edge-label"
             >
               {{ edge.label }}
@@ -325,4 +355,21 @@ const selectCategory = async (cat) => {
 .code-font { font-family: 'Consolas', 'Courier New', Courier, monospace; }
 .w-full { width: 100%; }
 .mt-4 { margin-top: 1rem; }
+
+.error-banner {
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  border-left: 4px solid var(--color-danger);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mb-4 {
+  margin-bottom: 1rem;
+}
+.btn-sm {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.85rem;
+}
 </style>

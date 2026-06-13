@@ -59,36 +59,39 @@ async def legal_graph_rag(query: str) -> dict:
 
 ```python
 # workers/rag_pipeline.py
-@celery_app.task
-def ingest_legal_documents(source_dir: str = settings.rag_docs_dir):
+# Không dùng Chroma SDK — gọi Chroma REST API trực tiếp qua httpx (zero ML deps)
+# → Image nhỏ hơn, Alpine-compatible, không cần sentence-transformers
+
+@celery_app.task(name="ingest_legal_documents", bind=True)
+def ingest_legal_documents(self, source_dir: str | None = None):
     """Runs every 6 hours via Celery Beat"""
-    docs = _scan_directory(source_dir)  # *.txt, *.md
-
-    for doc in docs:
-        chunks = _sliding_window_chunk(
-            text=doc.content,
-            chunk_size=512,    # tokens
-            overlap=64         # tokens
+    # Scan *.txt, *.md from source_dir
+    for fpath in files:
+        chunks = _sliding_window_chunks(
+            text=fpath.read_text(),
+            chunk_size_tokens=512,   # cfg.rag_chunk_size_tokens
+            overlap_tokens=64        # cfg.rag_chunk_overlap_tokens
         )
-        for i, chunk in enumerate(chunks):
-            vector_store.upsert_legal_doc(
-                doc_id=f"{doc.filename}_{i}",
-                text=chunk,
-                metadata={
-                    "source": doc.filename,
-                    "chunk_idx": i,
-                    "ingested_at": datetime.now().isoformat()
-                }
-            )
+        for idx, chunk_text in enumerate(chunks):
+            doc_id = f"legal-{source_name}-{idx}"
+            metadata = {
+                "source":      source_name,
+                "chunk_idx":   idx,
+                "ingested_at": int(time.time()),   # unix timestamp
+                "char_count":  len(chunk_text),
+            }
+            # Direct Chroma REST call — httpx, no SDK
+            await client.post(f"{chroma_base}/api/v1/collections/{coll_id}/upsert",
+                json={"ids": [doc_id], "documents": [chunk_text], "metadatas": [metadata]})
 
-        # Audit log
-        AiAuditLog.insert(tool_name="RagIngest", inputs={"source": doc.filename})
+    # Audit trail
+    await _emit_rag_audit("ingest", inputs={"source_dir": src}, outputs=summary)
 
-@celery_app.task
-def cleanup_stale_embeddings():
-    """Runs daily at 02:00 (Asia/Ho_Chi_Minh)"""
-    cutoff = datetime.now() - timedelta(days=settings.rag_stale_days)
-    # Delete Chroma docs where ingested_at < cutoff
+@celery_app.task(name="cleanup_stale_embeddings", bind=True)
+def cleanup_stale_embeddings(self):
+    """Runs daily at 02:00 via Celery Beat"""
+    cutoff_ts = int(time.time()) - cfg.rag_stale_days * 86400
+    # GET all chunks with metadata → filter ingested_at < cutoff_ts → DELETE
 ```
 
 **Celery Beat Schedule:**

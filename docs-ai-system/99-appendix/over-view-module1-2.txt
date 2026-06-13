@@ -1,0 +1,54 @@
+# HDTV AI Platform — Review FE → BE theo Module & Task Backlog cho Cursor
+
+> Tài liệu này review chéo giữa **Frontend** (`hdtv-ai-prototype`, Vue 3 + Pinia) và **Backend**
+> (`hdtv-ai-platform`, FastAPI + SQLAlchemy + Celery), đi từ màn hình/luồng người dùng (FE) ngược
+> về API/service (BE) cho từng module. Mục tiêu: phát hiện chỗ FE gọi API không khớp BE, chỗ FE
+> đang là "mock/placeholder" chưa có BE thật, chỗ logic nghiệp vụ (đặc biệt phân quyền chuyển
+> trạng thái hồ sơ) không đồng bộ giữa hai phía — và đóng gói thành **task chi tiết** để đưa cho
+> Cursor thực thi, đảm bảo đồng nhất workflow.
+
+## 0. Cách đọc tài liệu
+
+Mỗi module gồm:
+
+- **FE hiện trạng** — view/store liên quan, API đang gọi.
+- **BE hiện trạng** — router/service/schema tương ứng.
+- **Vấn đề phát hiện** — đánh số `Gx`, mức độ ưu tiên `P0` (chặn nghiệp vụ/bug), `P1` (quan trọng,
+  nên làm sớm), `P2` (cải thiện/nợ kỹ thuật).
+- **Task cho Cursor** — mã `T-REV-<module>.<n>`, có file/đường dẫn cụ thể, input/output mong đợi.
+
+Quy ước mã nguồn:
+
+- FE: `hdtv-ai-prototype/src/...`
+- BE: `hdtv-ai-platform/app/...`
+
+## 1. Bản đồ Module ↔ FE View ↔ BE Router
+
+| # | Module | FE View(s) | FE Store(s) | BE Router(s) |
+|---|--------|-----------|-------------|---------------|
+| 1 | Dossier Inbox (danh sách hồ sơ) | `DossierListView.vue` | `dossier.js` | `dossiers.py` (`GET/POST /dossiers`, `/dossiers/units`) |
+| 2 | Dossier Workspace (thẩm định chi tiết) | `SplitViewWorkspace.vue` | `dossier.js`, `auth.js` | `dossiers.py` (appraise, transition-status, reference-documents, document-versions, status-history), `feedback.py`, `clarifications.py`, `audit.py`, `ws.py` |
+| 3 | Dashboard | `DashboardView.vue` | `dashboard.js` | `meta.py` (`/dashboard/summary`, `/agent/models`) |
+| 4 | Alerts | `AlertsView.vue` | `alerts.js` | `alerts.py` |
+| 5 | Advanced Chat & Floating Chat | `AdvancedChatView.vue`, `components/FloatingChat.vue` | `chat.js` | `audit.py` (`/audit-logs`), `dossiers.py` (`/appraise`), `ws.py` |
+| 6 | Workflow Manager (BPMN) | `WorkflowManager.vue` | `workflow.js`, `dossier.js` | `workflow.py` |
+| 7 | Skill Builder | `SkillBuilderView.vue` | `skills.js`, `dossier.js` | `meta.py` (`/skills`) |
+| 8 | Tool Registry | `ToolRegistryView.vue` | `tools.js` | `meta.py` (`/tools`) |
+| 9 | Knowledge Graph | `KnowledgeGraphView.vue` | `graph.js`, `dossier.js` | `meta.py` (`/knowledge-graph`) |
+| 10 | Schedule Manager | `ScheduleManagerView.vue` | `schedule.js` | `meta.py` (`/schedules`) |
+| 11 | Dossier Settings (checklist/biểu mẫu) | `DossierSettingsView.vue` | `settings.js`, `dossier.js` | `meta.py` (`/checklist-template`) |
+| 12 | System Admin | `SystemAdminView.vue` | `admin.js` | `meta.py` (users/roles/system-logs/agent metrics), `api_keys.py`, `mcp.py`, `audit.py` |
+| 13 | Notifications | `NotificationsView.vue`, `components/NotificationBell.vue` | `notifications.js` | `notifications.py` |
+| 14 | Global Search | `components/GlobalSearch.vue` | `search.js` | `search.py` |
+| — | Cross-cutting: Auth & phân quyền | `auth.js`, route guards | — | `core/permissions.py`, `services/workflow_service.py` |
+
+## 2. Tổng hợp mức độ nghiêm trọng (Executive Summary)
+
+| Mức | Số lượng | Ghi chú |
+|-----|----------|---------|
+| P0 (bug/chặn nghiệp vụ) | 5 | Lỗi runtime, sai luồng điều hướng, mismatch quyền gây 403 |
+| P1 (gap chức năng quan trọng) | ~14 | Module "trông như xong" trên FE nhưng BE chưa có / FE chưa nối |
+| P2 (nợ kỹ thuật / polish) | ~10 | Dead code, hardcode demo, UI chưa wiring nút |
+
+Danh sách chi tiết theo từng module ở các phần dưới. Cuối tài liệu có **Bảng tổng hợp Backlog**
+để import vào Cursor/issue tracker theo thứ tự ưu tiên đề xuất.

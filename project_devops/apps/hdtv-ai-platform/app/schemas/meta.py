@@ -67,6 +67,8 @@ class DashboardSummaryOut(BaseModel):
     open_alerts: int
     alert_sources: list[dict[str, Any]]
     notable_dossiers: list[dict[str, Any]]
+    newest_dossiers: list[dict[str, Any]]
+    dossiers_by_unit: list[dict[str, Any]] = []
 
 
 class UserOut(BaseModel):

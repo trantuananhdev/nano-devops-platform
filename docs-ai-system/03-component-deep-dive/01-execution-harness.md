@@ -87,21 +87,21 @@ Agent calls execute_tool("ErpBudgetCheck", {"dossier_id": 1, "doc_no": "MX-2025-
 _TOOL_INPUT_REQUIRED_FIELDS = {
     "LegalGraphRAG":     ["query"],
     "ErpBudgetCheck":    ["dossier_id", "doc_no"],
-    "ErpInventoryCheck": ["dossier_id"],
-    "DOfficeLookup":     ["query"],
-    "PmisProjectCheck":  ["dossier_id"],
+    "ErpInventoryCheck": ["dossier_id", "doc_no"],  # doc_no required
+    "DOfficeLookup":     ["dossier_id", "doc_no"],
+    "PmisProjectCheck":  ["dossier_id", "doc_no"],
     "EcoOcrExtract":     ["dossier_id"],
     "SandboxShell":      ["command"],
 }
 
-STATIC_TOOL_IMPLS: dict[str, Callable] = {
+STATIC_TOOL_IMPLS: dict[str, ToolFn] = {
     "LegalGraphRAG":     legal_graph_rag,
-    "ErpBudgetCheck":    erp_budget_check,
-    "ErpInventoryCheck": erp_inventory_check,
-    "DOfficeLookup":     doffice_lookup,
-    "PmisProjectCheck":  pmis_project_check,
-    "EcoOcrExtract":     eco_ocr_extract,
-    "SandboxShell":      sandbox_shell,
+    "ErpBudgetCheck":    _erp_budget_check,
+    "ErpInventoryCheck": _erp_inventory_check,
+    "DOfficeLookup":     _doffice_lookup,
+    "PmisProjectCheck":  _pmis_project_check,
+    "EcoOcrExtract":     _eco_ocr_extract,
+    "SandboxShell":      sandbox_shell_tool,
 }
 ```
 

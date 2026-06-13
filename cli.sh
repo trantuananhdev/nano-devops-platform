@@ -353,6 +353,12 @@ cmd_hdtv_migrate() {
         -f "${COMPOSE_DIR}/docker-compose.yml" \
         ${_VM_OVERLAY} \
         -f "$HDTV_COMPOSE" run --rm hdtv-api alembic upgrade head
+        
+    # Auto seed if HDTV_AUTO_SEED is true
+    if [ "${HDTV_AUTO_SEED:-false}" = "true" ]; then
+        echo "[HDTV] Auto-seeding demo data (HDTV_AUTO_SEED=true)..."
+        cmd_hdtv_seed
+    fi
 }
 
 cmd_hdtv_seed() {

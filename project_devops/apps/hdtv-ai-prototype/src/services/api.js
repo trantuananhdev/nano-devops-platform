@@ -20,7 +20,8 @@ export const getKnowledgeGraph = (dossierId) => api.get('/knowledge-graph', { pa
 export const getDashboardSummary = () => api.get('/dashboard/summary')
 export const getSchedules = () => api.get('/schedules')
 export const getSkills = () => api.get('/skills')
-export const getChecklistTemplate = () => api.get('/checklist-template')
+export const getChecklistTemplate = (dossierTypeId) =>
+  api.get('/checklist-template', { params: dossierTypeId ? { dossier_type_id: dossierTypeId } : {} })
 
 // T-11: Meilisearch full-text search
 export const searchDossiers = (params) => api.get('/search', { params })
@@ -97,5 +98,12 @@ export const createDocumentVersion = (dossierId, body, createdBy) =>
 // T-50: Audit Trail (FE)
 export const getAuditLogs = (dossierId) => api.get(`/audit-logs`, { params: { dossier_id: dossierId } })
 export const getAuditLog = (logId) => api.get(`/audit-logs/${logId}`)
+
+// T-54: Notification System (FE)
+export const getUserNotifications = (userId, params) => api.get(`/notifications/user/${userId}`, { params })
+export const getNotification = (notificationId) => api.get(`/notifications/${notificationId}`)
+export const markNotificationRead = (notificationId, isRead = true) => api.patch(`/notifications/${notificationId}`, { is_read: isRead })
+export const markAllNotificationsRead = (userId) => api.patch(`/notifications/user/${userId}/mark-all-read`)
+export const createNotification = (data) => api.post(`/notifications`, data)
 
 export default api

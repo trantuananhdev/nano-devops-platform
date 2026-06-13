@@ -15,6 +15,7 @@ const AlertsView         = () => import('../views/AlertsView.vue')
 const AdvancedChatView   = () => import('../views/AdvancedChatView.vue')
 const DossierSettingsView = () => import('../views/DossierSettingsView.vue')
 const SystemAdminView    = () => import('../views/SystemAdminView.vue')
+const NotificationsView  = () => import('../views/NotificationsView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -32,6 +33,7 @@ const router = createRouter({
     { path: '/chat',       name: 'chat',       component: AdvancedChatView },
     { path: '/settings',   name: 'settings',   component: DossierSettingsView },
     { path: '/admin',      name: 'admin',      component: SystemAdminView, meta: { requiresAuth: true, requiresRole: ['admin'] } },
+    { path: '/notifications', name: 'notifications', component: NotificationsView, meta: { requiresAuth: true } },
   ],
 })
 
@@ -47,6 +49,7 @@ router.beforeEach((to, from, next) => {
 
   // If route requires specific roles and user doesn't have any of them, redirect to dashboard
   if (to.meta.requiresRole && !authStore.hasRole(to.meta.requiresRole)) {
+    alert("Không đủ quyền, vui lòng chuyển sang vai trò Admin")
     next('/dashboard')
     return
   }

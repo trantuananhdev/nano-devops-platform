@@ -42,16 +42,16 @@ export const useDossierStore = defineStore('dossier', () => {
       unit:   d.unit,
       date:   d.created_at ? new Date(d.created_at).toLocaleDateString('vi-VN') : '',
       risk:   d.risk_level,
-      status: statusLabels[d.status] || d.status,
+      status: d.status, // Keep as enum for view to format
     }
   }
 
   // T-40: Initial load — resets list and loads page 0
-  async function fetchDossiers() {
+  async function fetchDossiers(filters = {}) {
     loading.value = true
     error.value   = null
     try {
-      const { data } = await api.getDossiers({ offset: 0, limit: PAGE_SIZE })
+      const { data } = await api.getDossiers({ offset: 0, limit: PAGE_SIZE, ...filters })
       dossiers.value = data.items.map(_mapDossier)
       total.value    = data.total
       offset.value   = data.items.length
@@ -64,11 +64,11 @@ export const useDossierStore = defineStore('dossier', () => {
   }
 
   // T-40: Load next page and append (infinite scroll / load-more)
-  async function loadMoreDossiers() {
+  async function loadMoreDossiers(filters = {}) {
     if (!hasMore.value || loadingMore.value) return
     loadingMore.value = true
     try {
-      const { data } = await api.getDossiers({ offset: offset.value, limit: PAGE_SIZE })
+      const { data } = await api.getDossiers({ offset: offset.value, limit: PAGE_SIZE, ...filters })
       dossiers.value  = [...dossiers.value, ...data.items.map(_mapDossier)]
       total.value     = data.total
       offset.value   += data.items.length
