@@ -17,6 +17,7 @@ const AdvancedChatView   = () => import('../views/AdvancedChatView.vue')
 const DossierSettingsView = () => import('../views/DossierSettingsView.vue')
 const SystemAdminView    = () => import('../views/SystemAdminView.vue')
 const NotificationsView  = () => import('../views/NotificationsView.vue')
+const TokenUsageView     = () => import('../views/TokenUsageView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -24,37 +25,29 @@ const router = createRouter({
     { path: '/', redirect: '/dashboard' },
     { path: '/login', name: 'login', component: LoginView },
     { path: '/dashboard',  name: 'dashboard',  component: DashboardView, meta: { requiresAuth: true } },
-    { path: '/dossiers',   name: 'dossiers',   component: DossierListView },
-    { path: '/workflow',   name: 'workflow',   component: WorkflowManager },
-    { path: '/workspace/:id?', name: 'workspace', component: SplitViewWorkspace },
-    { path: '/skills',     name: 'skills',     component: SkillBuilderView },
-    { path: '/tools',      name: 'tools',      component: ToolRegistryView },
-    { path: '/graph',      name: 'graph',      component: KnowledgeGraphView },
-    { path: '/schedule',   name: 'schedule',   component: ScheduleManagerView },
-    { path: '/alerts',     name: 'alerts',     component: AlertsView },
-    { path: '/chat',       name: 'chat',       component: AdvancedChatView },
-    { path: '/settings',   name: 'settings',   component: DossierSettingsView },
+    { path: '/dossiers',   name: 'dossiers',   component: DossierListView,    meta: { requiresAuth: true } },
+    { path: '/workflow',   name: 'workflow',   component: WorkflowManager,    meta: { requiresAuth: true } },
+    { path: '/workspace/:id?', name: 'workspace', component: SplitViewWorkspace, meta: { requiresAuth: true } },
+    { path: '/skills',     name: 'skills',     component: SkillBuilderView,   meta: { requiresAuth: true } },
+    { path: '/tools',      name: 'tools',      component: ToolRegistryView,   meta: { requiresAuth: true } },
+    { path: '/graph',      name: 'graph',      component: KnowledgeGraphView, meta: { requiresAuth: true } },
+    { path: '/schedule',   name: 'schedule',   component: ScheduleManagerView,meta: { requiresAuth: true } },
+    { path: '/alerts',     name: 'alerts',     component: AlertsView,         meta: { requiresAuth: true } },
+    { path: '/chat',       name: 'chat',       component: AdvancedChatView,   meta: { requiresAuth: true } },
+    { path: '/settings',   name: 'settings',   component: DossierSettingsView,meta: { requiresAuth: true } },
     { path: '/admin',      name: 'admin',      component: SystemAdminView, meta: { requiresAuth: true, requiresRole: ['admin'] } },
     { path: '/notifications', name: 'notifications', component: NotificationsView, meta: { requiresAuth: true } },
+    { path: '/token-usage',   name: 'token-usage',   component: TokenUsageView,    meta: { requiresAuth: true, requiresRole: ['admin', 'hdtv_leader'] } },
   ],
 })
 
-// Route guards — auth + RBAC
+// Route guards — RBAC only (no login redirect — auto-login as admin on mount)
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
 
-  // Routes không cần auth
+  // /login không còn dùng — redirect về dashboard
   if (to.name === 'login') {
-    if (authStore.isAuthenticated) {
-      next('/dashboard')
-    } else {
-      next()
-    }
-    return
-  }
-
-  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    next({ name: 'login', query: { redirect: to.fullPath } })
+    next('/dashboard')
     return
   }
 

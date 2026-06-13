@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { RouterView, RouterLink, useRoute } from 'vue-router'
-import { LayoutDashboard, FileText, GitPullRequest, Sun, Moon, Menu, X, Bot, Settings2, Wrench, Network, CalendarClock, Bell, CheckCircle, AlertTriangle, MessageSquare, FileCog, ShieldCheck, Users } from '@lucide/vue'
+import { LayoutDashboard, FileText, GitPullRequest, Sun, Moon, Menu, X, Bot, Settings2, Wrench, Network, CalendarClock, Bell, CheckCircle, AlertTriangle, MessageSquare, FileCog, ShieldCheck, Users, Coins } from '@lucide/vue'
 import FloatingChat from './components/FloatingChat.vue'
 import GlobalSearch from './components/GlobalSearch.vue'
 import NotificationBell from './components/NotificationBell.vue'
@@ -49,6 +49,11 @@ const _offNotif = mainWs.on('notification_new', (data) => {
 
 // Auto-detect system theme on mount
 onMounted(() => {
+  // Auto-login as admin for demo — no login screen needed
+  if (!authStore.isAuthenticated) {
+    authStore.loginAs('admin')
+  }
+
   if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
     isDark.value = true
     document.documentElement.setAttribute('data-theme', 'dark')
@@ -68,7 +73,7 @@ onUnmounted(() => {
   mainWs.disconnect()
 })
 
-const navItems = [
+const _allNavItems = [
   { path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard },
   { path: '/chat', name: 'Chat', icon: MessageSquare },
   { path: '/dossiers', name: 'Quản lý Tờ trình', icon: FileText },
@@ -79,8 +84,15 @@ const navItems = [
   { path: '/tools', name: 'Danh mục Công cụ', icon: Wrench },
   { path: '/graph', name: 'Đồ thị Tri thức', icon: Network },
   { path: '/schedule', name: 'Lập lịch Tự động', icon: CalendarClock },
-  { path: '/admin', name: 'Quản trị Hệ thống', icon: ShieldCheck },
+  { path: '/token-usage', name: 'Token & Chi phí AI', icon: Coins, roles: ['admin', 'hdtv_leader'] },
+  { path: '/admin', name: 'Quản trị Hệ thống', icon: ShieldCheck, roles: ['admin'] },
 ]
+
+const navItems = computed(() =>
+  _allNavItems.filter(item =>
+    !item.roles || authStore.hasRole(item.roles)
+  )
+)
 
 
 </script>

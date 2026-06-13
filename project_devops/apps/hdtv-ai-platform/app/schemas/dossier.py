@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 class HealthOut(BaseModel):
     status: str = "ok"
     service: str = "hdtv-ai-platform"
+    checks: dict[str, str] = Field(default_factory=dict)
 
 
 class DossierCreate(BaseModel):

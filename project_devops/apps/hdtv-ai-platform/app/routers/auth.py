@@ -1,9 +1,9 @@
 """Auth router — JWT login/refresh endpoints."""
 from datetime import datetime, timedelta, timezone
 
+import bcrypt as _bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
 from jose import jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +13,10 @@ from app.core.database import get_db
 from app.models.entities import User
 
 router = APIRouter()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def _verify_password(plain: str, hashed: str) -> bool:
+    return _bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
 class LoginRequest(BaseModel):
@@ -58,7 +61,7 @@ async def login(
             detail="Email hoặc mật khẩu không đúng",
         )
 
-    if not pwd_context.verify(body.password, user.password_hash):
+    if not _verify_password(body.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email hoặc mật khẩu không đúng",

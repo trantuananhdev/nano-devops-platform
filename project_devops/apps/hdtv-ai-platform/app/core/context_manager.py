@@ -1,20 +1,28 @@
 """
-Context Window Manager — Token counting + truncation cho LLM calls.
+Context Window Manager — Token counting + priority-based eviction cho LLM calls.
 
 Mục tiêu:
-  - Tránh gửi payload vượt context limit của model lên LLM API (gây 400/truncation lỗi)
-  - FIFO rotation tin nhắn cũ (giữ system prompt + N tin nhắn cuối)
-  - Trả về số token ước tính đã dùng để Prometheus tracking
+  - Tránh gửi payload vượt context limit của model (gây 400/truncation lỗi)
+  - Priority-based eviction: giữ reasoning quan trọng, drop routine observations
+  - FIFO là fallback — priority scoring là primary strategy
 
 Chiến lược đếm token:
   - Không dùng tiktoken (nặng, không phù hợp Alpine image)
-  - Dùng heuristic: 1 token ≈ 4 ký tự (chuẩn OpenAI estimate)
-  - Đủ chính xác cho purpose bảo vệ context limit
+  - Heuristic: 1 token ≈ 4 ký tự (OpenAI estimate, đủ chính xác)
+
+Priority levels (cao → thấp):
+  CRITICAL  — system prompt, first user message (task definition)
+  HIGH      — tool failures, reflection summaries, critic verdicts
+  MEDIUM    — planning messages, clarification exchanges
+  LOW       — routine successful tool observations
+  MINIMAL   — duplicate/verbose tool output
 """
 
 from __future__ import annotations
 
 import logging
+import re
+from enum import IntEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -23,51 +31,65 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-# Ký tự trên mỗi token (heuristic — OpenAI: ~4 chars/token)
 _CHARS_PER_TOKEN: int = 4
 
-# Context limits per model (tokens)
 _MODEL_CONTEXT_LIMITS: dict[str, int] = {
-    "gemma-4-2b-it":         8_192,
-    "gemma-4-4b-it":         8_192,
-    "gemma-4-8b-it":         8_192,
-    "gemma-4-e2b-it":        8_192,   # Gemma 4 E2B (2B params, 8K context)
-    "gemma-2b-it":          8_192,   # Gemma 2B (2B params, 8K context)
-    "gemini-2.5-flash":    1_048_576,   # 1M token context window
+    "gemma-4-2b-it":          8_192,
+    "gemma-4-4b-it":          8_192,
+    "gemma-4-8b-it":          8_192,
+    "gemma-4-e2b-it":         8_192,
+    "gemma-2b-it":            8_192,
+    "gemini-2.5-flash":    1_048_576,
     "gemini-2.5-flash-lite": 1_048_576,
     "gemini-2.0-flash":      32_768,
     "gemini-1.5-flash":      32_768,
-    "default":              8_192,
+    "default":                8_192,
 }
 
-# Dự trữ token cho response của model (output buffer)
 _RESPONSE_RESERVE_TOKENS: int = 1_024
+
+# Patterns to detect high-priority content
+_FAILURE_PATTERNS = re.compile(
+    r"(fail|error|exception|lỗi|thất bại|không hợp lệ|không đạt|cảnh báo|warning|vượt|thiếu)",
+    re.IGNORECASE,
+)
+_PLAN_PATTERNS = re.compile(
+    r"(plan|step|tool_call|reflection|verdict|critic|revision|escalate|kế hoạch|thẩm định)",
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
+# Priority enum
+# ---------------------------------------------------------------------------
+
+class MessagePriority(IntEnum):
+    MINIMAL  = 0   # Verbose/duplicate, drop first
+    LOW      = 1   # Routine successful observations
+    MEDIUM   = 2   # Planning, clarifications
+    HIGH     = 3   # Failures, reflections, critic verdicts
+    CRITICAL = 4   # System prompt, task definition
+
 
 # ---------------------------------------------------------------------------
 # Token estimation
 # ---------------------------------------------------------------------------
 
 def estimate_tokens(text: str) -> int:
-    """Estimate token count from raw text using char-based heuristic."""
     if not text:
         return 0
     return max(1, len(text) // _CHARS_PER_TOKEN)
 
 
 def estimate_messages_tokens(messages: list[dict[str, str]]) -> int:
-    """Estimate total tokens for an OpenAI-style messages list."""
     total = 0
     for msg in messages:
-        # Role header overhead (~4 tokens per message)
-        total += 4
+        total += 4  # role header overhead
         total += estimate_tokens(msg.get("content", ""))
-    # Final priming tokens (~3)
-    total += 3
+    total += 3  # final priming tokens
     return total
 
 
 def get_context_limit(model: str) -> int:
-    """Return the context limit in tokens for the given model name."""
     for key, limit in _MODEL_CONTEXT_LIMITS.items():
         if key in model.lower():
             return limit
@@ -75,11 +97,55 @@ def get_context_limit(model: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Priority scoring
+# ---------------------------------------------------------------------------
+
+def score_message_priority(msg: dict[str, str], index: int, total: int) -> MessagePriority:
+    """Assign retention priority to a message.
+
+    Rules (highest priority wins):
+    - system role → CRITICAL
+    - First user message (index 0 among non-system) → CRITICAL (task definition)
+    - Content contains failure/error indicators → HIGH
+    - Content contains plan/reflection keywords → HIGH
+    - assistant messages near end → MEDIUM
+    - Everything else → LOW
+    """
+    role = msg.get("role", "")
+    content = msg.get("content", "")
+
+    if role == "system":
+        return MessagePriority.CRITICAL
+
+    # First user message is the task definition — always keep
+    if role == "user" and index == 0:
+        return MessagePriority.CRITICAL
+
+    # Failure indicators are highly informative
+    if _FAILURE_PATTERNS.search(content):
+        return MessagePriority.HIGH
+
+    # Planning, reflection, critic content
+    if _PLAN_PATTERNS.search(content):
+        return MessagePriority.HIGH
+
+    # Recent messages (last 20% of conversation) are more relevant
+    recency_threshold = max(0, int(total * 0.8))
+    if index >= recency_threshold:
+        return MessagePriority.MEDIUM
+
+    # Long routine observations (>500 chars) that are just data dumps → LOW
+    if len(content) > 2000 and role == "assistant":
+        return MessagePriority.MINIMAL
+
+    return MessagePriority.LOW
+
+
+# ---------------------------------------------------------------------------
 # Truncation
 # ---------------------------------------------------------------------------
 
 def truncate_text(text: str, max_tokens: int) -> str:
-    """Truncate text to fit within max_tokens (appends marker if cut)."""
     max_chars = max_tokens * _CHARS_PER_TOKEN
     if len(text) <= max_chars:
         return text
@@ -88,35 +154,37 @@ def truncate_text(text: str, max_tokens: int) -> str:
     return cut_text + " … [nội dung đã cắt bớt]"
 
 
+# ---------------------------------------------------------------------------
+# Priority-based fit_messages
+# ---------------------------------------------------------------------------
+
 def fit_messages(
     messages: list[dict[str, str]],
     model: str = "default",
     *,
     max_tokens: int | None = None,
 ) -> tuple[list[dict[str, str]], int]:
-    """
-    Trim messages list to fit within model context window.
+    """Trim messages list to fit within model context window.
 
-    Strategy (FIFO — keep recent):
-    1. Always keep system prompt (role=system)
-    2. Keep as many recent user/assistant messages as fit
-    3. If a single message body exceeds budget, truncate its content
+    Strategy (Priority-based, not pure FIFO):
+    1. Always keep system prompt (CRITICAL).
+    2. Score all non-system messages by priority.
+    3. Drop lowest-priority messages first (MINIMAL → LOW → MEDIUM).
+    4. Never drop HIGH or CRITICAL messages.
+    5. If a message must be truncated to fit, truncate content instead of drop.
 
     Returns:
         (trimmed_messages, estimated_tokens_used)
     """
     limit = max_tokens or (get_context_limit(model) - _RESPONSE_RESERVE_TOKENS)
 
-    # Separate system + non-system
     system_msgs = [m for m in messages if m.get("role") == "system"]
     other_msgs  = [m for m in messages if m.get("role") != "system"]
 
-    # Token cost of system messages (must keep all)
     system_tokens = estimate_messages_tokens(system_msgs)
     remaining = limit - system_tokens
 
     if remaining <= 0:
-        # Edge case: system prompt alone exceeds limit — truncate last system msg
         logger.warning(
             "fit_messages: system prompt alone uses %d tokens (limit=%d) — truncating",
             system_tokens, limit,
@@ -127,46 +195,73 @@ def fit_messages(
             system_msgs = [trimmed_sys]
         return system_msgs, estimate_messages_tokens(system_msgs)
 
-    # Fill from newest → oldest (FIFO: keep recent)
-    kept: list[dict[str, str]] = []
-    for msg in reversed(other_msgs):
-        msg_tokens = estimate_messages_tokens([msg])
-        if msg_tokens <= remaining:
-            kept.insert(0, msg)
-            remaining -= msg_tokens
-        else:
-            # Try to fit a truncated version of this message
-            truncated = dict(msg)
-            truncated["content"] = truncate_text(msg.get("content", ""), remaining - 8)
-            truncated_tokens = estimate_messages_tokens([truncated])
-            if truncated_tokens < remaining and truncated["content"]:
-                kept.insert(0, truncated)
-                remaining -= truncated_tokens
-                logger.debug("fit_messages: truncated one message to fit context")
-            else:
-                logger.debug(
-                    "fit_messages: dropped %s message (too large, %d tokens remaining)",
-                    msg.get("role"), remaining,
-                )
-            break  # Stop after first drop — older messages also dropped
+    n = len(other_msgs)
 
-    final_messages = system_msgs + kept
-    total_tokens   = estimate_messages_tokens(final_messages)
+    # Score each message
+    scored: list[tuple[int, MessagePriority, dict[str, str]]] = [
+        (i, score_message_priority(m, i, n), m)
+        for i, m in enumerate(other_msgs)
+    ]
 
-    dropped = len(other_msgs) - len(kept)
-    if dropped > 0:
+    # Sort by priority ascending (drop low priority first) while preserving order
+    # Strategy: try fitting all, then drop lowest priority until budget fits
+    candidates = list(scored)  # [(original_index, priority, msg)]
+
+    # First pass: try to fit everything
+    total_tokens = estimate_messages_tokens([m for _, _, m in candidates])
+    dropped_count = 0
+
+    while total_tokens > remaining and candidates:
+        # Find lowest priority message (excluding CRITICAL & HIGH) to drop
+        droppable = [
+            (i, p, m) for i, p, m in candidates
+            if p < MessagePriority.HIGH
+        ]
+        if not droppable:
+            # All remaining are HIGH/CRITICAL — truncate the largest one instead
+            largest = max(candidates, key=lambda x: estimate_tokens(x[2].get("content", "")))
+            idx_in_candidates = next(
+                k for k, (i, p, m) in enumerate(candidates) if i == largest[0]
+            )
+            original_msg = candidates[idx_in_candidates][2]
+            truncated_content = truncate_text(
+                original_msg.get("content", ""),
+                max(100, remaining // 2),
+            )
+            truncated_msg = dict(original_msg)
+            truncated_msg["content"] = truncated_content
+            candidates[idx_in_candidates] = (
+                candidates[idx_in_candidates][0],
+                candidates[idx_in_candidates][1],
+                truncated_msg,
+            )
+            total_tokens = estimate_messages_tokens([m for _, _, m in candidates])
+            break
+
+        # Drop the lowest-priority, then oldest among ties
+        droppable.sort(key=lambda x: (x[1], -x[0]))  # lowest priority, oldest first
+        to_drop = droppable[0]
+        candidates = [(i, p, m) for i, p, m in candidates if i != to_drop[0]]
+        dropped_count += 1
+        total_tokens = estimate_messages_tokens([m for _, _, m in candidates])
+
+    if dropped_count > 0:
         logger.info(
-            "fit_messages: dropped %d old message(s) to fit context limit=%d (model=%s)",
-            dropped, limit, model,
+            "fit_messages: dropped %d message(s) by priority (model=%s, limit=%d)",
+            dropped_count, model, limit,
         )
-        # T-27: Emit Prometheus metric when context is trimmed
         try:
             from app.core.metrics import CONTEXT_TRUNCATIONS
             CONTEXT_TRUNCATIONS.labels(model=model).inc()
         except Exception:
-            pass  # Never block fit_messages on metrics failure
+            pass
 
-    return final_messages, total_tokens
+    # Restore original order
+    candidates.sort(key=lambda x: x[0])
+    final_messages = system_msgs + [m for _, _, m in candidates]
+    total_used = estimate_messages_tokens(final_messages)
+
+    return final_messages, total_used
 
 
 # ---------------------------------------------------------------------------
@@ -179,22 +274,39 @@ def trim_observations(
 ) -> list[str]:
     """Keep the most recent observations that fit within max_tokens total.
 
-    Used by react_agent to prevent unbounded observation growth.
+    Failure observations are kept preferentially over successes.
     """
     if not observations:
         return []
 
-    kept: list[str] = []
+    # Separate failures (keep preferentially) from successes
+    failures = [(i, obs) for i, obs in enumerate(observations) if _FAILURE_PATTERNS.search(obs)]
+    successes = [(i, obs) for i, obs in enumerate(observations) if not _FAILURE_PATTERNS.search(obs)]
+
+    kept_indexed: list[tuple[int, str]] = []
     budget = max_tokens
-    for obs in reversed(observations):
+
+    # Allocate failures first (prioritized)
+    failure_budget = int(budget * 0.6)  # up to 60% for failures
+    for i, obs in reversed(failures):
         cost = estimate_tokens(obs)
-        if cost <= budget:
-            kept.insert(0, obs)
+        if cost <= failure_budget:
+            kept_indexed.append((i, obs))
+            failure_budget -= cost
             budget -= cost
-        else:
-            break  # Oldest observations dropped
+
+    # Fill remainder with most recent successes
+    for i, obs in reversed(successes):
+        cost = estimate_tokens(obs)
+        if cost <= budget - failure_budget:
+            kept_indexed.append((i, obs))
+            budget -= cost
+
+    # Sort back to original order
+    kept_indexed.sort(key=lambda x: x[0])
+    kept = [obs for _, obs in kept_indexed]
 
     dropped = len(observations) - len(kept)
     if dropped > 0:
-        logger.debug("trim_observations: dropped %d old observation(s)", dropped)
+        logger.debug("trim_observations: kept %d/%d (priority-weighted)", len(kept), len(observations))
     return kept

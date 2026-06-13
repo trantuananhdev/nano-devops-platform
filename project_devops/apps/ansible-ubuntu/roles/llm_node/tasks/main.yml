@@ -209,6 +209,28 @@
           Xem logs: docker logs llama-server
   when: _llm_health is failed or _llm_health.status | default(0) != 200
 
+# ---------------------------------------------------------------------------
+# 7. Memory snapshot — log RSS after model is confirmed healthy
+#    Critical for detecting OOM risk on 4GB physical RAM machine.
+# ---------------------------------------------------------------------------
+- name: "[LLM] Snapshot llama-server RSS after model load"
+  ansible.builtin.command: >
+    docker stats --no-stream --format
+    "table {{ '{{' }}.Name{{ '}}' }}\t{{ '{{' }}.MemUsage{{ '}}' }}\t{{ '{{' }}.MemPerc{{ '}}' }}"
+    llama-server
+  register: _llm_mem_stats
+  changed_when: false
+  ignore_errors: true
+  when: _llm_health.status | default(0) == 200
+
+- name: "[LLM] Log RSS snapshot"
+  ansible.builtin.debug:
+    msg: |
+      📊 llama-server memory snapshot:
+      {{ _llm_mem_stats.stdout | default('(no data — health check did not pass)') }}
+      ⚠️  If MemPerc > 85% → consider reducing llm_context_size further (current: {{ llm_context_size }})
+  when: _llm_health.status | default(0) == 200
+
 - name: "[LLM] Wait for node-exporter metrics endpoint"
   ansible.builtin.uri:
     url: "http://{{ ansible_host | default(inventory_hostname) }}:{{ node_exporter_port }}/metrics"

@@ -116,7 +116,8 @@ async def reflect_on_results(
     ]
 
     try:
-        raw = await llm_call(AgentRole.REFLECTOR, messages, response_format_json=True)
+        raw = await llm_call(AgentRole.REFLECTOR, messages, response_format_json=True,
+                             dossier_id=dossier.id)
         result = json.loads(raw) if isinstance(raw, str) else raw
         if not isinstance(result, dict):
             raise TypeError("Reflection must be a JSON object")

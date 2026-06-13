@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, CheckCircle2, AlertTriangle, FileCheck, MessageSquare, FileOutput, Share2, FileBadge, Bot, FileText, Files, Info, X, BookOpen, Trash2, UploadCloud, RefreshCw, ThumbsUp, ThumbsDown, History } from '@lucide/vue'
 import { useDossierStore } from '../stores/dossier'
 import { useAuthStore } from '../stores/auth'
-import { createAppraisalSocket } from '../services/ws'
 import { getDossierPdfUrl, submitFeedback, getPendingClarifications, answerClarification, transitionDossierStatus, getDossierStatusHistory, getReferenceDocuments, uploadReferenceDocument, deleteReferenceDocument, getDocumentVersions, createDocumentVersion, getAuditLogs } from '../services/api'
 
 const route = useRoute()

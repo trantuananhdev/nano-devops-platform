@@ -13,7 +13,8 @@ llm_internal_port: 8081         # llama-server listens only on 127.0.0.1:8081
 llm_hf_repo: "MaziyarPanahi/gemma-2b-it-GGUF"
 llm_model_file: "gemma-2b-it.Q4_K_M.gguf"
 llm_hf_token: ""                # Optional: Hugging Face token for private/gated repos
-llm_context_size: 4096
+llm_context_size: 2048   # 4096→2048: KV cache ~200MB smaller → fits 3.35GB model in 3.5GB limit
+llm_memory_limit: "3500m"  # hard cgroup ceiling; model=3.35GB + process overhead ≈ 3.4GB
 llm_threads: 2
 llm_docker_image: "ghcr.io/ggml-org/llama.cpp:server"   # T-61: migrated ggerganov → ggml-org (2025-06)
 

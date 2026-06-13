@@ -11,7 +11,7 @@
 |------|-------------|--------|
 | T-01 | FastAPI skeleton + Docker Compose + `/health` endpoint | ✅ DONE |
 | T-02 | Ansible deploy Ubuntu LLM node (llama-server :8080) | ✅ DONE |
-| T-03 | DB models + 12 tables + Alembic migrations | ✅ DONE |
+| T-03 | DB models + Alembic migrations (18 migrations tổng, 001→018) | ✅ DONE |
 | T-04 | Celery ReAct agent + ai_audit_logs mọi tool call | ✅ DONE |
 | T-05 | WebSocket real-time: started/completed events | ✅ DONE |
 | T-06 | Frontend core: DossierList, Workspace, Admin, Alerts | ✅ DONE |

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from typing import Any
@@ -415,7 +416,8 @@ async def _complete_appraisal_from_checks(
             "content": f"Dossier: {dossier.title}\nObservations:\n" + "\n".join(observations),
         },
     ]
-    llm_raw = await llm_call(AgentRole.SUMMARY, llm_messages, response_format_json=False)
+    llm_raw = await llm_call(AgentRole.SUMMARY, llm_messages, response_format_json=False,
+                             dossier_id=dossier.id, session_id=task_id)
 
     overall_risk = await _execute_risk_rules(checks, session)
     if force_high_risk:
@@ -584,7 +586,8 @@ async def _run_legacy_react_loop(
             })
 
         try:
-            llm_response = await llm_call(AgentRole.EXECUTOR, conversation, response_format_json=True)
+            llm_response = await llm_call(AgentRole.EXECUTOR, conversation, response_format_json=True,
+                                          dossier_id=dossier.id, session_id=task_id)
             logger.info("LLM decision: %s", llm_response)
 
             try:
@@ -782,7 +785,8 @@ async def _regenerate_llm_summary(
             ),
         },
     ]
-    return await llm_call(AgentRole.SUMMARY, messages, response_format_json=False)
+    return await llm_call(AgentRole.SUMMARY, messages, response_format_json=False,
+                          dossier_id=dossier.id)
 
 
 async def _run_critic_loop(
@@ -815,6 +819,7 @@ async def _run_critic_loop(
             checks,
             overall_risk,
             resolution_md=resolution_md,
+            dossier_id=dossier.id,
         )
         last_verdict = verdict
 
@@ -901,22 +906,31 @@ async def run_appraisal(
 
     system_prompt = prompt_builder.build_system_prompt(user_role, tools, user_prefs)
 
+    _APPRAISAL_TIMEOUT_S = 1200  # 20 minutes — hard ceiling for entire appraisal run
+
     try:
-        checks, observations, last_step = await _run_plan_execute_reflect(
-            session,
-            dossier,
-            task_id,
-            tools,
-            pref_context,
-            user_id=user_id,
-            role=user_role,
+        checks, observations, last_step = await asyncio.wait_for(
+            _run_plan_execute_reflect(
+                session,
+                dossier,
+                task_id,
+                tools,
+                pref_context,
+                user_id=user_id,
+                role=user_role,
+            ),
+            timeout=_APPRAISAL_TIMEOUT_S,
         )
+    except asyncio.TimeoutError:
+        logger.error("Appraisal timed out after %ds for dossier %d", _APPRAISAL_TIMEOUT_S, dossier_id)
+        raise RuntimeError(f"Appraisal timed out after {_APPRAISAL_TIMEOUT_S}s")
     except ClarificationPaused:
         raise
     except Exception as exc:
         logger.warning("Plan orchestration failed (%s), falling back to legacy ReAct", exc)
-        checks, observations, last_step = await _run_legacy_react_loop(
-            session, dossier, task_id, tools, system_prompt
+        checks, observations, last_step = await asyncio.wait_for(
+            _run_legacy_react_loop(session, dossier, task_id, tools, system_prompt),
+            timeout=_APPRAISAL_TIMEOUT_S,
         )
 
     return await _complete_appraisal_from_checks(

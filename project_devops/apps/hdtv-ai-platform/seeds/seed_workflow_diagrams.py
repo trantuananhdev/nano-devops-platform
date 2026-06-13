@@ -1,6 +1,9 @@
-"""Seed workflow BPMN diagrams — 3 quy trình dựa trên luồng thật EVN.
+﻿"""Seed workflow BPMN diagrams — 3 quy trinh EVN HDTV thuc te.
 
-Idempotent: kiểm tra dossier_id trước khi insert.
+Diagram 1: Quy trinh phe duyet HDTV 9 buoc — dua tren ho so 198/TTr-EVNHANOI that.
+Diagram 2: Quy trinh AI tham dinh co clarification — flow chuan cho he thong.
+Diagram 3: Quy trinh tham dinh co ban 5 buoc — cho ho so don gian.
+Idempotent: kiem tra dossier_id truoc khi insert.
 """
 import logging
 
@@ -11,138 +14,126 @@ from app.models.entities import WorkflowDiagram
 
 logger = logging.getLogger(__name__)
 
-# BPMN XML cho quy trình thẩm định cơ bản 5 bước
+BPMN_UAV_HDTV = """<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" targetNamespace="http://bpmn.io/schema/bpmn">
+  <process id="evn_hdtv_uav" name="Quy trinh phe duyet HDTV 198/TTr-EVNHANOI" isExecutable="false">
+    <startEvent id="start" name="Cong ty LDCT de xuat"/><task id="t1" name="Ban KT soan To trinh 07/KT (07/01/2025)"/><serviceTask id="t2" name="AI Tham dinh tu dong (LegalRAG + TCKT)"/><task id="t3" name="PTGD KT Nguyen Anh Dung ky phe duyet"/><task id="t4" name="TGD Nguyen Anh Tuan ky To trinh 198 (08/01/2025)"/><task id="t5" name="Ban Tong hop tham tra (24/01/2025)"/><task id="t6" name="Phieu trinh Chu tich HDTV (10/02/2025)"/><task id="t7" name="5 TV HDTV ky dong y (Do Tuan Anh, Nguyen Xuan Thang, Tran Van Thuong, Pham Dai Nghia, Ma Hoai Nam)"/><task id="t8" name="Chu tich HDTV Nguyen Danh Duyen ban hanh Nghi quyet"/>
+    <endEvent id="end" name="Nghi quyet duoc ban hanh"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="t1"/><sequenceFlow id="f2" sourceRef="t1" targetRef="t2"/><sequenceFlow id="f3" sourceRef="t2" targetRef="t3"/><sequenceFlow id="f4" sourceRef="t3" targetRef="t4"/><sequenceFlow id="f5" sourceRef="t4" targetRef="t5"/><sequenceFlow id="f6" sourceRef="t5" targetRef="t6"/><sequenceFlow id="f7" sourceRef="t6" targetRef="t7"/><sequenceFlow id="f8" sourceRef="t7" targetRef="t8"/><sequenceFlow id="f9" sourceRef="t8" targetRef="end"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diagram"><bpmndi:BPMNPlane id="plane" bpmnElement="evn_hdtv_uav">
+    <bpmndi:BPMNShape id="s0" bpmnElement="start"><dc:Bounds x="80" y="122" width="36" height="36"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s1" bpmnElement="t1"><dc:Bounds x="170" y="100" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s2" bpmnElement="t2"><dc:Bounds x="350" y="100" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s3" bpmnElement="t3"><dc:Bounds x="530" y="100" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s4" bpmnElement="t4"><dc:Bounds x="710" y="100" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s5" bpmnElement="t5"><dc:Bounds x="890" y="100" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s6" bpmnElement="t6"><dc:Bounds x="1070" y="100" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s7" bpmnElement="t7"><dc:Bounds x="1250" y="100" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s8" bpmnElement="t8"><dc:Bounds x="1430" y="100" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s9" bpmnElement="end"><dc:Bounds x="1610" y="122" width="36" height="36"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNEdge id="e1" bpmnElement="f1"><di:waypoint x="116" y="140"/><di:waypoint x="170" y="140"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e2" bpmnElement="f2"><di:waypoint x="290" y="140"/><di:waypoint x="350" y="140"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e3" bpmnElement="f3"><di:waypoint x="470" y="140"/><di:waypoint x="530" y="140"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e4" bpmnElement="f4"><di:waypoint x="650" y="140"/><di:waypoint x="710" y="140"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e5" bpmnElement="f5"><di:waypoint x="830" y="140"/><di:waypoint x="890" y="140"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e6" bpmnElement="f6"><di:waypoint x="1010" y="140"/><di:waypoint x="1070" y="140"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e7" bpmnElement="f7"><di:waypoint x="1190" y="140"/><di:waypoint x="1250" y="140"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e8" bpmnElement="f8"><di:waypoint x="1370" y="140"/><di:waypoint x="1430" y="140"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e9" bpmnElement="f9"><di:waypoint x="1550" y="140"/><di:waypoint x="1610" y="140"/></bpmndi:BPMNEdge>
+  </bpmndi:BPMNPlane></bpmndi:BPMNDiagram>
+</definitions>"""
+
+BPMN_AI_CLARIFICATION = """<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" targetNamespace="http://bpmn.io/schema/bpmn">
+  <process id="ai_clarification_flow" name="Quy trinh AI tham dinh co lam ro" isExecutable="false">
+    <startEvent id="start" name="Nhan ho so"/><task id="t1" name="Kiem tra dieu kien ho so"/><serviceTask id="t2" name="AI Tham dinh (ReAct Agent)"/>
+    <exclusiveGateway id="gw1" name="Can lam ro?"/>
+    <userTask id="t3" name="Chuyen vien bo sung thong tin"/><task id="t4" name="Truong Ban xem xet ket qua AI"/><task id="t5" name="Phe duyet cap Ban"/><task id="t6" name="Trinh len HDTV"/>
+    <endEvent id="end" name="Hoan tat"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="t1"/><sequenceFlow id="f2" sourceRef="t1" targetRef="t2"/><sequenceFlow id="f3" sourceRef="t2" targetRef="gw1"/>
+    <sequenceFlow id="f4" name="Co" sourceRef="gw1" targetRef="t3"/><sequenceFlow id="f5" sourceRef="t3" targetRef="t2"/>
+    <sequenceFlow id="f6" name="Khong" sourceRef="gw1" targetRef="t4"/><sequenceFlow id="f7" sourceRef="t4" targetRef="t5"/><sequenceFlow id="f8" sourceRef="t5" targetRef="t6"/><sequenceFlow id="f9" sourceRef="t6" targetRef="end"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diagram"><bpmndi:BPMNPlane id="plane" bpmnElement="ai_clarification_flow">
+    <bpmndi:BPMNShape id="s0" bpmnElement="start"><dc:Bounds x="80" y="152" width="36" height="36"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s1" bpmnElement="t1"><dc:Bounds x="170" y="130" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s2" bpmnElement="t2"><dc:Bounds x="350" y="130" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="sg1" bpmnElement="gw1" isMarkerVisible="true"><dc:Bounds x="525" y="145" width="50" height="50"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s3" bpmnElement="t3"><dc:Bounds x="500" y="260" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s4" bpmnElement="t4"><dc:Bounds x="640" y="130" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s5" bpmnElement="t5"><dc:Bounds x="820" y="130" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s6" bpmnElement="t6"><dc:Bounds x="1000" y="130" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="se" bpmnElement="end"><dc:Bounds x="1180" y="152" width="36" height="36"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNEdge id="e1" bpmnElement="f1"><di:waypoint x="116" y="170"/><di:waypoint x="170" y="170"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e2" bpmnElement="f2"><di:waypoint x="290" y="170"/><di:waypoint x="350" y="170"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e3" bpmnElement="f3"><di:waypoint x="470" y="170"/><di:waypoint x="525" y="170"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e4" bpmnElement="f4"><di:waypoint x="550" y="195"/><di:waypoint x="550" y="260"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e5" bpmnElement="f5"><di:waypoint x="500" y="300"/><di:waypoint x="410" y="300"/><di:waypoint x="410" y="210"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e6" bpmnElement="f6"><di:waypoint x="575" y="170"/><di:waypoint x="640" y="170"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e7" bpmnElement="f7"><di:waypoint x="760" y="170"/><di:waypoint x="820" y="170"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e8" bpmnElement="f8"><di:waypoint x="940" y="170"/><di:waypoint x="1000" y="170"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e9" bpmnElement="f9"><di:waypoint x="1120" y="170"/><di:waypoint x="1180" y="170"/></bpmndi:BPMNEdge>
+  </bpmndi:BPMNPlane></bpmndi:BPMNDiagram>
+</definitions>"""
+
 BPMN_BASIC = """<?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
-             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-             targetNamespace="http://bpmn.io/schema/bpmn">
-  <process id="basic_appraisal" name="Quy trình thẩm định cơ bản" isExecutable="false">
-    <startEvent id="start" name="Nhận hồ sơ"/>
-    <task id="task1" name="Kiểm tra đủ điều kiện"/>
-    <task id="task2" name="AI Thẩm định"/>
-    <task id="task3" name="Phê duyệt Trưởng phòng"/>
-    <task id="task4" name="Phê duyệt HĐTV"/>
-    <endEvent id="end" name="Hoàn tất"/>
-    <sequenceFlow id="f1" sourceRef="start" targetRef="task1"/>
-    <sequenceFlow id="f2" sourceRef="task1" targetRef="task2"/>
-    <sequenceFlow id="f3" sourceRef="task2" targetRef="task3"/>
-    <sequenceFlow id="f4" sourceRef="task3" targetRef="task4"/>
-    <sequenceFlow id="f5" sourceRef="task4" targetRef="end"/>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" targetNamespace="http://bpmn.io/schema/bpmn">
+  <process id="basic_appraisal" name="Quy trinh tham dinh co ban" isExecutable="false">
+    <startEvent id="start" name="Nhan ho so"/><task id="t1" name="Kiem tra dieu kien"/><serviceTask id="t2" name="AI Tham dinh"/><task id="t3" name="Phe duyet Truong ban"/><task id="t4" name="Phe duyet HDTV"/><endEvent id="end" name="Hoan tat"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="t1"/><sequenceFlow id="f2" sourceRef="t1" targetRef="t2"/><sequenceFlow id="f3" sourceRef="t2" targetRef="t3"/><sequenceFlow id="f4" sourceRef="t3" targetRef="t4"/><sequenceFlow id="f5" sourceRef="t4" targetRef="end"/>
   </process>
-  <bpmndi:BPMNDiagram id="diagram">
-    <bpmndi:BPMNPlane id="plane" bpmnElement="basic_appraisal">
-      <bpmndi:BPMNShape id="start_di" bpmnElement="start"><dc:Bounds x="152" y="82" width="36" height="36"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task1_di" bpmnElement="task1"><dc:Bounds x="240" y="60" width="120" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task2_di" bpmnElement="task2"><dc:Bounds x="410" y="60" width="120" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task3_di" bpmnElement="task3"><dc:Bounds x="580" y="60" width="120" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task4_di" bpmnElement="task4"><dc:Bounds x="750" y="60" width="120" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="end_di" bpmnElement="end"><dc:Bounds x="922" y="82" width="36" height="36"/></bpmndi:BPMNShape>
-    </bpmndi:BPMNPlane>
-  </bpmndi:BPMNDiagram>
+  <bpmndi:BPMNDiagram id="diagram"><bpmndi:BPMNPlane id="plane" bpmnElement="basic_appraisal">
+    <bpmndi:BPMNShape id="s0" bpmnElement="start"><dc:Bounds x="152" y="82" width="36" height="36"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s1" bpmnElement="t1"><dc:Bounds x="240" y="60" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s2" bpmnElement="t2"><dc:Bounds x="410" y="60" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s3" bpmnElement="t3"><dc:Bounds x="580" y="60" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="s4" bpmnElement="t4"><dc:Bounds x="750" y="60" width="120" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="se" bpmnElement="end"><dc:Bounds x="922" y="82" width="36" height="36"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNEdge id="e1" bpmnElement="f1"><di:waypoint x="188" y="100"/><di:waypoint x="240" y="100"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e2" bpmnElement="f2"><di:waypoint x="360" y="100"/><di:waypoint x="410" y="100"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e3" bpmnElement="f3"><di:waypoint x="530" y="100"/><di:waypoint x="580" y="100"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e4" bpmnElement="f4"><di:waypoint x="700" y="100"/><di:waypoint x="750" y="100"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="e5" bpmnElement="f5"><di:waypoint x="870" y="100"/><di:waypoint x="922" y="100"/></bpmndi:BPMNEdge>
+  </bpmndi:BPMNPlane></bpmndi:BPMNDiagram>
 </definitions>"""
 
-# BPMN XML cho quy trình có clarification 7 bước
-BPMN_CLARIFICATION = """<?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
-             targetNamespace="http://bpmn.io/schema/bpmn">
-  <process id="clarification_flow" name="Quy trình thẩm định có yêu cầu làm rõ" isExecutable="false">
-    <startEvent id="start" name="Nhận hồ sơ"/>
-    <task id="task1" name="Kiểm tra đủ điều kiện"/>
-    <task id="task2" name="AI Thẩm định sơ bộ"/>
-    <userTask id="task3" name="Chuyên viên trả lời AI"/>
-    <task id="task4" name="AI Hoàn thiện thẩm định"/>
-    <task id="task5" name="Phê duyệt Trưởng phòng"/>
-    <task id="task6" name="Phê duyệt HĐTV"/>
-    <endEvent id="end" name="Hoàn tất"/>
-    <intermediateCatchEvent id="clarif" name="AI Yêu cầu làm rõ"/>
-    <sequenceFlow id="f1" sourceRef="start" targetRef="task1"/>
-    <sequenceFlow id="f2" sourceRef="task1" targetRef="task2"/>
-    <sequenceFlow id="f3" sourceRef="task2" targetRef="clarif"/>
-    <sequenceFlow id="f4" sourceRef="clarif" targetRef="task3"/>
-    <sequenceFlow id="f5" sourceRef="task3" targetRef="task4"/>
-    <sequenceFlow id="f6" sourceRef="task4" targetRef="task5"/>
-    <sequenceFlow id="f7" sourceRef="task5" targetRef="task6"/>
-    <sequenceFlow id="f8" sourceRef="task6" targetRef="end"/>
-  </process>
-  <bpmndi:BPMNDiagram id="diagram">
-    <bpmndi:BPMNPlane id="plane" bpmnElement="clarification_flow">
-      <bpmndi:BPMNShape id="start_di" bpmnElement="start"><dc:Bounds x="100" y="100" width="36" height="36"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task1_di" bpmnElement="task1"><dc:Bounds x="190" y="78" width="120" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task2_di" bpmnElement="task2"><dc:Bounds x="360" y="78" width="120" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="clarif_di" bpmnElement="clarif"><dc:Bounds x="530" y="100" width="36" height="36"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task3_di" bpmnElement="task3"><dc:Bounds x="620" y="78" width="120" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task4_di" bpmnElement="task4"><dc:Bounds x="790" y="78" width="120" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task5_di" bpmnElement="task5"><dc:Bounds x="960" y="78" width="120" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task6_di" bpmnElement="task6"><dc:Bounds x="1130" y="78" width="120" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="end_di" bpmnElement="end"><dc:Bounds x="1300" y="100" width="36" height="36"/></bpmndi:BPMNShape>
-    </bpmndi:BPMNPlane>
-  </bpmndi:BPMNDiagram>
-</definitions>"""
-
-# BPMN XML cho quy trình phê duyệt HĐTV đầy đủ 9 bước (theo Mẫu KT thật)
-BPMN_FULL_HDTV = """<?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
-             targetNamespace="http://bpmn.io/schema/bpmn">
-  <process id="hdtv_full" name="Quy trình phê duyệt HĐTV đầy đủ" isExecutable="false">
-    <startEvent id="start" name="Phiếu trình B4"/>
-    <task id="task1" name="PTGĐ xem xét sơ bộ"/>
-    <task id="task2" name="Ban KT thẩm tra kỹ thuật"/>
-    <task id="task3" name="Lập Báo cáo thẩm tra"/>
-    <task id="task4" name="Lấy ý kiến tư vấn ngoài"/>
-    <task id="task5" name="AI Tổng hợp ý kiến"/>
-    <task id="task6" name="Trình Tổng Giám đốc"/>
-    <task id="task7" name="HĐTV phê duyệt"/>
-    <task id="task8" name="Ban hành Quyết định"/>
-    <endEvent id="end" name="QĐ có hiệu lực"/>
-    <sequenceFlow id="f1" sourceRef="start" targetRef="task1"/>
-    <sequenceFlow id="f2" sourceRef="task1" targetRef="task2"/>
-    <sequenceFlow id="f3" sourceRef="task2" targetRef="task3"/>
-    <sequenceFlow id="f4" sourceRef="task3" targetRef="task4"/>
-    <sequenceFlow id="f5" sourceRef="task4" targetRef="task5"/>
-    <sequenceFlow id="f6" sourceRef="task5" targetRef="task6"/>
-    <sequenceFlow id="f7" sourceRef="task6" targetRef="task7"/>
-    <sequenceFlow id="f8" sourceRef="task7" targetRef="task8"/>
-    <sequenceFlow id="f9" sourceRef="task8" targetRef="end"/>
-  </process>
-  <bpmndi:BPMNDiagram id="diagram">
-    <bpmndi:BPMNPlane id="plane" bpmnElement="hdtv_full">
-      <bpmndi:BPMNShape id="start_di" bpmnElement="start"><dc:Bounds x="80" y="100" width="36" height="36"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task1_di" bpmnElement="task1"><dc:Bounds x="170" y="78" width="100" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task2_di" bpmnElement="task2"><dc:Bounds x="320" y="78" width="100" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task3_di" bpmnElement="task3"><dc:Bounds x="470" y="78" width="100" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task4_di" bpmnElement="task4"><dc:Bounds x="620" y="78" width="100" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task5_di" bpmnElement="task5"><dc:Bounds x="770" y="78" width="100" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task6_di" bpmnElement="task6"><dc:Bounds x="920" y="78" width="100" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task7_di" bpmnElement="task7"><dc:Bounds x="1070" y="78" width="100" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="task8_di" bpmnElement="task8"><dc:Bounds x="1220" y="78" width="100" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="end_di" bpmnElement="end"><dc:Bounds x="1370" y="100" width="36" height="36"/></bpmndi:BPMNShape>
-    </bpmndi:BPMNPlane>
-  </bpmndi:BPMNDiagram>
-</definitions>"""
-
-
-WORKFLOW_DATA = [
-    {"doc_no": "EVNHANOI-SCADA-2024-007", "bpmn_xml": BPMN_BASIC},
-    {"doc_no": "EVNHANOI-UAV-198-2024", "bpmn_xml": BPMN_CLARIFICATION},
-    {"doc_no": "EVNHANOI-MBA-2024-021", "bpmn_xml": BPMN_FULL_HDTV},
+WORKFLOWS_DATA = [
+    {
+        "doc_no": "198/TTr-EVNHANOI",
+        "name": "Quy trinh phe duyet HDTV — 198/TTr-EVNHANOI",
+        "description": (
+            "9 buoc thuc te: Cong ty LDCT de xuat -> Ban KT soan 07/KT -> AI tham dinh -> "
+            "PTGD KT Nguyen Anh Dung ky -> TGD Nguyen Anh Tuan ky To trinh 198 -> "
+            "Ban Tong hop tham tra -> Phieu trinh HDTV -> 5 TV HDTV ky -> "
+            "Chu tich HDTV Nguyen Danh Duyen ban hanh Nghi quyet"
+        ),
+        "bpmn_xml": BPMN_UAV_HDTV,
+    },
+    {
+        "doc_no": "EVNHANOI-MBA-2024-021",
+        "name": "Quy trinh AI tham dinh co lam ro",
+        "description": (
+            "Flow chuan: Nhan ho so -> Kiem tra dieu kien -> AI tham dinh (ReAct) -> "
+            "Neu can lam ro: chuyen vien bo sung -> Truong ban xem xet -> Phe duyet Ban -> Trinh HDTV"
+        ),
+        "bpmn_xml": BPMN_AI_CLARIFICATION,
+    },
+    {
+        "doc_no": "EVNHANOI-SCADA-2024-007",
+        "name": "Quy trinh tham dinh co ban",
+        "description": "5 buoc don gian cho ho so rui ro thap: Nhan ho so -> Kiem tra -> AI -> Truong ban -> HDTV",
+        "bpmn_xml": BPMN_BASIC,
+    },
 ]
 
 
 async def seed_workflow_diagrams(
     session: AsyncSession, dossier_id_map: dict[str, int]
 ) -> None:
-    """Seed BPMN workflow diagrams."""
-    for w in WORKFLOW_DATA:
+    for w in WORKFLOWS_DATA:
         doc_no = w["doc_no"]
         dossier_id = dossier_id_map.get(doc_no)
-        if not dossier_id:
-            continue
 
         existing = (
             await session.execute(
@@ -151,10 +142,14 @@ async def seed_workflow_diagrams(
         ).scalar_one_or_none()
 
         if existing:
-            logger.info("Workflow diagram already exists for: %s", doc_no)
+            logger.info("WorkflowDiagram already exists for dossier: %s", doc_no)
             continue
 
-        session.add(WorkflowDiagram(dossier_id=dossier_id, bpmn_xml=w["bpmn_xml"]))
-        logger.info("Seeded workflow diagram for: %s", doc_no)
+        diagram = WorkflowDiagram(
+            dossier_id=dossier_id,
+            bpmn_xml=w["bpmn_xml"],
+        )
+        session.add(diagram)
+        logger.info("Seeded workflow diagram: %s", w["name"])
 
     await session.commit()

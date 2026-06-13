@@ -106,4 +106,10 @@ export const markNotificationRead = (notificationId, isRead = true) => api.patch
 export const markAllNotificationsRead = (userId) => api.patch(`/notifications/user/${userId}/mark-all-read`)
 export const createNotification = (data) => api.post(`/notifications`, data)
 
+// Token Usage
+export const getTokenUsageSummary = (days = 30) => api.get('/token-usage/summary', { params: { days } })
+export const getTokenUsageDaily = (days = 30) => api.get('/token-usage/daily', { params: { days } })
+export const getTokenUsageByRole = (days = 30) => api.get('/token-usage/by-role', { params: { days } })
+export const getTokenUsageByDossier = (days = 30, limit = 20) => api.get('/token-usage/by-dossier', { params: { days, limit } })
+
 export default api

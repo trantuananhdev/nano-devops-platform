@@ -394,6 +394,38 @@ class DocumentVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class LlmTokenUsage(Base):
+    """Per-call LLM token usage — actual counts from API response (not estimated).
+
+    Captures Gemini usageMetadata and llama.cpp OpenAI-compatible usage field.
+    Used for the Token Usage dashboard screen and cost analysis.
+    """
+
+    __tablename__ = "llm_token_usage"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # LLM identity
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    backend: Mapped[str] = mapped_column(String(16), nullable=False)   # "local" | "gemini"
+    model: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Actual token counts from API response
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Context (nullable — not every call tied to a dossier)
+    dossier_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dossiers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+
 class Notification(Base):
     """Notification system for user alerts (T-53: Notification System)."""
 

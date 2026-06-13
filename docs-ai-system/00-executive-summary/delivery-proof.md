@@ -2,14 +2,15 @@
 
 > **Audience:** CEO
 > **Mục đích:** Bằng chứng cụ thể rằng team có thể deliver — timeline, milestone, demo-ready.
+> **Cập nhật:** 2026-06-13
 
 ---
 
 ## Timeline tổng quan
 
 ```
-Day 1-10: Sprint 1 — Core Platform (10 ngày thử việc)
-─────────────────────────────────────────────────────
+Day 1-10: Sprint 1 — Core Platform (10 ngày)
+─────────────────────────────────────────────
 D1: Infra skeleton + FastAPI + Docker Compose    → T-01 ✅
 D2: Ansible LLM Node + llama-server             → T-02 ✅
 D3: Database models + migrations                → T-03 ✅
@@ -30,7 +31,8 @@ Phase 11: Performance (T-38→T-41)      → Virtual Scroll, Lazy Load, Paginati
 Phase 12: Hardening (T-42→T-46)        → Ansible fix, Smoke Tests, Env Validation ✅
 Phase 13: Infra Fix (T-47→T-50)        → SSH Bootstrap hardening ✅
 Phase 14: Simplification (T-51→T-52)   → Root-Key workflow, clean up complexity ✅
-Phase 15: Migration fixes (T-53→T-66)  → DB migration robustness ✅
+Phase 15+: Migration + Data (T-53→T-66)→ Notification System, DB robustness,
+                                          Real EVN seed data từ tờ trình thật ✅
 ```
 
 ---
@@ -38,7 +40,7 @@ Phase 15: Migration fixes (T-53→T-66)  → DB migration robustness ✅
 ## Milestone đã đạt được
 
 ### ✅ Sprint 1 — 10 ngày (Demo-ready)
-- Stack chạy end-to-end: `vagrant up → ansible-deploy-llm → hdtv-up`
+- Stack chạy end-to-end: `COPY_PROJECT_DEVOPS=1 vagrant up` → fully automated
 - AI Agent thẩm định hồ sơ async với real-time WebSocket
 - 4 vai trò người dùng với UI riêng biệt
 - CI/CD pipeline trên GitHub Actions
@@ -58,29 +60,37 @@ Phase 15: Migration fixes (T-53→T-66)  → DB migration robustness ✅
 - **MCP Server**: Standard protocol cho AI-to-AI tool calling + SSE streaming
 - **Execution Harness**: Mọi tool call có validation, timeout, retry, error taxonomy
 
-### ✅ Phase 10-15 — Operations & Hardening
+### ✅ Phase 10-15 — Operations, Hardening & Real Data
 - **Observability LLMOps**: 14 alert rules, Grafana dashboard 5 panels
 - **API Key Management**: bcrypt hashing, DB-first lookup, rotation
 - **Backup strategy**: PostgreSQL + MinIO + Chroma automated backup
-- **Ansible automation**: Ubuntu LLM node deploy/teardown fully automated
-- **Smoke tests**: Tự động verify sau mỗi deployment
+- **Notification System**: WebSocket real-time notifications (T-53)
+- **Seed data thật**: 8 users + 16 dossiers từ 4 tờ trình thật EVN Hà Nội
+- **BPMN workflow thật**: Quy trình phê duyệt HĐTV 9 bước thực tế
 
 ---
 
 ## Demo-ready checklist
 
 ```bash
-# Từ zero đến demo — 10 phút
-./cli.sh ansible-deploy-llm     # Deploy Ubuntu LLM node (Ansible)
-./cli.sh hdtv-up                # Khởi động Alpine app stack
-./cli.sh hdtv-migrate           # Apply 12 DB migrations
-./cli.sh hdtv-seed              # Seed demo data
-./cli.sh hdtv-smoke             # Verify everything works
+# Option A — Vagrant (production-like)
+COPY_PROJECT_DEVOPS=1 vagrant up    # Tất cả tự động: migrations + seed + services
+
+# Option B — Docker trực tiếp (dev)
+wsl docker compose -f docker-compose.hdtv.yml up -d
+wsl docker exec hdtv-api python -m seeds.seed_all    # Seed data thật
+
+# Verify
+curl http://localhost:8000/api/v1/health   # → {"status": "healthy"}
 
 # Demo URLs
-Frontend:   http://<VM_IP>:3080
-API Docs:   http://<VM_IP>:8000/docs
-Grafana:    http://<VM_IP>:3000
+Frontend:  http://localhost:3080  (hoặc http://192.168.157.10:3080 qua Vagrant)
+API Docs:  http://localhost:8000/docs
+Grafana:   http://localhost:3000  (hoặc http://192.168.157.10:3000)
+
+# Login
+Email:    admin@evnhanoi.vn
+Password: EVN@2024!
 ```
 
 ---
@@ -89,12 +99,13 @@ Grafana:    http://<VM_IP>:3000
 
 | Demo moment | Điều CEO thấy |
 |-------------|---------------|
-| Upload hồ sơ PDF | UI đẹp, 3-step wizard, file lên MinIO |
-| Bấm "Thẩm định" | Real-time progress bar qua WebSocket |
-| Risk HIGH alert | Thông báo tự động, màu đỏ nổi bật |
-| Xem báo cáo | Structured report với risk level, checklist, recommendations |
-| Lãnh đạo vs Chuyên viên | Cùng hồ sơ → báo cáo khác nhau theo vai trò |
-| Admin dashboard | Users, Roles, API Keys, Agent Metrics |
+| Dashboard | 12 hồ sơ pending, 7 alerts, biểu đồ theo đơn vị |
+| Hồ sơ UAV (198/TTr-EVNHANOI) | Tờ trình thật EVN, risk Trung bình, 2 kiến nghị hiệu chỉnh |
+| BPMN Workflow | Quy trình HĐTV 9 bước thật của EVNHANOI |
+| Bấm "Thẩm định" | Real-time progress bar, 30-60 giây, có từng bước tool |
+| Risk HIGH alert | Thông báo tự động, màu đỏ, có nguồn từ tool nào |
+| Báo cáo theo vai trò | TV HĐTV vs Chuyên viên thẩm tra → báo cáo khác nhau |
+| Admin dashboard | Users, Roles, Audit Logs, Agent Metrics |
 | Feedback 👍/👎 | Agent học từ phản hồi → cải thiện lần sau |
 
 ---
@@ -104,9 +115,13 @@ Grafana:    http://<VM_IP>:3000
 | Indicator | Status |
 |-----------|--------|
 | 66 tasks, tất cả DONE | ✅ |
-| `test.sh` chạy không lỗi | ✅ |
-| 13 pytest static cases pass | ✅ |
-| Docker Compose quality pass | ✅ |
+| 18 DB migrations apply clean | ✅ |
+| Seed data idempotent (retry OK) | ✅ |
+| Login thật với bcrypt hash | ✅ (passlib issue fixed) |
+| Dashboard API hoạt động | ✅ |
+| Dossier detail + appraisal | ✅ |
+| Alerts endpoint | ✅ |
+| Notifications per user | ✅ |
+| Docker Compose 9 services healthy | ✅ |
 | CI builds hdtv images | ✅ (GitHub Actions) |
-| Smoke test 4 checks pass | ✅ |
-| Không có tech debt critical | ✅ (Code Quality Pass session 15) |
+| Seed data từ tờ trình thật EVN | ✅ (198/TTr-EVNHANOI) |

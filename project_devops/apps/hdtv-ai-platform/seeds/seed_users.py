@@ -1,11 +1,11 @@
-﻿"""Seed users — 8 nhân viên EVN Hà Nội thực tế từ hồ sơ 198/TTr-EVNHANOI.
+﻿"""Seed users — 8 nhan vien EVN Ha Noi thuc te tu ho so 198/TTr-EVNHANOI.
 
-Idempotent: kiểm tra email trước khi insert.
-Password mặc định: EVN@2024! (bcrypt hashed)
+Idempotent: kiem tra email truoc khi insert.
+Password mac dinh: EVN@2024! (bcrypt hashed)
 """
 import logging
+import bcrypt as _bcrypt
 
-from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,65 +13,65 @@ from app.models.entities import User, UserRole
 
 logger = logging.getLogger(__name__)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 DEFAULT_PASSWORD = "EVN@2024!"
 
-# Người dùng thực tế từ Tờ trình 198/TTr-EVNHANOI, 07/KT, Báo cáo thẩm tra và Phiếu trình HĐTV
+# Nguoi dung thuc te tu To trinh 198/TTr-EVNHANOI, 07/KT, Bao cao tham tra va Phieu trinh HDTV
 USERS_DATA = [
     {
-        "name": "Nguyễn Danh Duyên",
+        "name": "Nguyen Danh Duyen",
         "email": "admin@evnhanoi.vn",
         "role": UserRole.admin,
-        # Chủ tịch HĐTV EVNHANOI — ký ban hành Nghị quyết (Phiếu trình 10/02/2025)
+        # Chu tich HDTV EVNHANOI — ky ban hanh Nghi quyet (Phieu trinh 10/02/2025)
     },
     {
-        "name": "Đỗ Tuấn Anh",
+        "name": "Do Tuan Anh",
         "email": "dtanh@evnhanoi.vn",
         "role": UserRole.hdtv_leader,
-        # Thành viên HĐTV — ký đồng ý Phiếu trình (vị trí 1/5)
+        # Thanh vien HDTV — ky dong y Phieu trinh (vi tri 1/5)
     },
     {
-        "name": "Đoàn Đức Tiến",
+        "name": "Doan Duc Tien",
         "email": "ddtien@evnhanoi.vn",
         "role": UserRole.dept_head,
-        # Trưởng Ban Tổng hợp — ký Báo cáo thẩm tra ngày 24/01/2025
+        # Truong Ban Tong hop — ky Bao cao tham tra ngay 24/01/2025
     },
     {
-        "name": "Nguyễn Anh Dũng",
+        "name": "Nguyen Anh Dung",
         "email": "nadung@evnhanoi.vn",
         "role": UserRole.dept_head,
-        # Phó TGĐ Kỹ thuật — ký phê duyệt Tờ trình 07/KT ngày 07/01/2025
+        # Pho TGD Ky thuat — ky phe duyet To trinh 07/KT ngay 07/01/2025
     },
     {
-        "name": "Hà Tuấn Minh",
+        "name": "Ha Tuan Minh",
         "email": "htminh@evnhanoi.vn",
         "role": UserRole.specialist,
-        # Cán bộ thụ lý Ban Tổng hợp — người thẩm tra hồ sơ 198/TTr-EVNHANOI
+        # Can bo thu ly Ban Tong hop — nguoi tham tra ho so 198/TTr-EVNHANOI
     },
     {
-        "name": "Đào Ngọc Chung",
+        "name": "Dao Ngoc Chung",
         "email": "dnchung@evnhanoi.vn",
         "role": UserRole.specialist,
-        # KT. Phó Trưởng Ban Kỹ thuật — soạn và ký Tờ trình 07/KT ngày 07/01/2025
+        # KT. Pho Truong Ban Ky thuat — soan va ky To trinh 07/KT ngay 07/01/2025
     },
     {
-        "name": "Trần Văn Thương",
+        "name": "Tran Van Thuong",
         "email": "tvthuong@evnhanoi.vn",
         "role": UserRole.specialist,
-        # Thành viên HĐTV — ký đồng ý Phiếu trình (vị trí 3/5)
+        # Thanh vien HDTV — ky dong y Phieu trinh (vi tri 3/5)
     },
     {
-        "name": "Phạm Đại Nghĩa",
+        "name": "Pham Dai Nghia",
         "email": "pdnghia@evnhanoi.vn",
         "role": UserRole.specialist,
-        # Thành viên HĐTV — ký đồng ý Phiếu trình (vị trí 4/5)
+        # Thanh vien HDTV — ky dong y Phieu trinh (vi tri 4/5)
     },
 ]
 
 
 async def seed_users(session: AsyncSession) -> dict[str, int]:
-    """Seed users, return email→id map."""
-    hashed_pw = pwd_context.hash(DEFAULT_PASSWORD)
+    """Seed users, return email to id map."""
+    pw_bytes = DEFAULT_PASSWORD.encode("utf-8")
+    hashed_pw = _bcrypt.hashpw(pw_bytes, _bcrypt.gensalt(rounds=12)).decode("utf-8")
     id_map: dict[str, int] = {}
 
     for u in USERS_DATA:

@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import logging
 import threading
@@ -41,6 +42,14 @@ if TYPE_CHECKING:
     from app.core.config import Settings
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# ContextVar for token capture — set by llm_call(), written by _call_* fns.
+# Pattern: contextvar flows down through circuit breaker without changing sigs.
+# ---------------------------------------------------------------------------
+_token_capture: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
+    "_token_capture", default=None
+)
 
 # ---------------------------------------------------------------------------
 # Agent roles — mỗi role = 1 "model" riêng trên FE dashboard
@@ -324,6 +333,14 @@ async def _call_gemini(
                 if not text:
                     raise ValueError(f"Gemini empty response: {data}")
                 LLM_CALLS.labels(role=role, backend="gemini", status="ok").inc()
+                # Capture actual token counts from Gemini usageMetadata
+                _cap = _token_capture.get()
+                if _cap is not None:
+                    meta = data.get("usageMetadata", {})
+                    _cap["prompt_tokens"] = meta.get("promptTokenCount", 0)
+                    _cap["completion_tokens"] = meta.get("candidatesTokenCount", 0)
+                    _cap["total_tokens"] = meta.get("totalTokenCount", 0)
+                    _cap["model"] = model_name
                 return text
 
             resp.raise_for_status()
@@ -383,8 +400,17 @@ async def _call_local_llm(
             try:
                 resp = await client.post(url, json=payload)
                 resp.raise_for_status()
+                rdata = resp.json()
                 LLM_CALLS.labels(role=role, backend="local", status="ok").inc()
-                return resp.json()["choices"][0]["message"]["content"]
+                # Capture actual token counts from llama.cpp OpenAI-compatible usage
+                _cap = _token_capture.get()
+                if _cap is not None:
+                    usage = rdata.get("usage", {})
+                    _cap["prompt_tokens"] = usage.get("prompt_tokens", 0)
+                    _cap["completion_tokens"] = usage.get("completion_tokens", 0)
+                    _cap["total_tokens"] = usage.get("total_tokens", 0)
+                    _cap["model"] = rdata.get("model", cfg.llm_model)
+                return rdata["choices"][0]["message"]["content"]
             except (httpx.TransportError, httpx.TimeoutException) as exc:
                 last_exc = exc
                 if attempt <= max_retries:
@@ -470,6 +496,8 @@ async def llm_call(
     *,
     response_format_json: bool | None = None,
     temperature:          float | None = None,
+    dossier_id:           int | None = None,
+    session_id:           str | None = None,
 ) -> str:
     """Route an LLM call to the correct backend based on agent role.
 
@@ -478,6 +506,8 @@ async def llm_call(
         messages:             OpenAI-style messages list
         response_format_json: override JSON mode (None = use role default)
         temperature:          override temperature (None = use role default)
+        dossier_id:           optional dossier context for token usage tracking
+        session_id:           optional agent session ID for grouping
 
     Returns:
         Raw text string from whichever backend was selected.
@@ -485,6 +515,7 @@ async def llm_call(
     role_str = role.value if isinstance(role, AgentRole) else str(role)
     cfg_entry = _ROLE_CONFIG.get(role_str, _ROLE_CONFIG[AgentRole.TOOL_MOCK])
     cfg = get_settings()
+    _t_start = time.perf_counter()
 
     backend = cfg_entry["backend"]
     temp    = temperature if temperature is not None else cfg_entry["temperature"]
@@ -493,6 +524,50 @@ async def llm_call(
 
     logger.debug("llm_call role=%s backend=%s label=%s json=%s", role_str, backend, label, jmode)
 
+    # Set token capture context — written by _call_gemini / _call_local_llm on success
+    _capture: dict[str, Any] = {"backend": backend, "role": role_str, "model": label}
+    _ctx_token = _token_capture.set(_capture)
+
+    try:
+        result = await _llm_call_inner(
+            role_str, messages, backend=backend, temp=temp, jmode=jmode,
+            cfg=cfg, cfg_entry=cfg_entry,
+        )
+    finally:
+        # Always reset the contextvar regardless of success/failure
+        _token_capture.reset(_ctx_token)
+
+    # Fire-and-forget persist — only on success (result is bound here)
+    if _capture.get("total_tokens", 0) > 0:
+        duration_ms = int((time.perf_counter() - _t_start) * 1000)
+        asyncio.create_task(
+            _persist_token_usage(
+                role=role_str,
+                backend=_capture["backend"],
+                model=_capture.get("model", label),
+                prompt_tokens=_capture.get("prompt_tokens", 0),
+                completion_tokens=_capture.get("completion_tokens", 0),
+                total_tokens=_capture["total_tokens"],
+                duration_ms=duration_ms,
+                dossier_id=dossier_id,
+                session_id=session_id,
+            ),
+            name=f"token_persist_{role_str}",
+        )
+    return result
+
+
+async def _llm_call_inner(
+    role_str: str,
+    messages: list[dict[str, str]],
+    *,
+    backend: str,
+    temp: float,
+    jmode: bool,
+    cfg: Any,
+    cfg_entry: dict[str, Any],
+) -> str:
+    """Inner dispatch — extracted to keep llm_call() clean."""
     if backend == "local":
         try:
             return await _get_cb_local().call(
@@ -556,6 +631,45 @@ async def llm_call(
                 LLM_CIRCUIT_TRIPS.labels(backend="local_llm", role=role_str).inc()
             logger.warning("Local LLM fallback also failed for role=%s: %s", role_str, local_exc)
             return _LLM_FALLBACK
+
+
+# ---------------------------------------------------------------------------
+# Token usage persistence — fire-and-forget, non-blocking
+# ---------------------------------------------------------------------------
+
+async def _persist_token_usage(
+    *,
+    role: str,
+    backend: str,
+    model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    total_tokens: int,
+    duration_ms: int,
+    dossier_id: int | None,
+    session_id: str | None,
+) -> None:
+    """Persist actual token usage to DB. Called via asyncio.create_task — never blocks llm_call."""
+    try:
+        from app.core.database import async_session_factory
+        from app.models.entities import LlmTokenUsage
+
+        async with async_session_factory() as session:
+            row = LlmTokenUsage(
+                role=role,
+                backend=backend,
+                model=model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                duration_ms=duration_ms,
+                dossier_id=dossier_id,
+                session_id=session_id,
+            )
+            session.add(row)
+            await session.commit()
+    except Exception as exc:
+        logger.debug("Token usage persist failed (non-critical): %s", exc)
 
 
 # ---------------------------------------------------------------------------

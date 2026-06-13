@@ -1,5 +1,6 @@
-"""Seed alerts — 8 cảnh báo từ hồ sơ UAV và các hồ sơ khác.
+﻿"""Seed alerts — 8 cảnh báo dựa trên tài liệu thật.
 
+2 cảnh báo UAV từ Báo cáo thẩm tra Ban Tổng hợp ngày 24/01/2025.
 Idempotent: kiểm tra description trước khi insert.
 """
 import logging
@@ -12,30 +13,34 @@ from app.models.entities import Alert, AlertStatus
 logger = logging.getLogger(__name__)
 
 ALERTS_DATA = [
+    # === 2 cảnh báo UAV từ Báo cáo thẩm tra thật (Hà Tuấn Minh — Ban Tổng hợp, 24/01/2025) ===
     {
-        "doc_no": "EVNHANOI-UAV-198-2024",
-        "title": "Giá đề xuất UAV vượt 18% so với tham chiếu thị trường",
-        "severity": "high",
-        "source": "ErpInventoryCheck",
+        "doc_no": "198/TTr-EVNHANOI",
+        "title": "Chưa thống nhất thuật ngữ trong Tiêu chuẩn kỹ thuật UAV",
+        "severity": "medium",
+        "source": "TechnicalStandardCheck",
         "description": (
-            "Hồ sơ EVNHANOI-UAV-198-2024: Giá DJI Matrice 300 RTK đề xuất 485.000.000 VND/bộ, "
-            "tham chiếu thị trường Q3/2024 là 411.000.000 VND/bộ (chênh lệch 18%). "
-            "Tổng chênh lệch: 222.000.000 VND cho 3 bộ. Cần giải trình hoặc đàm phán lại."
+            "Hồ sơ 198/TTr-EVNHANOI: Phụ lục I (Tờ trình 07/KT) sử dụng đan xen hai cụm từ "
+            "'máy bay không người lái' và 'thiết bị bay không người lái' cho cùng một đối tượng. "
+            "Theo kiến nghị Báo cáo thẩm tra Ban Tổng hợp (24/01/2025): Ban Kỹ thuật cần thống "
+            "nhất một cụm từ duy nhất xuyên suốt toàn bộ tài liệu trước khi ban hành tiêu chuẩn."
         ),
         "status": AlertStatus.open,
     },
     {
-        "doc_no": "EVNHANOI-UAV-198-2024",
-        "title": "Nhà thầu chưa cung cấp ISO 9001:2015 phiên bản mới nhất",
-        "severity": "high",
-        "source": "LegalGraphRAG",
+        "doc_no": "198/TTr-EVNHANOI",
+        "title": "Tiêu chuẩn kỹ thuật còn chứa yếu tố đấu thầu không phù hợp",
+        "severity": "medium",
+        "source": "ProcurementCheck",
         "description": (
-            "Hồ sơ EVNHANOI-UAV-198-2024: Công ty CP Công nghệ Thiên Vũ đính kèm chứng chỉ "
-            "ISO 9001:2008 (đã hết hiệu lực từ 2018). Theo Điều 12 Nghị định 24/2024/NĐ-CP, "
-            "cần chứng chỉ còn hiệu lực tối thiểu 6 tháng từ ngày nộp hồ sơ."
+            "Hồ sơ 198/TTr-EVNHANOI: Phụ lục I (Tờ trình 07/KT) còn sử dụng các cụm từ 'Nhà thầu' "
+            "và 'Hồ sơ dự thầu' — đây là văn bản phê duyệt tiêu chuẩn kỹ thuật, không phải hồ sơ "
+            "mời thầu. Theo kiến nghị Báo cáo thẩm tra (24/01/2025): cần loại bỏ các yếu tố đấu "
+            "thầu để tránh nhầm lẫn về bản chất pháp lý của văn bản tiêu chuẩn kỹ thuật."
         ),
         "status": AlertStatus.open,
     },
+    # === Các cảnh báo hồ sơ khác ===
     {
         "doc_no": "EVNHANOI-MBA-2024-021",
         "title": "Giá MBA ABB 250kVA vượt 23% khung giá EVN",

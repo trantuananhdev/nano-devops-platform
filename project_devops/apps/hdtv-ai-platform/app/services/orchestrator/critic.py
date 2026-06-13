@@ -88,6 +88,7 @@ async def review_draft(
     risk_level: Any,
     *,
     resolution_md: str = "",
+    dossier_id: int | None = None,
 ) -> CriticResult:
     """Review draft report and resolution; LLM with rule-based fallback."""
     checks_summary = "\n".join(
@@ -117,7 +118,8 @@ async def review_draft(
     ]
 
     try:
-        raw = await llm_call(AgentRole.CRITIC, messages, response_format_json=True)
+        raw = await llm_call(AgentRole.CRITIC, messages, response_format_json=True,
+                             dossier_id=dossier_id)
         result = json.loads(raw) if isinstance(raw, str) else raw
         if not isinstance(result, dict):
             raise TypeError("Critic response must be a JSON object")

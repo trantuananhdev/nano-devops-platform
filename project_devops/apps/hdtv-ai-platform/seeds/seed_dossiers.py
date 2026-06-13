@@ -46,7 +46,8 @@ DOSSIERS_DATA = [
         ),
         "unit": "Ban Kỹ thuật / EVNHANOI (đề xuất từ Công ty Lưới điện Cao thế TP HN)",
         "risk_level": RiskLevel.medium,
-        "status": DossierStatus.appraising,
+        "status": DossierStatus.board_reviewed,
+        "pdf_url": "dossiers/uav-198/02-to-trinh-xin-duyet-HDTV.pdf",
         "pdf_text": _UAV_PDF_TEXT,
     },
     {

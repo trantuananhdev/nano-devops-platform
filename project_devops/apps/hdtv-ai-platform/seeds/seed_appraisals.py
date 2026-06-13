@@ -68,14 +68,14 @@ APPRAISALS_DATA = [
             "Sau khi hiệu chỉnh, tiêu chuẩn kỹ thuật sẽ được áp dụng cho việc mua sắm 04 bộ UAV "
             "tại Công ty Lưới điện Cao thế TP Hà Nội."
         ),
-        "checks": [
+        "checks": {"items": [
             {"tool": "LegalGraphRAG", "status": "pass", "score": 0.96,
              "detail": "Đúng thẩm quyền HĐTV; căn cứ pháp lý đầy đủ; trình tự phê duyệt đúng"},
             {"tool": "TechnicalStandardCheck", "status": "warning", "score": 0.71,
              "detail": "Tiêu chuẩn kỹ thuật đáp ứng yêu cầu vận hành; cần thống nhất thuật ngữ"},
             {"tool": "ProcurementCheck", "status": "warning", "score": 0.68,
              "detail": "2/4 nhà phân phối phúc đáp; còn ngôn ngữ đấu thầu trong TCKT"},
-        ],
+        ]},
         "critic_verdict": {
             "approved": True,
             "confidence": 0.87,
@@ -107,11 +107,11 @@ APPRAISALS_DATA = [
             "Đề nghị phê duyệt. Điều kiện: nhà thầu cam kết bảo hành 36 tháng và đào tạo "
             "≥5 kỹ sư điều độ trong 30 ngày sau nghiệm thu."
         ),
-        "checks": [
+        "checks": {"items": [
             {"tool": "LegalGraphRAG", "status": "pass", "score": 0.94},
             {"tool": "ErpBudgetCheck", "status": "pass", "score": 0.91},
             {"tool": "ErpInventoryCheck", "status": "pass", "score": 0.88},
-        ],
+        ]},
         "critic_verdict": {
             "approved": True,
             "confidence": 0.92,
@@ -138,10 +138,10 @@ APPRAISALS_DATA = [
             "Yêu cầu giải trình chênh lệch giá hoặc đề xuất nhà cung cấp thay thế "
             "(Siemens Energy hoặc THIBIDI: 148-155 triệu/bộ). Hoàn thiện trong 15 ngày."
         ),
-        "checks": [
+        "checks": {"items": [
             {"tool": "LegalGraphRAG", "status": "pass", "score": 0.89},
             {"tool": "ErpBudgetCheck", "status": "fail", "score": 0.23, "price_anomaly": True},
-        ],
+        ]},
         "critic_verdict": {
             "approved": False,
             "confidence": 0.88,
@@ -166,10 +166,10 @@ APPRAISALS_DATA = [
             "Trả lại hồ sơ. Yêu cầu bổ sung: (1) Biên bản nghiệm thu 2023 có ký xác nhận "
             "Trưởng phòng KT; (2) Báo cáo phân tích xu hướng cách điện 3 năm. Hạn: 20 ngày."
         ),
-        "checks": [
+        "checks": {"items": [
             {"tool": "LegalGraphRAG", "status": "fail", "score": 0.12,
              "missing_docs": ["bien_ban_nghiem_thu_2023", "bao_cao_ky_thuat"]},
-        ],
+        ]},
         "critic_verdict": {
             "approved": False,
             "confidence": 0.97,
